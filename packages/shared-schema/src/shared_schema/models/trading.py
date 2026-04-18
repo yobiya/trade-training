@@ -32,7 +32,8 @@ class TradeSession(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # UUID
     started_at: Mapped[datetime] = mapped_column(DateTime)  # UTC
-    presented_at: Mapped[datetime] = mapped_column(DateTime)  # UTC: チャート内提示日時
+    presented_at: Mapped[datetime] = mapped_column(DateTime)  # UTC: 最初に提示した日時(固定)
+    current_position: Mapped[datetime] = mapped_column(DateTime)  # UTC: 現在の足位置(足送りで更新)
     mode: Mapped[str] = mapped_column(String(10))  # "training" | "real"
     time_filter: Mapped[Any] = mapped_column(JSON, nullable=True)  # {sessions, days, date_range}
     is_suspended: Mapped[bool] = mapped_column(Boolean, default=False)
