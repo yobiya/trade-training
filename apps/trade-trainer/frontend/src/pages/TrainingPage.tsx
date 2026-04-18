@@ -113,7 +113,9 @@ export function TrainingPage({ sessionId, onBack }: Props) {
         <div className="session-info">
           <span className="symbol">{session?.symbol ?? '—'}</span>
           <span className="position">
-            {session ? new Date(session.current_position).toLocaleString('ja-JP') : ''}
+            {session?.current_position
+              ? new Date(session.current_position).toLocaleString('ja-JP')
+              : ''}
           </span>
         </div>
         <div className="tf-selector">

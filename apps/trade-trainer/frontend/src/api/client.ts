@@ -24,14 +24,26 @@ export class ApiError extends Error {
 
 export type OhlcBar = { t: number; o: number; h: number; l: number; c: number; v: number }
 
+export type SessionListItem = {
+  id: string
+  symbol: string
+  started_at: string
+  presented_at: string
+  mode: string
+  is_suspended: boolean
+  is_complete: boolean
+}
+
 export type TradeSession = {
   id: string
+  symbol: string
+  started_at: string
   presented_at: string
   current_position: string
   mode: string
   is_suspended: boolean
-  symbol: string | null
-  has_entry: boolean | null
+  has_active_trade: boolean
+  is_complete: boolean
 }
 
 export type ChartResponse = {
@@ -90,10 +102,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ symbol }),
       }),
-    list: (page = 1, per_page = 20) =>
-      request<{ items: TradeSession[]; total: number; page: number; per_page: number }>(
-        `/sessions?page=${page}&per_page=${per_page}`,
-      ),
+    list: (limit = 20, offset = 0) =>
+      request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),
     get: (id: string) => request<TradeSession>(`/sessions/${id}`),
     skip: (id: string) =>
       request<TradeSession>(`/sessions/${id}/skip`, { method: 'POST' }),

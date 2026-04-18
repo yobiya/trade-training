@@ -21,11 +21,11 @@ async def login(
     body: LoginRequest,
     request: Request,
     settings: Settings = Depends(get_settings),
-) -> dict[str, str]:
+) -> dict[str, bool]:
     if body.password != settings.app_password:
         raise HTTPException(status_code=401, detail="Invalid password")
     request.session["authenticated"] = True
-    return {"status": "ok"}
+    return {"authenticated": True}
 
 
 @router.post("/logout")

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api/client'
-import type { TradeSession, StatsSummary } from '../api/client'
+import type { SessionListItem, StatsSummary } from '../api/client'
 import { StatsBar } from '../components/StatsBar'
 
 const SYMBOLS = ['USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'EURJPY', 'GBPJPY', 'AUDJPY', 'EURGBP']
@@ -11,17 +11,17 @@ type Props = {
 }
 
 export function SessionListPage({ onSelectSession, onLogout }: Props) {
-  const [sessions, setSessions] = useState<TradeSession[]>([])
+  const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [symbol, setSymbol] = useState('USDJPY')
   const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
-    const [listRes, statsRes] = await Promise.all([
+    const [list, statsRes] = await Promise.all([
       api.sessions.list(),
       api.stats.summary(),
     ])
-    setSessions(listRes.items)
+    setSessions(list)
     setStats(statsRes)
   }, [])
 
@@ -65,10 +65,10 @@ export function SessionListPage({ onSelectSession, onLogout }: Props) {
             className="session-item"
             onClick={() => onSelectSession(s.id)}
           >
-            <span className="session-symbol">{s.symbol ?? '—'}</span>
+            <span className="session-symbol">{s.symbol || '—'}</span>
             <span className="session-date">{new Date(s.presented_at).toLocaleDateString('ja-JP')}</span>
-            <span className={`session-status ${s.has_entry ? 'entered' : 'skip'}`}>
-              {s.has_entry === null ? '未処理' : s.has_entry ? 'エントリー' : '見送り'}
+            <span className={`session-status ${s.is_complete ? 'entered' : 'skip'}`}>
+              {s.is_complete ? '完了' : '未処理'}
             </span>
           </div>
         ))}
