@@ -1,0 +1,38 @@
+[project]
+name = "fx-trading"
+version = "0.0.0"
+description = "FXトレーニング・リアルトレードアプリのモノレポ"
+requires-python = ">=3.13"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "packages/shared-schema",
+    "packages/market-data",
+    "apps/trade-trainer/backend",
+    "apps/trade-journal/backend",
+    "apps/trade-analyzer/backend",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pre-commit>=4.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_ignores = true

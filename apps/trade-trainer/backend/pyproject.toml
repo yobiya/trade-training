@@ -1,0 +1,22 @@
+[project]
+name = "trade-trainer-backend"
+version = "0.0.0"
+description = "trade-trainer バックエンド(FastAPI)"
+requires-python = ">=3.13"
+dependencies = [
+    "shared-schema",
+    "market-data",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[tool.uv.sources]
+shared-schema = { workspace = true }
+market-data = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trade_trainer_backend"]

@@ -1,0 +1,15 @@
+{
+  "name": "fx-trading",
+  "version": "0.0.0",
+  "private": true,
+  "description": "FXトレーニング・リアルトレードアプリのモノレポ",
+  "workspaces": [
+    "libs/common-ui-lib",
+    "apps/trade-trainer/frontend",
+    "apps/trade-journal/frontend",
+    "apps/trade-analyzer/frontend"
+  ],
+  "engines": {
+    "node": ">=24"
+  }
+}

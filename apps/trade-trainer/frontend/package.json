@@ -1,0 +1,10 @@
+{
+  "name": "@fx/trade-trainer-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "trade-trainer フロントエンド",
+  "type": "module",
+  "dependencies": {
+    "@fx/common-ui-lib": "*"
+  }
+}

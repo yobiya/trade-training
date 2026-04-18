@@ -205,3 +205,37 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Node.js / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+.vite/
+
+# Local / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Project data
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+*.db-shm
+*.db-wal
+/data/
+/cache/
+
+# IDE
+.vscode/
+.idea/
