@@ -6,7 +6,7 @@
   "workspaces": [
     "libs/common-ui-lib",
     "apps/trade-trainer/frontend",
-    "apps/trade-journal/frontend",
+    "apps/trade-live/frontend",
     "apps/trade-analyzer/frontend"
   ],
   "engines": {

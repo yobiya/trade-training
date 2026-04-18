@@ -1,8 +1,8 @@
 {
-  "name": "@fx/trade-journal-frontend",
+  "name": "@fx/trade-live-frontend",
   "version": "0.0.0",
   "private": true,
-  "description": "trade-journal フロントエンド",
+  "description": "trade-live フロントエンド",
   "type": "module",
   "dependencies": {
     "@fx/common-ui-lib": "*"

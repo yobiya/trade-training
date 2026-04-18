@@ -42,7 +42,7 @@ Web + スマホ両対応(レスポンシブデザイン)
   ├─ [アプリ B] trade-trainer (Webサーバー)
   │    └ 過去チャートを使った訓練。発注コードを一切含まない
   │
-  ├─ [アプリ C] trade-journal (Webサーバー)
+  ├─ [アプリ C] trade-live (Webサーバー)
   │    └ 実トレードの実行。MT5経由で発注、ポジション管理
   │
   └─ [アプリ D] trade-analyzer (Webサーバー)
@@ -87,7 +87,7 @@ Web + スマホ両対応(レスポンシブデザイン)
 | common-ui-lib | パッケージ | - | - | - | - | Phase 2 |
 | market-data | パッケージ | - | 読み書き(市場データキャッシュ) | 取得 | - | Phase 1 |
 | B. trade-trainer | Webアプリ | VPS | 読み書き(トレーニング記録) | 経由(market-data 経由) | **なし** | Phase 1〜3 |
-| C. trade-journal | Webアプリ | VPS | 読み書き(リアル記録) | 直接(発注) + 経由(データ) | あり | Phase 5〜6 |
+| C. trade-live | Webアプリ | VPS | 読み書き(リアル記録) | 直接(発注) + 経由(データ) | あり | Phase 5〜6 |
 | D. trade-analyzer | Webアプリ | VPS | 読み込み(全データ) | なし | なし | Phase 4 |
 
 **開発環境と本番環境**
@@ -573,7 +573,7 @@ CREATE TABLE ohlc_m5 (
 
 ---
 
-## 12. リアルトレードアプリ (trade-journal)
+## 12. リアルトレードアプリ (trade-live)
 
 トレーニングで鍛えたプロセスをそのまま実戦で使うための**独立アプリ**。トレーニングアプリ(trade-trainer)とは物理的に分離し、UIは `common-ui-lib` を通じて共有する。分析・シナリオメモなど大半の機能はトレーニングと同じ体験になるよう設計するが、発注・ポジション管理・保有中の気づきメモなどのリアル特有機能を備える。
 
@@ -585,7 +585,7 @@ CREATE TABLE ohlc_m5 (
 
 ### 12.2 発注方式
 - **完全にMT5経由で発注**(`order_send()` 使用)
-- trade-journal が発注エンジンを兼ねる
+- trade-live が発注エンジンを兼ねる
 - 発注結果・約定情報はMT5から取得してDB保存
 - **VPS内でMT5とアプリが同居**するため、発注API呼び出しは数ミリ秒で完了
 - モバイル(スマホブラウザ)からもVPSへHTTPSでアクセスし、画面で発注指示 → VPS内のMT5で即座に実行
@@ -697,13 +697,13 @@ CREATE TABLE ohlc_m5 (
 
 ### 12.8 トレーニングとの連携
 
-**trade-journal → trade-trainer**
+**trade-live → trade-trainer**
 - 負けたトレード(または任意のトレード)を「この局面を復習」ボタンで trade-trainer に引き渡し、**同じ局面のトレーニングセッション**として再現
 - リアルで遭遇したパターンを訓練に回す
 - 引き渡しはDB経由(復習キューテーブルに登録、trainer起動時に表示)
 - 過去セッションからのランダム再出題(汎用的な反復モード)は本仕様では採用しないが、この復習ボタンは**リアルで実際に遭遇した具体的な局面の再検討**という明確な目的を持つため別機能として残す
 
-**trade-trainer → trade-journal**
+**trade-trainer → trade-live**
 - **リアルタイムの連携機能は設けない**(発注直前の警告は心理干渉・機会損失・自己成就予言のリスクが大きいため)
 - 訓練データの実戦への活用ルートは、後述の振り返り画面・週次レポート・AI分析(11章)で行う
   - 決済後の振り返り画面でタグ別の過去実績を参考表示
@@ -807,7 +807,7 @@ fx-app/ (Gitリポジトリルート)
 │   │   └── frontend/
 │   │       ├── package.json
 │   │       └── src/
-│   ├── trade-journal/        # アプリC
+│   ├── trade-live/        # アプリC
 │   │   ├── backend/
 │   │   │   ├── pyproject.toml
 │   │   │   └── src/
@@ -835,7 +835,7 @@ uv run market-data update-events
 
 # 特定アプリの起動
 cd apps/trade-trainer/backend && uv run uvicorn app.main:app --reload
-cd apps/trade-journal/backend && uv run uvicorn app.main:app --reload
+cd apps/trade-live/backend && uv run uvicorn app.main:app --reload
 
 # フロントエンドは npm workspace で管理
 npm install
@@ -869,13 +869,13 @@ npm run dev --workspace=apps/trade-trainer/frontend
 - **発注関連コードを含まない**
 - 仮想環境: `apps/trade-trainer/backend/.venv`(uv管理)
 
-### 15.4 アプリC: trade-journal
+### 15.4 アプリC: trade-live
 - バックエンド: **Python** + **FastAPI** + **MetaTrader5** パッケージ
 - フロントエンド: **React** + **TypeScript** + `common-ui-lib`
 - `market-data` でチャート取得、MT5 Python APIで直接発注
 - 実行環境: Windows VPS(MT5と同居、発注遅延ほぼゼロ)
 - 配色テーマを警告色系にしてトレーニングと区別
-- 仮想環境: `apps/trade-journal/backend/.venv`(uv管理)
+- 仮想環境: `apps/trade-live/backend/.venv`(uv管理)
 
 ### 15.5 アプリD: trade-analyzer
 - バックエンド: **Python** + **FastAPI**
@@ -894,7 +894,7 @@ npm run dev --workspace=apps/trade-trainer/frontend
 | MT5本体 | VPS(常時起動、RDPで初期セットアップ) |
 | market-data CLI (経済指標日次更新) | VPS(Windowsタスクスケジューラで日次実行) |
 | アプリB (trade-trainer) | VPS(Webサーバーとして常時稼働) |
-| アプリC (trade-journal) | VPS(Webサーバーとして常時稼働) |
+| アプリC (trade-live) | VPS(Webサーバーとして常時稼働) |
 | アプリD (trade-analyzer) | VPS(Webサーバーとして常時稼働) |
 | SQLite DB | VPS(全アプリが同一ファイルを参照) |
 
@@ -1018,7 +1018,7 @@ npm run dev --workspace=apps/trade-trainer/frontend
   - コーチング風レポート
 
 ### Phase 5: リアルトレードアプリ・デモ版 (C の実装、デモ口座)
-- **アプリC (trade-journal) 第一版**:
+- **アプリC (trade-live) 第一版**:
   - common-ui-lib を利用したUI構築(配色は警告色系)
   - MT5リアルタイムデータ表示
   - MT5**デモ口座**への発注機能
@@ -1031,7 +1031,7 @@ npm run dev --workspace=apps/trade-trainer/frontend
 ### Phase 6: リアルトレードアプリ・実口座 (C の本運用)
 - 実口座接続(最小ロットからスタート)
 - 通常ロットでの本格運用
-- trade-journal → trade-trainer の復習ボタン連携(リアルの負けトレードを訓練セッションとして再現)
+- trade-live → trade-trainer の復習ボタン連携(リアルの負けトレードを訓練セッションとして再現)
 - リアル特有の集計指標(理論勝率ギャップ、保有時間別成績、振り返りメモのテキストマイニング) → アプリD側に実装
 - リアル向けAI分析レポート(アプリD拡張)
 

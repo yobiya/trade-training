@@ -12,7 +12,7 @@ members = [
     "packages/shared-schema",
     "packages/market-data",
     "apps/trade-trainer/backend",
-    "apps/trade-journal/backend",
+    "apps/trade-live/backend",
     "apps/trade-analyzer/backend",
 ]
 

@@ -13,7 +13,7 @@ FXトレーニング・リアルトレードアプリのモノレポ。
 │   └── market-data/      # 市場データ取得ライブラリ
 ├── apps/
 │   ├── trade-trainer/    # アプリB: トレーニング
-│   ├── trade-journal/    # アプリC: リアルトレード
+│   ├── trade-live/       # アプリC: リアルトレード
 │   └── trade-analyzer/   # アプリD: 集計・AI分析
 └── libs/
     └── common-ui-lib/    # 共通UIコンポーネント
