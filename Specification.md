@@ -578,6 +578,29 @@ CREATE TABLE ohlc_m5 (
 - 送信データ内の日時は ISO8601(UTC)で送信
 - システムプロンプトで「ユーザーは JST で運用しており、メモ本文内の時刻は JST 基準」と明記し、AI が誤解釈しないようにする
 
+### 11.5 分析コンテキストの導出方針
+
+AI 送信時に必要な市場コンテキストは、**DBへの冗長保存は行わず、`entry_time`/`exit_time` を起点に on-demand で導出**する方針とする。
+
+| 導出項目 | 導出元 | 実装場所 |
+|---|---|---|
+| エントリー/決済時点のチャート(各時間足 N 本) | `ohlc_m5` + `market-data` のリサンプル | `market-data.accessor.get_ohlc()` |
+| MAE/MFE(最大含み損・含み益) | entry_time〜exit_time の M5 OHLC から min/max 計算 | `market-data` にヘルパー追加予定 |
+| 近接する経済指標 | `economic_event` を entry_time 前後 ±N時間で検索 | クエリ関数 |
+| セッション時間帯(東京/ロンドン/NY) | entry_time の UTC 時刻から判定 | ユーティリティ関数 |
+| ATR / スイングハイ・ロー | 直近 N 本の OHLC から計算 | ユーティリティ関数 |
+| インジケーター値(SMA/EMA/RSI 等) | OHLC + 当時の設定から再計算 | 下記参照 |
+
+**例外:インジケーター設定スナップショット**
+
+ユーザーが後から期間・種類設定を変更すると、過去トレード分析時に当時の値を再現できない。対策として:
+
+- `Setting` にインジケーター設定リストを保持し、変更時に**新バージョンを追記(履歴保持)**する
+- `TradeSession` に `indicator_config_id`(その時点の設定バージョン ID)を紐付け
+- 分析時はこの ID を介して当時の設定を取得し、OHLC から値を再計算
+
+この方式により、描画オブジェクト・メモ等の**ユーザー入力のみを保存**し、市場コンテキストは導出で再現する設計を貫徹する。
+
 ---
 
 ## 12. リアルトレードアプリ (trade-live)
@@ -1054,6 +1077,7 @@ npm run dev --workspace=apps/trade-trainer/frontend
 Session
 ├─ id, 開始日時, 提示日時(チャート内), 時間フィルタ設定
 ├─ mode (training | real)
+├─ indicator_config_id (当時のインジケーター設定バージョン、分析時の再現用)
 ├─ candidates[] (候補ウォッチリスト)
 │   ├─ symbol, 追加理由
 │   ├─ 最終選定されたか (bool)
@@ -1129,6 +1153,12 @@ Setting
 ├─ 経済指標表示設定(重要度閾値、表示通貨、シェーディング範囲)
 └─ リスク設定(1トレード許容損失%/金額)
 
+IndicatorConfig (インジケーター設定のバージョン管理)
+├─ id, 作成日時
+├─ is_active (現在有効な設定か)
+└─ indicators[] (種類・期間・色などのパラメータ配列)
+  例: [{ type: "SMA", period: 20 }, { type: "RSI", period: 14 }]
+
 EconomicEvent
 ├─ id, 発表日時
 ├─ 通貨, 指標名, 重要度(1-3)
@@ -1151,4 +1181,4 @@ EconomicEvent
 
 ---
 
-*仕様書 ver 1.27 - 2026/04/19 (描画オブジェクトに timeframe / visible_on_timeframes を追加、マルチタイムフレーム分析と AI 分析のコンテキスト情報として活用)*
+*仕様書 ver 1.28 - 2026/04/19 (AI 分析コンテキストは entry_time/exit_time から on-demand 導出する方針を 11.5 に明文化、インジケーター設定のバージョン管理を追加)*
