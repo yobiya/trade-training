@@ -465,6 +465,28 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--text);
 }
 
+/* Indicator panel */
+.indicator-panel {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.indicator-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.indicator-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.indicator-chips .chip {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
 /* Drawing tools */
 .drawing-tools {
   padding: 10px 12px;

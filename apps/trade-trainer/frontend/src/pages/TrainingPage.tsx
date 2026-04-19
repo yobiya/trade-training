@@ -5,7 +5,9 @@ import { Chart } from '../components/Chart'
 import type { ChartHandle, PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
+import { IndicatorPanel } from '../components/IndicatorPanel'
 import { TradePanel } from '../components/TradePanel'
+import type { IndicatorConfig } from '../indicators/types'
 import { TIMEFRAMES, UPPER_TFS } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { useCharts } from '../hooks/useCharts'
@@ -47,6 +49,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<string | null>(null)
   const [advancing, setAdvancing] = useState(false)
+  const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
 
   const { barsByTf, upperTfs, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, timeframe)
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
@@ -178,6 +181,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
                     digits={session?.digits}
                     onNeedMoreHistory={(earliest) => loadMoreHistory(tf, earliest)}
                     priceLines={priceLinesForTf(drawings, tf, interaction.preview)}
+                    indicators={indicators}
                   />
                 </div>
               ))}
@@ -197,6 +201,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
               onMouseDown={interaction.handlers.onMouseDown}
               onMouseUp={interaction.handlers.onMouseUp}
               priceLines={priceLinesForTf(drawings, timeframe, interaction.preview)}
+              indicators={indicators}
             />
             <DrawingOverlay
               chartHandle={mainChartHandle}
@@ -215,6 +220,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             loading={loading}
             digits={session?.digits ?? 5}
           />
+          <IndicatorPanel active={indicators} onChange={setIndicators} />
           <DrawingTools
             activeTool={interaction.activeTool}
             onSelectTool={interaction.selectTool}

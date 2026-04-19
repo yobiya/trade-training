@@ -11,6 +11,8 @@ import type {
 } from 'lightweight-charts'
 import type { OhlcBar } from '../api/client'
 import type { ChartApi, PointPx } from '../drawing/types'
+import { INDICATORS } from '../indicators/registry'
+import type { IndicatorConfig } from '../indicators/types'
 
 export type PriceLine = {
   id: string | number
@@ -41,7 +43,11 @@ type Props = {
   onMouseUp?: (price: number | null, time: number | null, px: PointPx) => void
   /** チャートに重ねて表示する価格線。 */
   priceLines?: PriceLine[]
+  /** チャートに重ねて表示するインジケーター。 */
+  indicators?: IndicatorConfig[]
 }
+
+const RSI_SCALE_ID = 'rsi-pane'
 
 function toCandle(bar: OhlcBar): CandlestickData {
   return { time: bar.t as Time, open: bar.o, high: bar.h, low: bar.l, close: bar.c }
@@ -58,7 +64,7 @@ const LOAD_MORE_THRESHOLD = 0
 export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   bars, timeframe, cursor, digits, onNeedMoreHistory,
   onChartClick, onMouseMove, onMouseDown, onMouseUp,
-  priceLines,
+  priceLines, indicators,
 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -71,6 +77,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   const onMouseDownRef = useRef(onMouseDown)
   const onMouseUpRef = useRef(onMouseUp)
   const priceLineHandlesRef = useRef<Map<string | number, IPriceLine>>(new Map())
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
+  const rsiPaneConfiguredRef = useRef(false)
 
   useEffect(() => { onNeedMoreRef.current = onNeedMoreHistory }, [onNeedMoreHistory])
   useEffect(() => { onChartClickRef.current = onChartClick }, [onChartClick])
@@ -198,6 +206,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       fittedForTfRef.current = null
       earliestRef.current = null
       priceLineHandlesRef.current.clear()
+      indicatorSeriesRef.current.clear()
+      rsiPaneConfiguredRef.current = false
     }
   }, [])
 
@@ -252,6 +262,67 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       }
     }
   }, [priceLines])
+
+  // インジケーターの差分更新(仕様書 §5.2)。
+  // - overlay: ローソク足と同じ右側価格軸に重ねる
+  // - subpanel: RSI_SCALE_ID で別スケールを作り、下 25% に表示
+  //
+  // lightweight-charts v4 の priceScale はいずれかの系列が参照したときに生成されるため、
+  // 順序は「系列追加/更新 → スケール設定」の順に行う必要がある。
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    const seriesMap = indicatorSeriesRef.current
+    const next = indicators ?? []
+    const nextKeys = new Set(next.map(i => i.key))
+
+    // 廃止されたインジケーターの series を削除
+    for (const [key, s] of seriesMap) {
+      if (!nextKeys.has(key)) {
+        chart.removeSeries(s)
+        seriesMap.delete(key)
+      }
+    }
+
+    // 追加・更新
+    for (const ind of next) {
+      const spec = INDICATORS[ind.type]
+      const data = spec.compute(bars, ind.params).map(p => ({
+        time: p.time as Time,
+        value: p.value,
+      }))
+      let s = seriesMap.get(ind.key)
+      if (!s) {
+        s = chart.addLineSeries({
+          color: ind.color,
+          lineWidth: 1,
+          priceScaleId: spec.placement === 'subpanel' ? RSI_SCALE_ID : 'right',
+          lastValueVisible: false,
+          priceLineVisible: false,
+          crosshairMarkerVisible: false,
+        })
+        seriesMap.set(ind.key, s)
+      } else {
+        s.applyOptions({ color: ind.color })
+      }
+      s.setData(data)
+    }
+
+    // 系列追加後にスケールのマージンを構成する(サブパネル領域の確保)
+    const hasSubpanel = next.some(i => INDICATORS[i.type].placement === 'subpanel')
+    if (hasSubpanel) {
+      // RSI 用のスケール(系列追加後なので参照可能)
+      chart.priceScale(RSI_SCALE_ID).applyOptions({
+        scaleMargins: { top: 0.78, bottom: 0 },
+        borderVisible: false,
+      })
+      chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.05, bottom: 0.25 } })
+      rsiPaneConfiguredRef.current = true
+    } else if (rsiPaneConfiguredRef.current) {
+      chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.05, bottom: 0.05 } })
+      rsiPaneConfiguredRef.current = false
+    }
+  }, [indicators, bars])
 
   return (
     <div
