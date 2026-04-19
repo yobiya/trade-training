@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api/client'
-import type { OhlcBar, TradeResponse, TradeSession } from '../api/client'
+import type { OhlcBar, ScenarioInput, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
 import { TradePanel } from '../components/TradePanel'
 
@@ -97,10 +97,16 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     }
   }
 
-  async function handleEnter(direction: 'buy' | 'sell', price: number, sl?: number, tp?: number) {
+  async function handleEnter(
+    direction: 'buy' | 'sell',
+    price: number,
+    sl: number,
+    tp: number | undefined,
+    scenario: ScenarioInput,
+  ) {
     setLoading(true)
     try {
-      const trade = await api.trades.enter(sessionId, { direction, price, sl, tp })
+      const trade = await api.trades.enter(sessionId, { direction, price, sl, tp, scenario })
       setActiveTrade(trade)
       notify(`エントリー: ${direction.toUpperCase()} @ ${price}`)
     } finally {

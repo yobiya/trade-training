@@ -61,6 +61,20 @@ export type AdvanceResponse = {
   trade_pips_pnl: number | null
 }
 
+export type ScenarioInput = {
+  scenario_main?: string | null
+  entry_basis?: string | null
+  tags?: string[]
+}
+
+export type ScenarioResponse = {
+  scenario_main: string | null
+  entry_basis: string | null
+  tags: string[]
+  exit_memo: string | null
+  reflection: string | null
+}
+
 export type TradeResponse = {
   id: string
   direction: 'buy' | 'sell'
@@ -73,6 +87,7 @@ export type TradeResponse = {
   exit_time: string | null
   pips_pnl: number | null
   is_open: boolean
+  scenario: ScenarioResponse | null
 }
 
 export type StatsSummary = {
@@ -135,15 +150,28 @@ export const api = {
   trades: {
     getActive: (sessionId: string) =>
       request<TradeResponse | null>(`/sessions/${sessionId}/trade`),
-    enter: (sessionId: string, body: { direction: 'buy' | 'sell'; price: number; sl?: number; tp?: number }) =>
+    getLatest: (sessionId: string) =>
+      request<TradeResponse | null>(`/sessions/${sessionId}/trade/latest`),
+    enter: (sessionId: string, body: {
+      direction: 'buy' | 'sell'
+      price: number
+      sl?: number
+      tp?: number
+      scenario?: ScenarioInput
+    }) =>
       request<TradeResponse>(`/sessions/${sessionId}/trade/enter`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    exit: (sessionId: string, body: { price: number; reason: string }) =>
+    exit: (sessionId: string, body: { price: number; reason: string; exit_memo?: string }) =>
       request<TradeResponse>(`/sessions/${sessionId}/trade/exit`, {
         method: 'POST',
         body: JSON.stringify(body),
+      }),
+    reflection: (sessionId: string, reflection: string) =>
+      request<TradeResponse>(`/sessions/${sessionId}/trade/reflection`, {
+        method: 'POST',
+        body: JSON.stringify({ reflection }),
       }),
   },
 
