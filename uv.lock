@@ -16,7 +16,7 @@ members = [
     "market-data",
     "shared-schema",
     "trade-analyzer-backend",
-    "trade-journal-backend",
+    "trade-live-backend",
     "trade-trainer-backend",
 ]
 
@@ -1051,9 +1051,9 @@ requires-dist = [
 ]
 
 [[package]]
-name = "trade-journal-backend"
+name = "trade-live-backend"
 version = "0.0.0"
-source = { editable = "apps/trade-journal/backend" }
+source = { editable = "apps/trade-live/backend" }
 dependencies = [
     { name = "fastapi" },
     { name = "market-data" },
