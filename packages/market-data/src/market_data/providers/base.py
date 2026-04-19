@@ -50,3 +50,7 @@ class DataSourceProvider(ABC):
     @abstractmethod
     def get_available_range(self, symbol: str) -> tuple[datetime, datetime] | None:
         """プロバイダが保持する利用可能な期間を返す。不明なら None。"""
+
+    def get_symbol_digits(self, symbol: str) -> int | None:
+        """銘柄の価格表示小数桁数を返す。取得不能なら None。既定実装は None。"""
+        return None

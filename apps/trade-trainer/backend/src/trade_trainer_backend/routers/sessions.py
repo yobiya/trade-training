@@ -29,6 +29,10 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
         select(Trade).where(Trade.session_id == s.id, Trade.exit_time.is_(None))
     ).first()
     is_complete = fd is not None and (fd.has_entry is False or active_trade is None)
+
+    from market_data.accessor import get_symbol_digits
+    digits = get_symbol_digits(symbol) if symbol else 5
+
     return SessionResponse(
         id=s.id,
         symbol=symbol or "",
@@ -39,6 +43,7 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
         is_suspended=s.is_suspended,
         has_active_trade=active_trade is not None,
         is_complete=is_complete,
+        digits=digits,
     )
 
 

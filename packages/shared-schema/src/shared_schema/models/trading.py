@@ -165,7 +165,11 @@ class Drawing(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"))
     kind: Mapped[str] = mapped_column(String(20))  # "line"|"fibonacci"|"label"|"trendline"
-    data: Mapped[Any] = mapped_column(JSON)  # 座標データ
+    data: Mapped[Any] = mapped_column(JSON)  # 座標データ(kind ごとに構造が異なる)
     label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # 仕様書 §5.3: 描画時のメイン時間足(マルチ TF 分析で判断根拠の時間軸を後追いするため必須)
+    timeframe: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # 仕様書 §5.3: 表示対象時間足の配列(未指定は既定の可視性に従う)
+    visible_on_timeframes: Mapped[Any] = mapped_column(JSON, nullable=True)
 
     session: Mapped["TradeSession"] = relationship("TradeSession", back_populates="drawings")

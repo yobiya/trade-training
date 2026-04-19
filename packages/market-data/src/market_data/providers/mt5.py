@@ -90,6 +90,13 @@ class MT5Provider(DataSourceProvider):
         rates = mt5.copy_rates_from_pos(resolved, mt5.TIMEFRAME_M5, 0, n_bars)
         return _rates_to_df(rates)
 
+    def get_symbol_digits(self, symbol: str) -> int | None:
+        resolved = _resolve_symbol(symbol)
+        info = mt5.symbol_info(resolved)
+        if info is None:
+            return None
+        return int(info.digits)
+
     def get_available_range(self, symbol: str) -> tuple[datetime, datetime] | None:
         resolved = _resolve_symbol(symbol)
         # 全期間の最初と最後の1本を取得して範囲を推定する

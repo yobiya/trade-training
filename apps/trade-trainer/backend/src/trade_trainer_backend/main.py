@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from trade_trainer_backend.auth import router as auth_router
 from trade_trainer_backend.config import get_settings
 from trade_trainer_backend.routers.chart import router as chart_router
+from trade_trainer_backend.routers.drawings import router as drawings_router
 from trade_trainer_backend.routers.sessions import router as sessions_router
 from trade_trainer_backend.routers.stats import router as stats_router
 from trade_trainer_backend.routers.trades import router as trades_router
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(sessions_router, prefix="/api")
     app.include_router(chart_router, prefix="/api")
     app.include_router(trades_router, prefix="/api")
+    app.include_router(drawings_router, prefix="/api")
     app.include_router(stats_router, prefix="/api")
 
     @app.get("/health")

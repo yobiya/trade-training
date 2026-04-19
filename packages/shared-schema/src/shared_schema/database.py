@@ -32,6 +32,34 @@ def init_db(db_path: str | Path = "trading.db") -> None:
     _engine = create_db_engine(db_path)
     _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
     Base.metadata.create_all(_engine)
+    _auto_add_missing_columns(_engine)
+
+
+def _auto_add_missing_columns(engine: Engine) -> None:
+    """モデルとテーブルのカラムを比較し、不足分を ALTER TABLE ADD COLUMN で追加する。
+
+    alembic 導入前の暫定措置。SQLite は ADD COLUMN で既存行に NULL が入る
+    ため nullable カラムのみ安全に追加できる。非 NULL カラムが増えた場合は
+    手動マイグレーションが必要。
+    """
+    from shared_schema.base import Base
+
+    with engine.connect() as conn:
+        for table_name, table in Base.metadata.tables.items():
+            existing = {
+                row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            for col in table.columns:
+                if col.name not in existing:
+                    if not col.nullable and col.default is None and col.server_default is None:
+                        # 既存行に値が決められない非 NULL カラムはスキップ(人手介入が必要)
+                        continue
+                    col_type = col.type.compile(dialect=engine.dialect)
+                    nullable_clause = "" if col.nullable else " NOT NULL"
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type}{nullable_clause}"
+                    )
+        conn.commit()
 
 
 def get_engine() -> Engine:

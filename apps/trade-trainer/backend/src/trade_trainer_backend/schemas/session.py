@@ -34,6 +34,7 @@ class SessionResponse(BaseModel):
     is_suspended: bool
     has_active_trade: bool
     is_complete: bool  # skip or trade exited
+    digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
 
     model_config = {"from_attributes": True}
 

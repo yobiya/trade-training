@@ -75,6 +75,19 @@ def get_latest(symbol: str, timeframe: str, n_bars: int = 500) -> pd.DataFrame:
     return resample_ohlc(df, timeframe)
 
 
+def get_symbol_digits(symbol: str) -> int:
+    """銘柄の価格表示小数桁数を返す。
+
+    provider 接続中は MT5 等から取得。取得不能/未接続時は
+    JPY クロス=3 桁、それ以外=5 桁のヒューリスティックでフォールバック。
+    """
+    if _provider is not None and _provider.is_connected():
+        d = _provider.get_symbol_digits(symbol)
+        if d is not None:
+            return d
+    return 3 if symbol.upper().endswith("JPY") else 5
+
+
 def shutdown() -> None:
     """アプリ終了時に呼ぶ。プロバイダ接続を切断する。"""
     global _initialized
