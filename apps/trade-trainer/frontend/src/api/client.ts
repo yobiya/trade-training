@@ -120,8 +120,14 @@ export const api = {
   },
 
   chart: {
-    get: (sessionId: string, timeframe = 'M5', bars = 200) =>
-      request<ChartResponse>(`/sessions/${sessionId}/chart?timeframe=${timeframe}&bars=${bars}`),
+    get: (sessionId: string, timeframe = 'M5', bars = 200, before?: number) => {
+      const params = new URLSearchParams({ timeframe, bars: String(bars) })
+      if (before !== undefined) {
+        // UNIX 秒 → ISO (UTC)
+        params.set('before', new Date(before * 1000).toISOString())
+      }
+      return request<ChartResponse>(`/sessions/${sessionId}/chart?${params.toString()}`)
+    },
     advance: (sessionId: string, bars = 1) =>
       request<AdvanceResponse>(`/sessions/${sessionId}/advance?bars=${bars}`, { method: 'POST' }),
   },

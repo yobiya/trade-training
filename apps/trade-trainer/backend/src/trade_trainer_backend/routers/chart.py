@@ -64,6 +64,7 @@ def get_chart(
     session_id: str,
     timeframe: str = "M5",
     bars: int = _DEFAULT_BARS,
+    before: datetime | None = None,  # 指定時は before より前の bars 本を返す(遅延ロード用)
     db: Session = Depends(get_db),
 ) -> ChartResponse:
     s = db.get(TradeSession, session_id)
@@ -71,14 +72,23 @@ def get_chart(
         raise HTTPException(status_code=404, detail="Session not found")
 
     current_pos = s.current_position.replace(tzinfo=timezone.utc)
-    from market_data.timeframes import TIMEFRAME_MINUTES, timeframe_delta
+    from market_data.timeframes import TIMEFRAME_MINUTES
 
     if timeframe not in TIMEFRAME_MINUTES:
         raise HTTPException(status_code=400, detail=f"Invalid timeframe: {timeframe}")
 
     tf_minutes = TIMEFRAME_MINUTES[timeframe]
-    fetch_bars_m5 = bars * tf_minutes + _BARS_FETCH_BUFFER * tf_minutes
-    from_dt = current_pos - timedelta(minutes=fetch_bars_m5)
+
+    # 右端の決定: before 指定時は before より前(排他)の N 本を返す。
+    # current_position を越える未来は露出しない。
+    if before is not None:
+        before_utc = before.replace(tzinfo=timezone.utc) if before.tzinfo is None else before.astimezone(timezone.utc)
+        # 排他にするため、1 timeframe 分手前を上限にする
+        to_dt = before_utc - timedelta(minutes=tf_minutes)
+        if to_dt > current_pos:
+            to_dt = current_pos
+    else:
+        to_dt = current_pos
 
     fd = db.get(SessionFinalDecision, session_id)
     if fd is None or not fd.symbol:
@@ -86,7 +96,22 @@ def get_chart(
     symbol = fd.symbol
 
     from market_data.accessor import get_ohlc
-    df = get_ohlc(symbol, timeframe, from_dt, current_pos)
+
+    # 週末・祝日・データ欠損に備え、目標本数に達するまで指数的に from_dt を遡る。
+    # 最大で ~18 倍(週末 2 日を数回跨いでも賄える範囲)まで拡張する。
+    max_multiplier = 32
+    multiplier = 1
+    df = None
+    while multiplier <= max_multiplier:
+        fetch_minutes = bars * tf_minutes * multiplier + _BARS_FETCH_BUFFER * tf_minutes
+        from_dt = to_dt - timedelta(minutes=fetch_minutes)
+        df = get_ohlc(symbol, timeframe, from_dt, to_dt)
+        if df is not None and len(df) >= bars:
+            break
+        multiplier *= 2
+
+    if df is None:
+        df = get_ohlc(symbol, timeframe, to_dt - timedelta(minutes=tf_minutes), to_dt)
     df = df.tail(bars)
 
     return ChartResponse(
