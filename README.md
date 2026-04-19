@@ -19,31 +19,23 @@ FXトレーニング・リアルトレードアプリのモノレポ。
     └── common-ui-lib/    # 共通UIコンポーネント
 ```
 
-## セットアップ
+## セットアップと起動
 
-### 前提
+セットアップ手順・環境変数・設定ファイル・トラブルシュートは [docs/Setup.md](./docs/Setup.md) を参照してください。
 
-- Python 3.13(`.python-version` で管理)
-- Node.js 24(`.nvmrc` で管理)
-- uv 0.11 以上
-- npm 11 以上
-
-### 初回セットアップ
+最小手順:
 
 ```bash
-# Python 側(全アプリのワークスペース環境構築)
 uv sync
-
-# フロントエンド側
 npm install
 ```
 
-### アプリ起動(開発)
+起動(trade-trainer、ターミナル 2 枚):
 
 ```bash
-# バックエンド(例: trade-trainer)
-cd apps/trade-trainer/backend && uv run uvicorn trade_trainer_backend.main:app --reload
+# backend
+cd apps/trade-trainer/backend && uv run uvicorn trade_trainer_backend.main:app --reload --port 8001
 
-# フロントエンド(例: trade-trainer)
+# frontend
 npm run dev --workspace=apps/trade-trainer/frontend
 ```
