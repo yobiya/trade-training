@@ -48,6 +48,11 @@ def get_cached_ohlc(
     return pd.DataFrame(data).set_index("timestamp")
 
 
+# SQLite は 1 ステートメントあたりのバインド変数を制限(古いビルドで 999、新ビルドで 32766)。
+# 1 レコード 9 カラムを掛けても安全な範囲にチャンクする。
+_INSERT_CHUNK_SIZE = 500
+
+
 def store_ohlc(
     session: Session,
     df: pd.DataFrame,
@@ -74,19 +79,21 @@ def store_ohlc(
         for ts, row in df.iterrows()
     ]
 
-    stmt = insert(OhlcM5).values(records)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["symbol", "timestamp", "source"],
-        set_={
-            "open": stmt.excluded.open,
-            "high": stmt.excluded.high,
-            "low": stmt.excluded.low,
-            "close": stmt.excluded.close,
-            "volume": stmt.excluded.volume,
-            "fetched_at": stmt.excluded.fetched_at,
-        },
-    )
-    session.execute(stmt)
+    for i in range(0, len(records), _INSERT_CHUNK_SIZE):
+        chunk = records[i : i + _INSERT_CHUNK_SIZE]
+        stmt = insert(OhlcM5).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["symbol", "timestamp", "source"],
+            set_={
+                "open": stmt.excluded.open,
+                "high": stmt.excluded.high,
+                "low": stmt.excluded.low,
+                "close": stmt.excluded.close,
+                "volume": stmt.excluded.volume,
+                "fetched_at": stmt.excluded.fetched_at,
+            },
+        )
+        session.execute(stmt)
     session.commit()
     return len(records)
 
