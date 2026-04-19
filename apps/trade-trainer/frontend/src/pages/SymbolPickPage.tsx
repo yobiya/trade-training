@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { TradeSession } from '../api/client'
+import { SYMBOLS } from '../constants'
 import { formatJST } from '../utils/datetime'
-
-const SYMBOLS = ['USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'EURJPY', 'GBPJPY', 'AUDJPY', 'EURGBP']
 
 type Props = {
   sessionId: string

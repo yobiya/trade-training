@@ -2,17 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { api, ApiError } from '../api/client'
 import type { SessionListItem, StatsSummary } from '../api/client'
 import { StatsBar } from '../components/StatsBar'
+import { DAYS_OF_WEEK, TRADING_SESSIONS } from '../constants'
 import { formatJST } from '../utils/datetime'
-
-const DAYS = [
-  { v: 0, label: '月' }, { v: 1, label: '火' }, { v: 2, label: '水' },
-  { v: 3, label: '木' }, { v: 4, label: '金' }, { v: 5, label: '土' }, { v: 6, label: '日' },
-]
-const SESSIONS = [
-  { v: 'tokyo', label: '東京 09-15' },
-  { v: 'london', label: 'ロンドン 16-25' },
-  { v: 'ny', label: 'NY 22-06' },
-]
 
 type Props = {
   onStartNew: (id: string) => void
@@ -106,7 +97,7 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
           <div className="filter-row">
             <label>曜日:</label>
             <div className="chip-group">
-              {DAYS.map(d => (
+              {DAYS_OF_WEEK.map(d => (
                 <button
                   key={d.v}
                   type="button"
@@ -119,7 +110,7 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
           <div className="filter-row">
             <label>時間帯:</label>
             <div className="chip-group">
-              {SESSIONS.map(s => (
+              {TRADING_SESSIONS.map(s => (
                 <button
                   key={s.v}
                   type="button"

@@ -1,22 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { OhlcBar } from '../api/client'
-
-// 時間足ごとに取得するバー本数(仕様書 §5.1)。
-export const BARS_BY_TF: Record<string, number> = {
-  M5: 500, M15: 400, M30: 400, H1: 400, H4: 300, D1: 200,
-}
-
-// メイン時間足を選んだときに並行表示する上位足(仕様書 §5.1)。
-// D1 は最上位のため上位足なしで main のみ表示。
-export const UPPER_TFS: Record<string, string[]> = {
-  M5: ['M15', 'H1', 'H4'],
-  M15: ['H1', 'H4', 'D1'],
-  M30: ['H1', 'H4', 'D1'],
-  H1: ['H4', 'D1'],
-  H4: ['D1'],
-  D1: [],
-}
+import { BARS_BY_TF, UPPER_TFS } from '../constants'
 
 export type ChartsApi = {
   /** 表示中の各時間足のバー配列 */

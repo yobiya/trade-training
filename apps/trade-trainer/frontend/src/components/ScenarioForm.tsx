@@ -1,11 +1,5 @@
 import type { ScenarioInput } from '../api/client'
-
-// 仕様書 §7.4 固定タグ候補
-const PRESET_TAGS = [
-  '押し目買い', '戻り売り', 'ブレイクアウト', 'レンジ逆張り',
-  '3波狙い', 'C波狙い', 'ダマシ警戒',
-  '指標前', '指標後', '指標スキップ', '指標無風',
-]
+import { PRESET_TAGS } from '../constants'
 
 type Props = {
   value: ScenarioInput

@@ -3,10 +3,9 @@ import { api } from '../api/client'
 import type { ScenarioInput, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
 import { TradePanel } from '../components/TradePanel'
-import { UPPER_TFS, useCharts } from '../hooks/useCharts'
+import { TIMEFRAMES, UPPER_TFS } from '../constants'
+import { useCharts } from '../hooks/useCharts'
 import { formatJST } from '../utils/datetime'
-
-const TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1']
 
 type Props = {
   sessionId: string

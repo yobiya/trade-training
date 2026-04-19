@@ -1,4 +1,25 @@
+import type {
+  AdvanceResponse,
+  ChartResponse,
+  ScenarioInput,
+  SessionFilter,
+  SessionListItem,
+  StatsSummary,
+  TradeResponse,
+  TradeSession,
+} from './types'
+
+export * from './types'
+
 const BASE = '/api'
+
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -14,92 +35,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export class ApiError extends Error {
-  status: number
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
-
-export type OhlcBar = { t: number; o: number; h: number; l: number; c: number; v: number }
-
-export type SessionListItem = {
-  id: string
-  symbol: string
-  started_at: string
-  presented_at: string
-  mode: string
-  is_suspended: boolean
-  is_complete: boolean
-}
-
-export type TradeSession = {
-  id: string
-  symbol: string
-  started_at: string
-  presented_at: string
-  current_position: string
-  mode: string
-  is_suspended: boolean
-  has_active_trade: boolean
-  is_complete: boolean
-}
-
-export type ChartResponse = {
-  bars: OhlcBar[]
-  current_position: string
-  timeframe: string
-}
-
-export type AdvanceResponse = {
-  new_bars: OhlcBar[]
-  current_position: string
-  trade_auto_closed: boolean
-  trade_exit_reason: string | null
-  trade_exit_price: number | null
-  trade_pips_pnl: number | null
-}
-
-export type ScenarioInput = {
-  scenario_main?: string | null
-  entry_basis?: string | null
-  tags?: string[]
-}
-
-export type ScenarioResponse = {
-  scenario_main: string | null
-  entry_basis: string | null
-  tags: string[]
-  exit_memo: string | null
-  reflection: string | null
-}
-
-export type TradeResponse = {
-  id: string
-  direction: 'buy' | 'sell'
-  entry_price: number
-  sl: number | null
-  tp: number | null
-  entry_time: string
-  exit_price: number | null
-  exit_reason: string | null
-  exit_time: string | null
-  pips_pnl: number | null
-  is_open: boolean
-  scenario: ScenarioResponse | null
-}
-
-export type StatsSummary = {
-  total_trades: number
-  win_count: number
-  loss_count: number
-  win_rate: number
-  total_pips: number
-  avg_pips_per_trade: number
-  profit_factor: number
-}
-
 export const api = {
   auth: {
     login: (password: string) =>
@@ -112,12 +47,7 @@ export const api = {
   },
 
   sessions: {
-    create: (filter?: {
-      date_from?: string
-      date_to?: string
-      days?: number[]
-      sessions?: string[]
-    }) =>
+    create: (filter?: SessionFilter) =>
       request<TradeSession>('/sessions', {
         method: 'POST',
         body: JSON.stringify(filter ?? {}),
