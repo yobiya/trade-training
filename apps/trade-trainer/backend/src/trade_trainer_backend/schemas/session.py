@@ -3,9 +3,14 @@ from pydantic import BaseModel
 
 
 class CreateSessionRequest(BaseModel):
-    symbol: str
+    # 仕様書 §1.2/§4.1: 日時起点フロー。銘柄は後続で select-symbol エンドポイントで設定する。
+    symbol: str | None = None
     date_from: datetime | None = None  # None = 過去5年の範囲でランダム選択
     date_to: datetime | None = None    # None = 30日前まで
+
+
+class SelectSymbolRequest(BaseModel):
+    symbol: str
 
 
 class AdvanceRequest(BaseModel):

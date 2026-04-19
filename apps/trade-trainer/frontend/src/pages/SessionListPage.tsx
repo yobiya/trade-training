@@ -3,17 +3,15 @@ import { api } from '../api/client'
 import type { SessionListItem, StatsSummary } from '../api/client'
 import { StatsBar } from '../components/StatsBar'
 
-const SYMBOLS = ['USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'EURJPY', 'GBPJPY', 'AUDJPY', 'EURGBP']
-
 type Props = {
-  onSelectSession: (id: string) => void
+  onStartNew: (id: string) => void
+  onOpenSession: (id: string) => void
   onLogout: () => void
 }
 
-export function SessionListPage({ onSelectSession, onLogout }: Props) {
+export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [stats, setStats] = useState<StatsSummary | null>(null)
-  const [symbol, setSymbol] = useState('USDJPY')
   const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
@@ -30,10 +28,18 @@ export function SessionListPage({ onSelectSession, onLogout }: Props) {
   async function handleCreate() {
     setCreating(true)
     try {
-      const s = await api.sessions.create(symbol)
-      onSelectSession(s.id)
+      const s = await api.sessions.create()
+      onStartNew(s.id)
     } finally {
       setCreating(false)
+    }
+  }
+
+  function handleOpenSession(s: SessionListItem) {
+    if (!s.symbol) {
+      onStartNew(s.id)
+    } else {
+      onOpenSession(s.id)
     }
   }
 
@@ -47,11 +53,8 @@ export function SessionListPage({ onSelectSession, onLogout }: Props) {
       <StatsBar stats={stats} />
 
       <div className="new-session">
-        <select value={symbol} onChange={e => setSymbol(e.target.value)}>
-          {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
         <button onClick={() => void handleCreate()} disabled={creating} className="create-btn">
-          {creating ? '作成中...' : '新規セッション'}
+          {creating ? '作成中...' : '新規セッション(日時を抽選)'}
         </button>
       </div>
 
@@ -63,12 +66,14 @@ export function SessionListPage({ onSelectSession, onLogout }: Props) {
           <div
             key={s.id}
             className="session-item"
-            onClick={() => onSelectSession(s.id)}
+            onClick={() => handleOpenSession(s)}
           >
-            <span className="session-symbol">{s.symbol || '—'}</span>
-            <span className="session-date">{new Date(s.presented_at).toLocaleDateString('ja-JP')}</span>
+            <span className="session-symbol">{s.symbol || '銘柄未選定'}</span>
+            <span className="session-date">
+              {new Date(s.presented_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+            </span>
             <span className={`session-status ${s.is_complete ? 'entered' : 'skip'}`}>
-              {s.is_complete ? '完了' : '未処理'}
+              {s.is_complete ? '完了' : s.symbol ? '未処理' : '銘柄未選定'}
             </span>
           </div>
         ))}

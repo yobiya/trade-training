@@ -97,14 +97,19 @@ export const api = {
   },
 
   sessions: {
-    create: (symbol: string) =>
+    create: (symbol?: string) =>
       request<TradeSession>('/sessions', {
         method: 'POST',
-        body: JSON.stringify({ symbol }),
+        body: JSON.stringify(symbol ? { symbol } : {}),
       }),
     list: (limit = 20, offset = 0) =>
       request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),
     get: (id: string) => request<TradeSession>(`/sessions/${id}`),
+    selectSymbol: (id: string, symbol: string) =>
+      request<TradeSession>(`/sessions/${id}/symbol`, {
+        method: 'POST',
+        body: JSON.stringify({ symbol }),
+      }),
     skip: (id: string) =>
       request<TradeSession>(`/sessions/${id}/skip`, { method: 'POST' }),
   },

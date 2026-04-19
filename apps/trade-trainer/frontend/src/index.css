@@ -164,6 +164,51 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .session-status.skip { color: var(--text-dim); }
 .empty { text-align: center; color: var(--text-dim); padding: 32px; }
 
+/* Symbol pick page */
+.symbol-pick-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.symbol-pick-page .app-header h1 { flex: 1; text-align: center; font-size: 15px; }
+.presented-datetime {
+  padding: 24px 16px 8px;
+  text-align: center;
+}
+.presented-datetime .label {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-right: 8px;
+}
+.presented-datetime .value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.symbol-pick-page .hint {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 0 16px 24px;
+  margin: 0;
+}
+.symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+.symbol-btn {
+  padding: 20px 12px;
+  font-size: 16px;
+  font-weight: 700;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+}
+.symbol-btn:hover:not(:disabled) {
+  background: var(--bg3);
+  border-color: var(--accent);
+}
+
 /* Training page */
 .training-page {
   display: flex;

@@ -12,6 +12,7 @@ from trade_trainer_backend.config import Settings, get_settings
 from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.session import (
     CreateSessionRequest,
+    SelectSymbolRequest,
     SessionListItem,
     SessionResponse,
     SkipSessionRequest,
@@ -84,16 +85,42 @@ def create_session(
         mode="training",
         is_suspended=False,
     )
-    fd = SessionFinalDecision(
-        session_id=session_id,
-        symbol=body.symbol.upper(),
-        has_entry=False,
-    )
     db.add(ts)
-    db.add(fd)
+    # 銘柄は任意。指定があれば即座に SessionFinalDecision を作成する。
+    if body.symbol:
+        fd = SessionFinalDecision(
+            session_id=session_id,
+            symbol=body.symbol.upper(),
+            has_entry=False,
+        )
+        db.add(fd)
     db.commit()
     db.refresh(ts)
     return _build_response(ts, db)
+
+
+@router.post("/{session_id}/symbol", response_model=SessionResponse)
+def select_symbol(
+    session_id: str,
+    body: SelectSymbolRequest,
+    db: Session = Depends(get_db),
+) -> SessionResponse:
+    """銘柄選定(仕様書 §4.1 Phase 2)。日時先行・銘柄後のフローで呼ばれる。"""
+    s = db.get(TradeSession, session_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    fd = db.get(SessionFinalDecision, session_id)
+    if fd is None:
+        fd = SessionFinalDecision(
+            session_id=session_id,
+            symbol=body.symbol.upper(),
+            has_entry=False,
+        )
+        db.add(fd)
+    else:
+        fd.symbol = body.symbol.upper()
+    db.commit()
+    return _build_response(s, db)
 
 
 @router.get("", response_model=list[SessionListItem])

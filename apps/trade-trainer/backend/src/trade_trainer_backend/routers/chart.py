@@ -81,7 +81,9 @@ def get_chart(
     from_dt = current_pos - timedelta(minutes=fetch_bars_m5)
 
     fd = db.get(SessionFinalDecision, session_id)
-    symbol = fd.symbol if fd else "USDJPY"
+    if fd is None or not fd.symbol:
+        raise HTTPException(status_code=409, detail="Symbol not selected for this session")
+    symbol = fd.symbol
 
     from market_data.accessor import get_ohlc
     df = get_ohlc(symbol, timeframe, from_dt, current_pos)
@@ -109,7 +111,9 @@ def advance_session(
     new_pos = current_pos + timedelta(minutes=5 * bars)
 
     fd = db.get(SessionFinalDecision, session_id)
-    symbol = fd.symbol if fd else "USDJPY"
+    if fd is None or not fd.symbol:
+        raise HTTPException(status_code=409, detail="Symbol not selected for this session")
+    symbol = fd.symbol
 
     # 新しい M5 バーを取得(SL/TP チェック用)
     from market_data.accessor import get_ohlc
