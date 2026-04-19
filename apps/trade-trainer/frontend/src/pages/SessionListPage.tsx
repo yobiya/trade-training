@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { api, ApiError } from '../api/client'
 import type { SessionListItem, StatsSummary } from '../api/client'
 import { StatsBar } from '../components/StatsBar'
+import { formatJST } from '../utils/datetime'
 
 const DAYS = [
   { v: 0, label: '月' }, { v: 1, label: '火' }, { v: 2, label: '水' },
@@ -145,9 +146,7 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
             onClick={() => handleOpenSession(s)}
           >
             <span className="session-symbol">{s.symbol || '銘柄未選定'}</span>
-            <span className="session-date">
-              {new Date(s.presented_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
-            </span>
+            <span className="session-date">{formatJST(s.presented_at)}</span>
             <span className={`session-status ${s.is_complete ? 'entered' : 'skip'}`}>
               {s.is_complete ? '完了' : s.symbol ? '未処理' : '銘柄未選定'}
             </span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { TradeSession } from '../api/client'
+import { formatJST } from '../utils/datetime'
 
 const SYMBOLS = ['USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'EURJPY', 'GBPJPY', 'AUDJPY', 'EURGBP']
 
@@ -37,11 +38,7 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
 
       <div className="presented-datetime">
         <span className="label">提示日時:</span>
-        <span className="value">
-          {session?.presented_at
-            ? new Date(session.presented_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
-            : '—'}
-        </span>
+        <span className="value">{formatJST(session?.presented_at)}</span>
       </div>
 
       <p className="hint">この日時の相場を見て、優位性があると判断できる銘柄を 1 つ選んでください。</p>
