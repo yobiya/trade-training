@@ -42,17 +42,76 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
     )
 
 
-def _random_presented_at(settings: Settings) -> datetime:
-    """過去 history_max_days ~ history_min_days の範囲でランダムな M5 日時を返す。"""
-    now = datetime.now(timezone.utc)
-    offset_secs = random.randint(
-        settings.history_min_days * 86400,
-        settings.history_max_days * 86400,
-    )
-    dt = now - timedelta(seconds=offset_secs)
-    # M5 に丸める
+_JST_OFFSET = timedelta(hours=9)
+
+# 仕様書 §2.11: セッション時間帯プリセット (JST 基準、夏時間固定なし)
+# tokyo: 09-15 JST = 00-06 UTC
+# london: 16-25 JST (翌01JST まで) = 07-16 UTC
+# ny: 22-06 JST (翌) = 13-21 UTC
+_SESSION_UTC_HOUR_RANGES: dict[str, tuple[int, int]] = {
+    "tokyo": (0, 6),
+    "london": (7, 16),
+    "ny": (13, 21),
+}
+
+
+def _matches_filters(
+    dt_utc: datetime,
+    days: list[int] | None,
+    sessions: list[str] | None,
+) -> bool:
+    """曜日・セッション時間帯フィルタに合致するか判定する。"""
+    jst = dt_utc + _JST_OFFSET  # naive JST
+    if days:
+        # 曜日判定は JST 基準(ユーザーの感覚に合わせる)
+        if jst.weekday() not in days:
+            return False
+    if sessions:
+        utc_hour = dt_utc.hour
+        if not any(
+            _SESSION_UTC_HOUR_RANGES[s][0] <= utc_hour < _SESSION_UTC_HOUR_RANGES[s][1]
+            for s in sessions
+            if s in _SESSION_UTC_HOUR_RANGES
+        ):
+            return False
+    return True
+
+
+def _random_datetime_in_range(from_ts: int, to_ts: int) -> datetime:
+    offset = random.randint(0, to_ts - from_ts)
+    dt = datetime.fromtimestamp(from_ts + offset, tz=timezone.utc)
     minutes = (dt.minute // 5) * 5
-    return dt.replace(minute=minutes, second=0, microsecond=0, tzinfo=timezone.utc)
+    return dt.replace(minute=minutes, second=0, microsecond=0)
+
+
+def _random_presented_at(
+    settings: Settings,
+    days: list[int] | None = None,
+    sessions: list[str] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> datetime:
+    """フィルタに合致するランダムな M5 日時を返す (rejection sampling)。"""
+    now = datetime.now(timezone.utc)
+    if date_from and date_to:
+        from_ts = int(date_from.timestamp())
+        to_ts = int(date_to.timestamp())
+    else:
+        from_ts = int((now - timedelta(days=settings.history_max_days)).timestamp())
+        to_ts = int((now - timedelta(days=settings.history_min_days)).timestamp())
+
+    if to_ts <= from_ts:
+        raise HTTPException(status_code=400, detail="date_to must be after date_from")
+
+    # フィルタなしなら 1 回で終わる
+    for _ in range(200):
+        dt = _random_datetime_in_range(from_ts, to_ts)
+        if _matches_filters(dt, days, sessions):
+            return dt
+    raise HTTPException(
+        status_code=400,
+        detail="指定された時間フィルタに合致する日時が見つかりませんでした。条件を緩めてください。",
+    )
 
 
 @router.post("", response_model=SessionResponse, status_code=201)
@@ -61,18 +120,13 @@ def create_session(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SessionResponse:
-    if body.date_from and body.date_to:
-        # 指定範囲内でランダム
-        from_ts = int(body.date_from.timestamp())
-        to_ts = int(body.date_to.timestamp())
-        if to_ts <= from_ts:
-            raise HTTPException(status_code=400, detail="date_to must be after date_from")
-        offset = random.randint(0, to_ts - from_ts)
-        presented_at = datetime.fromtimestamp(from_ts + offset, tz=timezone.utc)
-        minutes = (presented_at.minute // 5) * 5
-        presented_at = presented_at.replace(minute=minutes, second=0, microsecond=0)
-    else:
-        presented_at = _random_presented_at(settings)
+    presented_at = _random_presented_at(
+        settings,
+        days=body.days,
+        sessions=body.sessions,
+        date_from=body.date_from,
+        date_to=body.date_to,
+    )
 
     now = datetime.now(timezone.utc)
     session_id = str(uuid.uuid4())

@@ -97,10 +97,15 @@ export const api = {
   },
 
   sessions: {
-    create: (symbol?: string) =>
+    create: (filter?: {
+      date_from?: string
+      date_to?: string
+      days?: number[]
+      sessions?: string[]
+    }) =>
       request<TradeSession>('/sessions', {
         method: 'POST',
-        body: JSON.stringify(symbol ? { symbol } : {}),
+        body: JSON.stringify(filter ?? {}),
       }),
     list: (limit = 20, offset = 0) =>
       request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),

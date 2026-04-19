@@ -7,6 +7,9 @@ class CreateSessionRequest(BaseModel):
     symbol: str | None = None
     date_from: datetime | None = None  # None = 過去5年の範囲でランダム選択
     date_to: datetime | None = None    # None = 30日前まで
+    # 仕様書 §4.1: 時間フィルタ。指定された条件に合致する日時のみを抽選する。
+    days: list[int] | None = None      # 曜日フィルタ (0=月, 6=日)。空/None は全曜日
+    sessions: list[str] | None = None  # "tokyo"|"london"|"ny"。空/None は全時間帯
 
 
 class SelectSymbolRequest(BaseModel):

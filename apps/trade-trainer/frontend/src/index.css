@@ -164,6 +164,52 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .session-status.skip { color: var(--text-dim); }
 .empty { text-align: center; color: var(--text-dim); padding: 32px; }
 
+/* Time filter */
+.filter-toggle {
+  font-size: 12px;
+}
+.time-filter {
+  padding: 10px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.filter-row > label { width: 64px; color: var(--text-dim); flex-shrink: 0; }
+.chip-group { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0d1117;
+  font-weight: 600;
+}
+.filter-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin: 0;
+}
+.error-banner {
+  padding: 8px 16px;
+  background: rgba(239, 83, 80, 0.15);
+  border-bottom: 1px solid var(--loss);
+  color: var(--loss);
+  font-size: 12px;
+}
+
 /* Symbol pick page */
 .symbol-pick-page {
   display: flex;
