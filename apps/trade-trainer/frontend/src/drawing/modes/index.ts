@@ -24,7 +24,6 @@ export function toolStartMode(tool: DrawingKind | null): DrawingMode {
     case 'line': return new DrawingLineMode()
     case 'trendline': return new DrawingTrendlineMode()
     case 'fibonacci': return new DrawingFibonacciMode()
-    // 将来: label
     default: return new IdleMode()
   }
 }

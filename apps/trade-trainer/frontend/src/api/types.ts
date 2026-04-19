@@ -88,7 +88,7 @@ export type SessionFilter = {
 }
 
 // 仕様書 §5.3/§5.5: 描画オブジェクト
-export type DrawingKind = 'line' | 'trendline' | 'fibonacci' | 'label'
+export type DrawingKind = 'line' | 'trendline' | 'fibonacci'
 
 export type Drawing = {
   id: number

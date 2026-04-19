@@ -115,15 +115,16 @@ export interface ChartApi {
 | モード                        | 遷移元           | 役割                                                | 備考                    |
 | ----------------------------- | ---------------- | --------------------------------------------------- | ----------------------- |
 | `IdleMode`                    | 初期 / 各操作完了 | ヒットテストしてホバー時のカーソル変更、クリック時に編集モードへ遷移 | 常時待機 |
-| `DrawingLineMode`             | ツール選択       | 1 クリックで水平線を作成                            | Phase 2a で実装         |
-| `MovingLineMode`              | Idle のクリック  | y ドラッグで価格を更新                              | Phase 2a で実装         |
-| `DrawingTrendlineMode`        | ツール選択       | 2 点クリックで作成、マウスムーブ中はプレビュー表示  | (将来)                  |
-| `MovingTrendlineHandleMode`   | Idle のクリック  | 端点を移動                                          | (将来)                  |
-| `MovingTrendlineBodyMode`     | Idle のクリック  | 全体を平行移動                                      | (将来)                  |
-| `DrawingFibonacciMode`        | ツール選択       | 2 点クリックで作成                                  | (将来)                  |
-| `MovingFibonacciHandleMode`   | Idle のクリック  | 端点を移動(レベル線は自動追従)                      | (将来)                  |
-| `DrawingLabelMode`            | ツール選択       | 1 クリック + テキスト入力、連続採番をサポート       | (将来)                  |
-| `MovingLabelMode`             | Idle のクリック  | テキストの位置を移動                                | (将来)                  |
+| `DrawingLineMode`             | ツール選択       | 1 クリックで水平線を作成                            | 実装済み                |
+| `MovingLineMode`              | Idle のクリック  | y ドラッグで価格を更新                              | 実装済み                |
+| `DrawingTrendlineMode`        | ツール選択       | 2 点クリックで作成、マウスムーブ中はプレビュー表示  | 実装済み                |
+| `MovingTrendlineHandleMode`   | Idle のクリック  | 端点を移動                                          | 実装済み                |
+| `MovingTrendlineBodyMode`     | Idle のクリック  | 全体を平行移動                                      | 実装済み                |
+| `DrawingFibonacciMode`        | ツール選択       | 2 点クリックで作成                                  | 実装済み                |
+| `MovingFibonacciHandleMode`   | Idle のクリック  | 端点を移動(レベル線は自動追従)                      | 実装済み                |
+| `MovingFibonacciBodyMode`     | Idle のクリック  | 全体を平行移動                                      | 実装済み                |
+
+※ エリオット波動カウント(連続採番ラベル)は描画ツールではなく §16 Phase 2b の専用機能として別途提供予定のため、本アーキテクチャには含めない。
 
 ## 7. 状態遷移の例
 
@@ -168,9 +169,8 @@ Idle
 // drawing/tools/registry.ts
 export const TOOLS: Record<DrawingKind, ToolMetadata> = {
   line: lineTool,
-  trendline: trendlineTool,   // 将来
-  fibonacci: fibonacciTool,   // 将来
-  label: labelTool,           // 将来
+  trendline: trendlineTool,
+  fibonacci: fibonacciTool,
 }
 
 export interface ToolMetadata {

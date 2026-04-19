@@ -53,7 +53,6 @@ function buildMovingMode(hit: HitResult, ctx: ModeContext, e: PointerPayload): D
       }
       if (e.point.time === null) return null
       return new MovingFibonacciBodyMode(drawing, { t: e.point.time, price: e.point.price })
-    // 将来: label
     default: return null
   }
 }

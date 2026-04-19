@@ -132,11 +132,9 @@ function getActiveTool(mode: DrawingMode): DrawingKind | null {
     case 'drawing-line': return 'line'
     case 'drawing-trendline': return 'trendline'
     case 'drawing-fibonacci': return 'fibonacci'
-    case 'drawing-label': return 'label'
     default: return null
   }
 }
-// (既に fibonacci と label は網羅済み。新規追加時は mode.id と case を足すのみ)
 
 const noopChartApi: ChartApi = {
   priceToY: () => null,

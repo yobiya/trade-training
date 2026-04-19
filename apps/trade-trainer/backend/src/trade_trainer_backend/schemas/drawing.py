@@ -2,7 +2,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-DrawingKind = Literal["line", "trendline", "fibonacci", "label"]
+DrawingKind = Literal["line", "trendline", "fibonacci"]
 
 
 class CreateDrawingRequest(BaseModel):
@@ -12,7 +12,6 @@ class CreateDrawingRequest(BaseModel):
       - line(水平線):   { "price": float }
       - trendline:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
       - fibonacci:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
-      - label:          { "t": int, "price": float, "text": str }
     """
     kind: DrawingKind
     data: dict[str, Any]

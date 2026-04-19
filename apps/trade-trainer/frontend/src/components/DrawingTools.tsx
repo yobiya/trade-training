@@ -10,14 +10,14 @@ type Props = {
 }
 
 // 現状 UI で扱うツール(TOOLS に登録されているもののみ)
-const TOOL_ORDER: DrawingKind[] = ['line', 'trendline', 'fibonacci', 'label']
+const TOOL_ORDER: DrawingKind[] = ['line', 'trendline', 'fibonacci']
 
 function hintFor(tool: DrawingKind): string {
   switch (tool) {
     case 'line': return 'チャートをクリックで追加 / ESC で中止'
     case 'trendline': return '2 点をクリックで引く / ESC で中止'
     case 'fibonacci': return '2 点をクリックで引く / ESC で中止'
-    case 'label': return 'クリック位置にラベルを配置'
+    default: return ''
   }
 }
 
@@ -32,11 +32,13 @@ function describe(d: Drawing, digits: number): string {
       }
       return 'フィボ'
     }
-    case 'label': return `ラベル: ${String(d.label ?? '')}`
+    default: return String(d.kind)
   }
 }
 
-export function DrawingTools({ activeTool, onSelectTool, drawings, onRemove, digits }: Props) {
+export function DrawingTools({
+  activeTool, onSelectTool, drawings, onRemove, digits,
+}: Props) {
   return (
     <div className="drawing-tools">
       <div className="drawing-toolbar">

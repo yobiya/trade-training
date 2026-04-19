@@ -12,8 +12,6 @@ export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
   trendline: trendlineTool,
   fibonacci: fibonacciTool,
-  // 将来: label
-  label: undefined,
 }
 
 export function findHit(
