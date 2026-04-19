@@ -46,6 +46,8 @@ def _trade_to_response(t: Trade, scenario: Scenario | None = None) -> TradeRespo
         pips_pnl=t.pips_pnl,
         is_open=t.exit_time is None,
         scenario=_scenario_to_response(scenario),
+        style_id=t.style_id,
+        style_selection_reason=t.style_selection_reason,
     )
 
 
@@ -81,6 +83,8 @@ def enter_trade(
         entry_price=body.price,
         sl=body.sl,
         tp=body.tp,
+        style_id=body.style_id,
+        style_selection_reason=body.style_selection_reason,
         created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(trade)

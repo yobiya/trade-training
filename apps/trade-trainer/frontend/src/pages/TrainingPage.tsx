@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { Drawing, ScenarioInput, TradeResponse, TradeSession } from '../api/client'
+import type { Drawing, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
 import type { ChartHandle, PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
@@ -13,6 +13,7 @@ import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
 import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
+import { useTradingStyles } from '../hooks/useTradingStyles'
 import { formatJST } from '../utils/datetime'
 
 type Props = {
@@ -53,6 +54,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
 
   const { barsByTf, upperTfs, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, timeframe)
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
+  const tradingStyles = useTradingStyles()
 
   const [mainChartHandle, setMainChartHandle] = useState<ChartHandle | null>(null)
   const chartApiRef = useRef<ChartApi | null>(null)
@@ -109,18 +111,28 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     }
   }
 
-  async function handleEnter(
-    direction: 'buy' | 'sell',
-    price: number,
-    sl: number,
-    tp: number | undefined,
-    scenario: ScenarioInput,
-  ) {
+  async function handleEnter(args: {
+    direction: 'buy' | 'sell'
+    price: number
+    sl: number
+    tp: number | undefined
+    scenario: import('../api/client').ScenarioInput
+    styleId: string
+    styleReason: string
+  }) {
     setLoading(true)
     try {
-      const trade = await api.trades.enter(sessionId, { direction, price, sl, tp, scenario })
+      const trade = await api.trades.enter(sessionId, {
+        direction: args.direction,
+        price: args.price,
+        sl: args.sl,
+        tp: args.tp,
+        scenario: args.scenario,
+        style_id: args.styleId,
+        style_selection_reason: args.styleReason,
+      })
       setActiveTrade(trade)
-      notify(`エントリー: ${direction.toUpperCase()} @ ${price}`)
+      notify(`エントリー: ${args.direction.toUpperCase()} @ ${args.price}`)
     } finally {
       setLoading(false)
     }
@@ -219,6 +231,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             onExit={handleExit}
             loading={loading}
             digits={session?.digits ?? 5}
+            styles={tradingStyles}
           />
           <IndicatorPanel active={indicators} onChange={setIndicators} />
           <DrawingTools

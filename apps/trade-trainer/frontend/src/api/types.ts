@@ -68,6 +68,8 @@ export type TradeResponse = {
   pips_pnl: number | null
   is_open: boolean
   scenario: ScenarioResponse | null
+  style_id: string | null
+  style_selection_reason: string | null
 }
 
 export type StatsSummary = {
@@ -85,6 +87,18 @@ export type SessionFilter = {
   date_to?: string
   days?: number[]
   sessions?: string[]
+}
+
+// 仕様書 §8: トレードスタイル
+export type TradingStyle = {
+  id: string
+  name: string
+  primary_timeframe: string
+  expected_hold_time: string
+  expected_rr: string
+  typical_sl_pips: string
+  description: string | null
+  is_active: boolean
 }
 
 // 仕様書 §5.3/§5.5: 描画オブジェクト

@@ -391,6 +391,28 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   font-weight: 600;
 }
 
+/* Style select (trade style selection at entry) */
+.style-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.style-select select {
+  width: 100%;
+  padding: 5px 8px;
+}
+.style-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 2px 4px;
+}
+
 /* Scenario memo form */
 .scenario-form {
   display: flex;

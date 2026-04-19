@@ -26,6 +26,9 @@ class EnterTradeRequest(BaseModel):
     sl: float
     tp: float | None = None
     scenario: ScenarioInput | None = None
+    # 仕様書 §7.1/§8: エントリー時に選択したトレードスタイル
+    style_id: str | None = None
+    style_selection_reason: str | None = None
 
 
 class ExitTradeRequest(BaseModel):
@@ -51,5 +54,7 @@ class TradeResponse(BaseModel):
     pips_pnl: float | None
     is_open: bool
     scenario: ScenarioResponse | None = None
+    style_id: str | None = None
+    style_selection_reason: str | None = None
 
     model_config = {"from_attributes": True}

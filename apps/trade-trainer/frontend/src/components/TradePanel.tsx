@@ -1,24 +1,31 @@
 import { useState } from 'react'
-import type { ScenarioInput, TradeResponse } from '../api/client'
+import type { ScenarioInput, TradeResponse, TradingStyle } from '../api/client'
 import { ScenarioForm } from './ScenarioForm'
+import { StyleSelect } from './StyleSelect'
+
+type EnterArgs = {
+  direction: 'buy' | 'sell'
+  price: number
+  sl: number
+  tp: number | undefined
+  scenario: ScenarioInput
+  styleId: string
+  styleReason: string
+}
 
 type Props = {
   activeTrade: TradeResponse | null
   currentPrice: number | null
-  onEnter: (
-    direction: 'buy' | 'sell',
-    price: number,
-    sl: number,
-    tp: number | undefined,
-    scenario: ScenarioInput,
-  ) => Promise<void>
+  onEnter: (args: EnterArgs) => Promise<void>
   onExit: (price: number, reason: string) => Promise<void>
   loading: boolean
-  /** 価格入力 step のための小数桁数。 */
   digits: number
+  styles: TradingStyle[]
 }
 
-export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading, digits }: Props) {
+export function TradePanel({
+  activeTrade, currentPrice, onEnter, onExit, loading, digits, styles,
+}: Props) {
   const step = Math.pow(10, -digits).toFixed(digits)
   const [price, setPrice] = useState('')
   const [sl, setSl] = useState('')
@@ -29,21 +36,25 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
     entry_basis: '',
     tags: [],
   })
+  const [styleId, setStyleId] = useState('')
+  const [styleReason, setStyleReason] = useState('')
 
   const scenarioValid =
     (scenario.scenario_main?.trim().length ?? 0) > 0 &&
     (scenario.entry_basis?.trim().length ?? 0) > 0 &&
     (scenario.tags?.length ?? 0) > 0
+  const styleValid = styleId !== '' && styleReason.trim().length > 0
 
   async function handleEnter(direction: 'buy' | 'sell') {
     const p = parseFloat(price)
     const slv = parseFloat(sl)
     if (isNaN(p) || isNaN(slv)) return
-    if (!scenarioValid) return
+    if (!scenarioValid || !styleValid) return
     const tpv = parseFloat(tp) || undefined
-    await onEnter(direction, p, slv, tpv, scenario)
+    await onEnter({ direction, price: p, sl: slv, tp: tpv, scenario, styleId, styleReason })
     setPrice(''); setSl(''); setTp('')
     setScenario({ scenario_main: '', entry_basis: '', tags: [] })
+    setStyleId(''); setStyleReason('')
   }
 
   async function handleExit() {
@@ -58,6 +69,7 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
       ? ''
       : activeTrade.pips_pnl >= 0 ? 'profit' : 'loss'
     const sc = activeTrade.scenario
+    const style = styles.find(s => s.id === activeTrade.style_id)
     return (
       <div className="trade-panel">
         <div className="active-trade">
@@ -71,6 +83,14 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
           </div>
           {activeTrade.pips_pnl != null && (
             <div className={`pnl ${pnlClass}`}>{activeTrade.pips_pnl > 0 ? '+' : ''}{activeTrade.pips_pnl} pips</div>
+          )}
+          {(style || activeTrade.style_selection_reason) && (
+            <div className="scenario-readout">
+              {style && <div className="scenario-block"><span className="scenario-readout-label">スタイル</span>{style.name}</div>}
+              {activeTrade.style_selection_reason && (
+                <div className="scenario-block"><span className="scenario-readout-label">選定理由</span>{activeTrade.style_selection_reason}</div>
+              )}
+            </div>
           )}
           {sc && (sc.scenario_main || sc.entry_basis || sc.tags.length > 0) && (
             <div className="scenario-readout">
@@ -102,10 +122,20 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
     )
   }
 
+  const ready = price && sl && scenarioValid && styleValid
+
   return (
     <div className="trade-panel">
       <div className="entry-form">
         <ScenarioForm value={scenario} onChange={setScenario} disabled={loading} />
+        <StyleSelect
+          styles={styles}
+          styleId={styleId}
+          onStyleIdChange={setStyleId}
+          reason={styleReason}
+          onReasonChange={setStyleReason}
+          disabled={loading}
+        />
         <div className="price-row">
           <input
             type="number"
@@ -135,22 +165,22 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
           <button
             className="buy-btn"
             onClick={() => handleEnter('buy')}
-            disabled={loading || !price || !sl || !scenarioValid}
-            title={!scenarioValid ? 'メモ・根拠・タグは必須です' : ''}
+            disabled={loading || !ready}
+            title={!ready ? 'メモ・根拠・タグ・スタイル・理由は必須です' : ''}
           >
             BUY
           </button>
           <button
             className="sell-btn"
             onClick={() => handleEnter('sell')}
-            disabled={loading || !price || !sl || !scenarioValid}
-            title={!scenarioValid ? 'メモ・根拠・タグは必須です' : ''}
+            disabled={loading || !ready}
+            title={!ready ? 'メモ・根拠・タグ・スタイル・理由は必須です' : ''}
           >
             SELL
           </button>
         </div>
-        {!scenarioValid && (
-          <p className="scenario-hint">メモ本文・エントリー根拠・タグは全て入力必須です</p>
+        {!ready && (
+          <p className="scenario-hint">メモ・根拠・タグ・スタイル・選定理由は全て入力必須です</p>
         )}
       </div>
     </div>

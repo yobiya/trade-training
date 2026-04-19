@@ -9,6 +9,7 @@ import type {
   StatsSummary,
   TradeResponse,
   TradeSession,
+  TradingStyle,
 } from './types'
 
 export * from './types'
@@ -90,6 +91,8 @@ export const api = {
       sl?: number
       tp?: number
       scenario?: ScenarioInput
+      style_id?: string
+      style_selection_reason?: string
     }) =>
       request<TradeResponse>(`/sessions/${sessionId}/trade/enter`, {
         method: 'POST',
@@ -110,6 +113,23 @@ export const api = {
   stats: {
     summary: (symbol?: string) =>
       request<StatsSummary>(`/stats/summary${symbol ? `?symbol=${symbol}` : ''}`),
+  },
+
+  tradingStyles: {
+    list: (includeInactive = false) =>
+      request<TradingStyle[]>(`/trading-styles${includeInactive ? '?include_inactive=true' : ''}`),
+    create: (body: Omit<TradingStyle, 'is_active'>) =>
+      request<TradingStyle>('/trading-styles', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (id: string, patch: Partial<Omit<TradingStyle, 'id'>>) =>
+      request<TradingStyle>(`/trading-styles/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    delete: (id: string) =>
+      request<void>(`/trading-styles/${id}`, { method: 'DELETE' }),
   },
 
   drawings: {

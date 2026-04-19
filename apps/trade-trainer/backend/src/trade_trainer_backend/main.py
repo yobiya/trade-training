@@ -13,6 +13,7 @@ from trade_trainer_backend.routers.drawings import router as drawings_router
 from trade_trainer_backend.routers.sessions import router as sessions_router
 from trade_trainer_backend.routers.stats import router as stats_router
 from trade_trainer_backend.routers.trades import router as trades_router
+from trade_trainer_backend.routers.trading_styles import router as trading_styles_router
 
 
 @asynccontextmanager
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(chart_router, prefix="/api")
     app.include_router(trades_router, prefix="/api")
     app.include_router(drawings_router, prefix="/api")
+    app.include_router(trading_styles_router, prefix="/api")
     app.include_router(stats_router, prefix="/api")
 
     @app.get("/health")
