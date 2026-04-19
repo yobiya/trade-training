@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ScenarioInput, TradeResponse, TradingStyle } from '../api/client'
-import { ScenarioForm } from './ScenarioForm'
+import { ScenarioForm, isScenarioValid } from './ScenarioForm'
 import { StyleSelect } from './StyleSelect'
 
 type EnterArgs = {
@@ -31,18 +31,11 @@ export function TradePanel({
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
   const [exitPrice, setExitPrice] = useState('')
-  const [scenario, setScenario] = useState<ScenarioInput>({
-    scenario_main: '',
-    entry_basis: '',
-    tags: [],
-  })
+  const [scenario, setScenario] = useState<ScenarioInput>({ tags: [] })
   const [styleId, setStyleId] = useState('')
   const [styleReason, setStyleReason] = useState('')
 
-  const scenarioValid =
-    (scenario.scenario_main?.trim().length ?? 0) > 0 &&
-    (scenario.entry_basis?.trim().length ?? 0) > 0 &&
-    (scenario.tags?.length ?? 0) > 0
+  const scenarioValid = isScenarioValid(scenario)
   const styleValid = styleId !== '' && styleReason.trim().length > 0
 
   async function handleEnter(direction: 'buy' | 'sell') {
@@ -53,7 +46,7 @@ export function TradePanel({
     const tpv = parseFloat(tp) || undefined
     await onEnter({ direction, price: p, sl: slv, tp: tpv, scenario, styleId, styleReason })
     setPrice(''); setSl(''); setTp('')
-    setScenario({ scenario_main: '', entry_basis: '', tags: [] })
+    setScenario({ tags: [] })
     setStyleId(''); setStyleReason('')
   }
 
@@ -92,9 +85,17 @@ export function TradePanel({
               )}
             </div>
           )}
-          {sc && (sc.scenario_main || sc.entry_basis || sc.tags.length > 0) && (
+          {sc && (
             <div className="scenario-readout">
-              {sc.scenario_main && <div className="scenario-block"><span className="scenario-readout-label">メモ</span>{sc.scenario_main}</div>}
+              {sc.environment && <div className="scenario-block"><span className="scenario-readout-label">環境</span>{sc.environment}</div>}
+              {sc.market_view && <div className="scenario-block"><span className="scenario-readout-label">相場観</span>{sc.market_view}</div>}
+              {sc.event_recognition && <div className="scenario-block"><span className="scenario-readout-label">指標</span>{sc.event_recognition}</div>}
+              {sc.symbol_reason && <div className="scenario-block"><span className="scenario-readout-label">銘柄理由</span>{sc.symbol_reason}</div>}
+              {sc.skipped_candidates && <div className="scenario-block"><span className="scenario-readout-label">見送り候補</span>{sc.skipped_candidates}</div>}
+              {sc.scenario_main && <div className="scenario-block"><span className="scenario-readout-label">メイン</span>{sc.scenario_main}</div>}
+              {sc.scenario_alt1 && <div className="scenario-block"><span className="scenario-readout-label">代替1</span>{sc.scenario_alt1}</div>}
+              {sc.scenario_alt2 && <div className="scenario-block"><span className="scenario-readout-label">代替2</span>{sc.scenario_alt2}</div>}
+              {sc.wave_count && <div className="scenario-block"><span className="scenario-readout-label">波動</span>{sc.wave_count}</div>}
               {sc.entry_basis && <div className="scenario-block"><span className="scenario-readout-label">根拠</span>{sc.entry_basis}</div>}
               {sc.tags.length > 0 && (
                 <div className="scenario-block">

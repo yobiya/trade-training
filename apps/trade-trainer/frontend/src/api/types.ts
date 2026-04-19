@@ -41,14 +41,31 @@ export type AdvanceResponse = {
   trade_pips_pnl: number | null
 }
 
+// 仕様書 §7.1 シナリオメモ
 export type ScenarioInput = {
+  environment?: string | null
+  market_view?: string | null
+  symbol_reason?: string | null
+  skipped_candidates?: string | null
+  event_recognition?: string | null
+  wave_count?: string | null
   scenario_main?: string | null
+  scenario_alt1?: string | null
+  scenario_alt2?: string | null
   entry_basis?: string | null
   tags?: string[]
 }
 
 export type ScenarioResponse = {
+  environment: string | null
+  market_view: string | null
+  symbol_reason: string | null
+  skipped_candidates: string | null
+  event_recognition: string | null
+  wave_count: string | null
   scenario_main: string | null
+  scenario_alt1: string | null
+  scenario_alt2: string | null
   entry_basis: string | null
   tags: string[]
   exit_memo: string | null

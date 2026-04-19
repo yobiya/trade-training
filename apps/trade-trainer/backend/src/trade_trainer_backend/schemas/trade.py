@@ -4,14 +4,30 @@ from pydantic import BaseModel
 
 
 class ScenarioInput(BaseModel):
-    """エントリー時に記録するシナリオメモ(仕様書 §7.1 最小版)。"""
-    scenario_main: str | None = None   # メモ本文(想定する主要な展開)
-    entry_basis: str | None = None     # エントリー根拠(具体的なトリガー)
-    tags: list[str] = []
+    """エントリー時に記録するシナリオメモ(仕様書 §7.1 完全版)。"""
+    environment: str | None = None          # 環境認識(必須) - 上位足のトレンド・相場状況
+    market_view: str | None = None          # 相場観(必須) - 自分で読んだ通貨強弱
+    symbol_reason: str | None = None        # 銘柄選定理由(必須)
+    skipped_candidates: str | None = None   # 見送った候補と理由(必須)
+    event_recognition: str | None = None    # 指標認識(必須)
+    wave_count: str | None = None           # 波動カウント(任意) - エリオット仮説
+    scenario_main: str | None = None        # メインシナリオ(必須)
+    scenario_alt1: str | None = None        # 代替シナリオ1(必須)
+    scenario_alt2: str | None = None        # 代替シナリオ2(任意 - 視野狭窄のシグナル)
+    entry_basis: str | None = None          # エントリー根拠(必須)
+    tags: list[str] = []                    # タグ(必須)
 
 
 class ScenarioResponse(BaseModel):
+    environment: str | None
+    market_view: str | None
+    symbol_reason: str | None
+    skipped_candidates: str | None
+    event_recognition: str | None
+    wave_count: str | None
     scenario_main: str | None
+    scenario_alt1: str | None
+    scenario_alt2: str | None
     entry_basis: str | None
     tags: list[str]
     exit_memo: str | None

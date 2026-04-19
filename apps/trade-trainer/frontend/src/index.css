@@ -427,6 +427,21 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--text-dim);
   margin-top: 4px;
 }
+.scenario-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.scenario-group-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
 .scenario-textarea {
   background: var(--bg3);
   border: 1px solid var(--border);

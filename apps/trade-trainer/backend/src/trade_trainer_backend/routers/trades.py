@@ -24,7 +24,15 @@ def _scenario_to_response(sc: Scenario | None) -> ScenarioResponse | None:
     if sc is None:
         return None
     return ScenarioResponse(
+        environment=sc.environment,
+        market_view=sc.market_view,
+        symbol_reason=sc.symbol_reason,
+        skipped_candidates=sc.skipped_candidates,
+        event_recognition=sc.event_recognition,
+        wave_count=sc.wave_count,
         scenario_main=sc.scenario_main,
+        scenario_alt1=sc.scenario_alt1,
+        scenario_alt2=sc.scenario_alt2,
         entry_basis=sc.entry_basis,
         tags=list(sc.tags) if sc.tags else [],
         exit_memo=sc.exit_memo,
@@ -91,11 +99,20 @@ def enter_trade(
 
     scenario: Scenario | None = None
     if body.scenario is not None:
+        sc = body.scenario
         scenario = Scenario(
             trade_id=trade_id,
-            scenario_main=body.scenario.scenario_main,
-            entry_basis=body.scenario.entry_basis,
-            tags=body.scenario.tags,
+            environment=sc.environment,
+            market_view=sc.market_view,
+            symbol_reason=sc.symbol_reason,
+            skipped_candidates=sc.skipped_candidates,
+            event_recognition=sc.event_recognition,
+            wave_count=sc.wave_count,
+            scenario_main=sc.scenario_main,
+            scenario_alt1=sc.scenario_alt1,
+            scenario_alt2=sc.scenario_alt2,
+            entry_basis=sc.entry_basis,
+            tags=sc.tags,
         )
         db.add(scenario)
 
