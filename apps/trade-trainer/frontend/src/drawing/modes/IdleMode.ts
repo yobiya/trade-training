@@ -1,5 +1,7 @@
 import type { DrawingMode, HitResult, ModeContext, PointerPayload } from '../types'
 import { findHit } from '../tools/registry'
+import { MovingFibonacciBodyMode } from './MovingFibonacciBodyMode'
+import { MovingFibonacciHandleMode } from './MovingFibonacciHandleMode'
 import { MovingLineMode } from './MovingLineMode'
 import { MovingTrendlineBodyMode } from './MovingTrendlineBodyMode'
 import { MovingTrendlineHandleMode } from './MovingTrendlineHandleMode'
@@ -45,7 +47,13 @@ function buildMovingMode(hit: HitResult, ctx: ModeContext, e: PointerPayload): D
       }
       if (e.point.time === null) return null  // 時間外の body ドラッグは不可
       return new MovingTrendlineBodyMode(drawing, { t: e.point.time, price: e.point.price })
-    // 将来: fibonacci / label
+    case 'fibonacci':
+      if (hit.part === 'handle' && hit.handleIndex !== undefined) {
+        return new MovingFibonacciHandleMode(drawing, hit.handleIndex)
+      }
+      if (e.point.time === null) return null
+      return new MovingFibonacciBodyMode(drawing, { t: e.point.time, price: e.point.price })
+    // 将来: label
     default: return null
   }
 }

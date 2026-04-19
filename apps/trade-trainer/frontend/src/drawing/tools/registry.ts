@@ -1,5 +1,6 @@
 import type { Drawing, DrawingKind } from '../../api/types'
 import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
+import { fibonacciTool } from './fibonacci'
 import { lineTool } from './line'
 import { trendlineTool } from './trendline'
 
@@ -10,8 +11,8 @@ import { trendlineTool } from './trendline'
 export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
   trendline: trendlineTool,
-  // 将来: fibonacci, label
-  fibonacci: undefined,
+  fibonacci: fibonacciTool,
+  // 将来: label
   label: undefined,
 }
 

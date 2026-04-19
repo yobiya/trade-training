@@ -25,7 +25,13 @@ function describe(d: Drawing, digits: number): string {
   switch (d.kind) {
     case 'line': return `水平線 ${Number(d.data.price).toFixed(digits)}`
     case 'trendline': return 'トレンドライン'
-    case 'fibonacci': return 'フィボ'
+    case 'fibonacci': {
+      const pts = d.data.points as Array<{ price: number }> | undefined
+      if (pts && pts.length === 2) {
+        return `フィボ ${Number(pts[0].price).toFixed(digits)} / ${Number(pts[1].price).toFixed(digits)}`
+      }
+      return 'フィボ'
+    }
     case 'label': return `ラベル: ${String(d.label ?? '')}`
   }
 }

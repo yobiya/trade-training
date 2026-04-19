@@ -136,6 +136,7 @@ function getActiveTool(mode: DrawingMode): DrawingKind | null {
     default: return null
   }
 }
+// (既に fibonacci と label は網羅済み。新規追加時は mode.id と case を足すのみ)
 
 const noopChartApi: ChartApi = {
   priceToY: () => null,
