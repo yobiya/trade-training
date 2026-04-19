@@ -1,15 +1,42 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { ScenarioInput, TradeResponse, TradeSession } from '../api/client'
+import type { Drawing, ScenarioInput, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
+import type { ChartHandle, PriceLine } from '../components/Chart'
+import { DrawingTools } from '../components/DrawingTools'
 import { TradePanel } from '../components/TradePanel'
 import { TIMEFRAMES, UPPER_TFS } from '../constants'
+import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { useCharts } from '../hooks/useCharts'
+import { useDrawings } from '../hooks/useDrawings'
+import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
 import { formatJST } from '../utils/datetime'
 
 type Props = {
   sessionId: string
   onBack: () => void
+}
+
+// 仕様書 §5.3 デフォルト表示範囲
+function isDrawingVisibleOnTf(d: Drawing, tf: string): boolean {
+  if (d.visible_on_timeframes) return d.visible_on_timeframes.includes(tf)
+  if (d.kind === 'line' || d.kind === 'trendline') return true
+  return d.timeframe === tf
+}
+
+function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | null): PriceLine[] {
+  const base = drawings
+    .filter(d => d.kind === 'line' && isDrawingVisibleOnTf(d, tf))
+    .map(d => {
+      const previewMatch = preview?.id === d.id ? preview : null
+      return {
+        id: d.id,
+        price: Number(previewMatch?.data.price ?? d.data.price),
+        label: d.label ?? undefined,
+      }
+    })
+  // プレビュー中の新規作成(未保存)にも対応できるよう、未保存 preview の水平線も足す余地あり
+  return base
 }
 
 export function TrainingPage({ sessionId, onBack }: Props) {
@@ -21,6 +48,35 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   const [advancing, setAdvancing] = useState(false)
 
   const { barsByTf, upperTfs, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, timeframe)
+  const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
+
+  const mainChartRef = useRef<ChartHandle>(null)
+  const chartApiRef = useRef<ChartApi | null>(null)
+  // mainChartRef が ChartHandle を載せたタイミングで chartApiRef を同期
+  useEffect(() => {
+    chartApiRef.current = mainChartRef.current?.api ?? null
+  })
+
+  const handleCreateDrawing = useCallback(async (body: CreateDrawingBody): Promise<Drawing> => {
+    return addDrawing(body)
+  }, [addDrawing])
+
+  const handleUpdateDrawing = useCallback(async (id: number, patch: UpdateDrawingPatch) => {
+    await updateDrawing(id, patch)
+  }, [updateDrawing])
+
+  const handleDeleteDrawing = useCallback(async (id: number) => {
+    await removeDrawing(id)
+  }, [removeDrawing])
+
+  const interaction = useDrawingInteraction({
+    drawings,
+    activeTimeframe: timeframe,
+    chartApiRef,
+    onCreate: handleCreateDrawing,
+    onUpdate: handleUpdateDrawing,
+    onDelete: handleDeleteDrawing,
+  })
 
   function notify(msg: string) {
     setNotification(msg)
@@ -118,7 +174,9 @@ export function TrainingPage({ sessionId, onBack }: Props) {
                   <Chart
                     bars={barsByTf[tf] ?? []}
                     timeframe={tf}
+                    digits={session?.digits}
                     onNeedMoreHistory={(earliest) => loadMoreHistory(tf, earliest)}
+                    priceLines={priceLinesForTf(drawings, tf, interaction.preview)}
                   />
                 </div>
               ))}
@@ -127,9 +185,17 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           <div className="main-chart">
             <div className="tf-badge main">{timeframe}</div>
             <Chart
+              ref={mainChartRef}
               bars={barsByTf[timeframe] ?? []}
               timeframe={timeframe}
+              digits={session?.digits}
+              cursor={interaction.cursor}
               onNeedMoreHistory={(earliest) => loadMoreHistory(timeframe, earliest)}
+              onChartClick={interaction.handlers.onChartClick}
+              onMouseMove={interaction.handlers.onMouseMove}
+              onMouseDown={interaction.handlers.onMouseDown}
+              onMouseUp={interaction.handlers.onMouseUp}
+              priceLines={priceLinesForTf(drawings, timeframe, interaction.preview)}
             />
           </div>
         </div>
@@ -140,6 +206,14 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             onEnter={handleEnter}
             onExit={handleExit}
             loading={loading}
+            digits={session?.digits ?? 5}
+          />
+          <DrawingTools
+            addMode={interaction.activeTool === 'line' ? 'line' : null}
+            onToggleAddMode={(m) => interaction.selectTool(m)}
+            drawings={drawings}
+            onRemove={(id) => void removeDrawing(id)}
+            digits={session?.digits ?? 5}
           />
           <div className="action-buttons">
             <button

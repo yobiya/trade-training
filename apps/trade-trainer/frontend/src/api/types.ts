@@ -23,6 +23,7 @@ export type TradeSession = {
   is_suspended: boolean
   has_active_trade: boolean
   is_complete: boolean
+  digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
 }
 
 export type ChartResponse = {
@@ -84,4 +85,25 @@ export type SessionFilter = {
   date_to?: string
   days?: number[]
   sessions?: string[]
+}
+
+// 仕様書 §5.3/§5.5: 描画オブジェクト
+export type DrawingKind = 'line' | 'trendline' | 'fibonacci' | 'label'
+
+export type Drawing = {
+  id: number
+  session_id: string
+  kind: DrawingKind
+  data: Record<string, unknown>
+  label: string | null
+  timeframe: string | null
+  visible_on_timeframes: string[] | null
+}
+
+export type CreateDrawingRequest = {
+  kind: DrawingKind
+  data: Record<string, unknown>
+  label?: string | null
+  timeframe?: string | null
+  visible_on_timeframes?: string[] | null
 }

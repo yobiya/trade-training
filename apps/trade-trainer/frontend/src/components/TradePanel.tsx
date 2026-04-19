@@ -14,9 +14,12 @@ type Props = {
   ) => Promise<void>
   onExit: (price: number, reason: string) => Promise<void>
   loading: boolean
+  /** 価格入力 step のための小数桁数。 */
+  digits: number
 }
 
-export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading }: Props) {
+export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading, digits }: Props) {
+  const step = Math.pow(10, -digits).toFixed(digits)
   const [price, setPrice] = useState('')
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
@@ -87,7 +90,7 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
                 placeholder={`決済価格 (${currentPrice ?? ''})`}
                 value={exitPrice}
                 onChange={e => setExitPrice(e.target.value)}
-                step="0.001"
+                step={step}
               />
               <button onClick={handleExit} disabled={loading} className="exit-btn">
                 決済
@@ -109,7 +112,7 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
             placeholder="エントリー価格"
             value={price}
             onChange={e => setPrice(e.target.value)}
-            step="0.001"
+            step={step}
           />
         </div>
         <div className="sl-tp-row">
@@ -118,14 +121,14 @@ export function TradePanel({ activeTrade, currentPrice, onEnter, onExit, loading
             placeholder="SL (必須)"
             value={sl}
             onChange={e => setSl(e.target.value)}
-            step="0.001"
+            step={step}
           />
           <input
             type="number"
             placeholder="TP"
             value={tp}
             onChange={e => setTp(e.target.value)}
-            step="0.001"
+            step={step}
           />
         </div>
         <div className="direction-row">

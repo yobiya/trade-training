@@ -1,6 +1,8 @@
 import type {
   AdvanceResponse,
   ChartResponse,
+  CreateDrawingRequest,
+  Drawing,
   ScenarioInput,
   SessionFilter,
   SessionListItem,
@@ -108,5 +110,26 @@ export const api = {
   stats: {
     summary: (symbol?: string) =>
       request<StatsSummary>(`/stats/summary${symbol ? `?symbol=${symbol}` : ''}`),
+  },
+
+  drawings: {
+    list: (sessionId: string) =>
+      request<Drawing[]>(`/sessions/${sessionId}/drawings`),
+    create: (sessionId: string, body: CreateDrawingRequest) =>
+      request<Drawing>(`/sessions/${sessionId}/drawings`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (drawingId: number, body: {
+      data?: Record<string, unknown>
+      label?: string | null
+      visible_on_timeframes?: string[] | null
+    }) =>
+      request<Drawing>(`/drawings/${drawingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    delete: (drawingId: number) =>
+      request<void>(`/drawings/${drawingId}`, { method: 'DELETE' }),
   },
 }
