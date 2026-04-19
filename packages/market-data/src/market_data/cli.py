@@ -26,14 +26,27 @@ def cmd_update_events(db_path: str = "trading.db") -> None:
 def cmd_check_connection() -> None:
     """MT5 への接続を確認する。"""
     try:
+        import MetaTrader5 as mt5
         from market_data.providers.mt5 import MT5Provider
         p = MT5Provider()
         if p.initialize():
-            info = __import__("MetaTrader5").terminal_info()
-            print(f"OK: MT5 接続成功 (broker={info.company if info else 'unknown'})")
+            info = mt5.terminal_info()
+            account = mt5.account_info()
+            print(f"OK: MT5 接続成功")
+            if info:
+                print(f"  broker    : {info.company}")
+                print(f"  terminal  : {info.name} build {info.build}")
+                print(f"  connected : {info.connected}")
+                print(f"  path      : {info.path}")
+            if account:
+                print(f"  login     : {account.login} ({account.server})")
+            else:
+                print("  WARN: account_info() が None。MT5 でログイン済みか確認してください。")
             p.shutdown()
         else:
-            _print_err("MT5 の初期化に失敗しました。MT5 が起動しているか確認してください。")
+            err = mt5.last_error()
+            _print_err(f"MT5 の初期化に失敗しました: {err}")
+            _print_err("MT5 ターミナルが起動していてブローカーへログイン済みか確認してください。")
             sys.exit(1)
     except ImportError as e:
         _print_err(str(e))

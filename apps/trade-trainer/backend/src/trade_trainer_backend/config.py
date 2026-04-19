@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # 訓練対象の期間設定(現在時刻から見た最小・最大の遡り日数)
     history_min_days: int = 30    # 直近30日は出題しない
     history_max_days: int = 1825  # 最大5年
+    # MT5 プロバイダを有効化するか。false の場合はキャッシュ参照モードで起動する
+    # (Windows + MetaTrader5 ターミナル起動済みの環境でのみ true にする)
+    use_mt5: bool = False
 
 
 @lru_cache

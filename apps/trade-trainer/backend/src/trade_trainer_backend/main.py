@@ -26,7 +26,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         run_all_seeds(session)
 
     from market_data.accessor import configure
-    configure(settings.db_path, provider=None)  # キャッシュ参照モード(MT5 接続は任意)
+    provider = None
+    if settings.use_mt5:
+        from market_data.providers.mt5 import MT5Provider
+        provider = MT5Provider()
+    configure(settings.db_path, provider=provider)
 
     yield
 

@@ -53,6 +53,7 @@ npm install
 | `TRAINER_PORT`               | `8001`                                    | バインドポート                           |
 | `TRAINER_HISTORY_MIN_DAYS`   | `30`                                      | 直近 N 日は出題しない                    |
 | `TRAINER_HISTORY_MAX_DAYS`   | `1825`                                    | 最大 N 日遡って出題                      |
+| `TRAINER_USE_MT5`            | `False`                                   | MT5 プロバイダを有効化(Windows + MT5 起動済み環境のみ) |
 
 `.env` の最小例:
 
@@ -144,7 +145,36 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ---
 
-## 5. トラブルシュート
+## 5. MT5 データソースの利用
+
+既定ではキャッシュ参照モードで起動します(`TRAINER_USE_MT5=False`)。MT5 から実際に価格データを取得するには以下が必要です。
+
+**前提**
+- Windows(`MetaTrader5` Python パッケージは Windows 専用)
+- MT5 ターミナルがインストール・起動済み、ブローカーへログイン済み
+- `MetaTrader5` パッケージが `uv sync` 時にインストールされていること(`market-data` の optional-dependencies `mt5`)
+
+**接続確認と利用可能期間の検証**
+
+```bash
+# MT5 ターミナルへの接続確認
+uv run market-data check-connection
+
+# 銘柄の M5 データが 5 年分取得可能か検証(仕様書 §16 Phase 1 出口条件)
+uv run market-data verify-range USDJPY
+uv run market-data verify-range EURUSD
+# 他銘柄も同様に確認
+```
+
+※ bash から実行すると日本語出力が文字化けします。PowerShell で実行してください。
+
+**MT5 を有効化した起動**
+
+`.env` に `TRAINER_USE_MT5=True` を追加してバックエンドを再起動すると、キャッシュに無い範囲が MT5 から取得されます(一度取得した範囲は SQLite にキャッシュされ、以降は MT5 が落ちていても利用可)。
+
+---
+
+## 6. トラブルシュート
 
 - **ログイン後に画面が真っ白**: 古いセッション Cookie が残っていることがあります。ブラウザの DevTools → Application → Cookies で `localhost:5173` の Cookie を削除してから再ログインしてください。
 - **401 Unauthorized**: `.env` の `TRAINER_APP_PASSWORD` とフロントで入力したパスワードが一致しているか確認。
@@ -153,6 +183,6 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ---
 
-## 6. trade-live / trade-analyzer について
+## 7. trade-live / trade-analyzer について
 
 `apps/trade-live` と `apps/trade-analyzer` も同じ構造(`backend/` + `frontend/`)ですが、Phase 1 時点では未実装です。実装が進んだ時点でこのドキュメントに起動手順を追記します。
