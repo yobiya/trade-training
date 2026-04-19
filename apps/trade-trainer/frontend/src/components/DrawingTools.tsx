@@ -1,51 +1,74 @@
-import type { Drawing } from '../api/client'
+import type { Drawing, DrawingKind } from '../api/client'
+import { TOOLS } from '../drawing/tools/registry'
 
 type Props = {
-  addMode: 'line' | null
-  onToggleAddMode: (mode: 'line' | null) => void
+  activeTool: DrawingKind | null
+  onSelectTool: (tool: DrawingKind | null) => void
   drawings: Drawing[]
   onRemove: (id: number) => void
-  /** 価格表示の小数桁数(MT5 symbol_info.digits)。 */
   digits: number
 }
 
-export function DrawingTools({ addMode, onToggleAddMode, drawings, onRemove, digits }: Props) {
-  const horizontalLines = drawings.filter(d => d.kind === 'line')
+// 現状 UI で扱うツール(TOOLS に登録されているもののみ)
+const TOOL_ORDER: DrawingKind[] = ['line', 'trendline', 'fibonacci', 'label']
 
+function hintFor(tool: DrawingKind): string {
+  switch (tool) {
+    case 'line': return 'チャートをクリックで追加 / ESC で中止'
+    case 'trendline': return '2 点をクリックで引く / ESC で中止'
+    case 'fibonacci': return '2 点をクリックで引く / ESC で中止'
+    case 'label': return 'クリック位置にラベルを配置'
+  }
+}
+
+function describe(d: Drawing, digits: number): string {
+  switch (d.kind) {
+    case 'line': return `水平線 ${Number(d.data.price).toFixed(digits)}`
+    case 'trendline': return 'トレンドライン'
+    case 'fibonacci': return 'フィボ'
+    case 'label': return `ラベル: ${String(d.label ?? '')}`
+  }
+}
+
+export function DrawingTools({ activeTool, onSelectTool, drawings, onRemove, digits }: Props) {
   return (
     <div className="drawing-tools">
       <div className="drawing-toolbar">
-        <button
-          type="button"
-          className={`tool-btn ${addMode === 'line' ? 'active' : ''}`}
-          onClick={() => onToggleAddMode(addMode === 'line' ? null : 'line')}
-          title="クリックでチャートに水平線を追加"
-        >
-          ➖ 水平線
-        </button>
-        {addMode === 'line' && (
-          <span className="drawing-hint">チャートをクリックで追加 / ESC で中止</span>
+        {TOOL_ORDER.map(tool => {
+          const meta = TOOLS[tool]
+          if (!meta) return null
+          const active = activeTool === tool
+          return (
+            <button
+              key={tool}
+              type="button"
+              className={`tool-btn ${active ? 'active' : ''}`}
+              onClick={() => onSelectTool(active ? null : tool)}
+              title={meta.label}
+            >
+              {meta.icon} {meta.label}
+            </button>
+          )
+        })}
+        {activeTool && (
+          <span className="drawing-hint">{hintFor(activeTool)}</span>
         )}
       </div>
 
-      {horizontalLines.length > 0 && (
+      {drawings.length > 0 && (
         <ul className="drawing-list">
-          {horizontalLines
-            .slice()
-            .sort((a, b) => Number(b.data.price ?? 0) - Number(a.data.price ?? 0))
-            .map(d => (
-              <li key={d.id} className="drawing-item">
-                <span className="drawing-kind">水平線</span>
-                <span className="drawing-price">{Number(d.data.price).toFixed(digits)}</span>
-                {d.timeframe && <span className="drawing-tf">({d.timeframe})</span>}
-                <button
-                  type="button"
-                  className="drawing-remove"
-                  onClick={() => onRemove(d.id)}
-                  title="削除"
-                >×</button>
-              </li>
-            ))}
+          {drawings.map(d => (
+            <li key={d.id} className="drawing-item">
+              <span className="drawing-kind">{describe(d, digits)}</span>
+              {d.timeframe && <span className="drawing-tf">({d.timeframe})</span>}
+              <button
+                type="button"
+                className="drawing-remove"
+                onClick={() => onRemove(d.id)}
+                title="削除"
+              >×</button>
+            </li>
+          ))}
         </ul>
       )}
     </div>

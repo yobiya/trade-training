@@ -1,6 +1,7 @@
 import type { Drawing, DrawingKind } from '../../api/types'
 import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
 import { lineTool } from './line'
+import { trendlineTool } from './trendline'
 
 /**
  * ツール横断情報のレジストリ(仕様書 §5.3)。
@@ -8,8 +9,8 @@ import { lineTool } from './line'
  */
 export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
-  // 将来: trendline, fibonacci, label
-  trendline: undefined,
+  trendline: trendlineTool,
+  // 将来: fibonacci, label
   fibonacci: undefined,
   label: undefined,
 }

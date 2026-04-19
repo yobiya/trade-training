@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Drawing, DrawingKind } from '../api/types'
 
 export type PointPx = { x: number; y: number }
@@ -14,6 +15,8 @@ export interface ChartApi {
   yToPrice(y: number): number | null
   timeToX(time: number): number | null
   xToTime(x: number): number | null
+  /** チャートのドラッグパンを有効/無効にする。Moving モード中は false にして描画操作と干渉させない。 */
+  setScrollEnabled(enabled: boolean): void
 }
 
 /** 描画の何に当たったか。 */
@@ -32,8 +35,8 @@ export interface ToolMetadata {
   /** 仕様書 §5.3 デフォルト表示範囲。null は「全時間足に表示」 */
   defaultVisibleTfs: string[] | null
   hitTest(drawing: Drawing, px: PointPx, api: ChartApi): HitResult | null
-  /** SVG 要素として描画する。null を返すとライブラリ標準(createPriceLine 等)に委譲。 */
-  renderOverlay?(drawing: Drawing, api: ChartApi): SVGElement | null
+  /** SVG オーバーレイに描画する React ノードを返す。未定義の場合はライブラリ標準(createPriceLine 等)に委譲。 */
+  renderOverlay?(drawing: Drawing, api: ChartApi): ReactNode
 }
 
 export type UpdateDrawingPatch = {

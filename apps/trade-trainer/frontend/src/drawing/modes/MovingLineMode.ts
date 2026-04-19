@@ -18,6 +18,13 @@ export class MovingLineMode implements DrawingMode {
     this.preview = target
   }
 
+  onEnter(ctx: ModeContext): void {
+    ctx.chartApi.setScrollEnabled(false)
+  }
+  onExit(ctx: ModeContext): void {
+    ctx.chartApi.setScrollEnabled(true)
+  }
+
   onMouseMove(e: PointerPayload): void {
     this.preview = {
       ...this.original,

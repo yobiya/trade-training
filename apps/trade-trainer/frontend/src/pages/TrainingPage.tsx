@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { Drawing, ScenarioInput, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
 import type { ChartHandle, PriceLine } from '../components/Chart'
+import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { TradePanel } from '../components/TradePanel'
 import { TIMEFRAMES, UPPER_TFS } from '../constants'
@@ -50,12 +51,12 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   const { barsByTf, upperTfs, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, timeframe)
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
 
-  const mainChartRef = useRef<ChartHandle>(null)
+  const [mainChartHandle, setMainChartHandle] = useState<ChartHandle | null>(null)
   const chartApiRef = useRef<ChartApi | null>(null)
-  // mainChartRef が ChartHandle を載せたタイミングで chartApiRef を同期
-  useEffect(() => {
-    chartApiRef.current = mainChartRef.current?.api ?? null
-  })
+  const setMainChartRef = useCallback((handle: ChartHandle | null) => {
+    setMainChartHandle(handle)
+    chartApiRef.current = handle?.api ?? null
+  }, [])
 
   const handleCreateDrawing = useCallback(async (body: CreateDrawingBody): Promise<Drawing> => {
     return addDrawing(body)
@@ -185,7 +186,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           <div className="main-chart">
             <div className="tf-badge main">{timeframe}</div>
             <Chart
-              ref={mainChartRef}
+              ref={setMainChartRef}
               bars={barsByTf[timeframe] ?? []}
               timeframe={timeframe}
               digits={session?.digits}
@@ -196,6 +197,12 @@ export function TrainingPage({ sessionId, onBack }: Props) {
               onMouseDown={interaction.handlers.onMouseDown}
               onMouseUp={interaction.handlers.onMouseUp}
               priceLines={priceLinesForTf(drawings, timeframe, interaction.preview)}
+            />
+            <DrawingOverlay
+              chartHandle={mainChartHandle}
+              drawings={drawings}
+              preview={interaction.preview}
+              activeTimeframe={timeframe}
             />
           </div>
         </div>
@@ -209,8 +216,8 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             digits={session?.digits ?? 5}
           />
           <DrawingTools
-            addMode={interaction.activeTool === 'line' ? 'line' : null}
-            onToggleAddMode={(m) => interaction.selectTool(m)}
+            activeTool={interaction.activeTool}
+            onSelectTool={interaction.selectTool}
             drawings={drawings}
             onRemove={(id) => void removeDrawing(id)}
             digits={session?.digits ?? 5}

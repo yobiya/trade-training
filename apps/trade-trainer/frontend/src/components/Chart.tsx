@@ -22,6 +22,8 @@ export type PriceLine = {
 export type ChartHandle = {
   api: ChartApi
   containerEl: HTMLDivElement | null
+  /** チャートの再描画が必要なタイミング(時間軸変化・リサイズ等)でコールバックを呼ぶ。 */
+  subscribeRedraw: (cb: () => void) => () => void
 }
 
 type Props = {
@@ -35,8 +37,8 @@ type Props = {
   /** クリック / マウス移動 / 押下 / 離上 の薄い中継。座標変換済みの Point を渡す。 */
   onChartClick?: (price: number, time: number | null, px: PointPx) => void
   onMouseMove?: (price: number | null, time: number | null, px: PointPx) => void
-  onMouseDown?: (px: PointPx) => void
-  onMouseUp?: (px: PointPx) => void
+  onMouseDown?: (price: number | null, time: number | null, px: PointPx) => void
+  onMouseUp?: (price: number | null, time: number | null, px: PointPx) => void
   /** チャートに重ねて表示する価格線。 */
   priceLines?: PriceLine[]
 }
@@ -89,9 +91,28 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
           const t = chartRef.current?.timeScale().coordinateToTime(x)
           return typeof t === 'number' ? t : null
         },
+        setScrollEnabled: (enabled: boolean) => {
+          chartRef.current?.applyOptions({
+            handleScroll: { pressedMouseMove: enabled, horzTouchDrag: enabled, vertTouchDrag: enabled },
+            handleScale: { axisPressedMouseMove: enabled },
+          })
+        },
       }
     },
     get containerEl() { return containerRef.current },
+    subscribeRedraw(cb: () => void) {
+      const chart = chartRef.current
+      const container = containerRef.current
+      if (!chart || !container) return () => {}
+      const handler = () => cb()
+      chart.timeScale().subscribeVisibleLogicalRangeChange(handler)
+      const ro = new ResizeObserver(() => cb())
+      ro.observe(container)
+      return () => {
+        chart.timeScale().unsubscribeVisibleLogicalRangeChange(handler)
+        ro.disconnect()
+      }
+    },
   }), [])
 
   useEffect(() => {
@@ -142,13 +163,24 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       const time = typeof tRaw === 'number' ? tRaw : null
       onMouseMoveRef.current?.(typeof price === 'number' ? price : null, time, px)
     }
+    const convert = (px: PointPx): { price: number | null; time: number | null } => {
+      const rawPrice = seriesRef.current?.coordinateToPrice(px.y)
+      const price = typeof rawPrice === 'number' ? rawPrice : null
+      const rawTime = chartRef.current?.timeScale().coordinateToTime(px.x)
+      const time = typeof rawTime === 'number' ? rawTime : null
+      return { price, time }
+    }
     const mdHandler = (e: MouseEvent) => {
       if (e.button !== 0) return
-      onMouseDownRef.current?.(toPx(e))
+      const px = toPx(e)
+      const { price, time } = convert(px)
+      onMouseDownRef.current?.(price, time, px)
     }
     const muHandler = (e: MouseEvent) => {
       if (e.button !== 0) return
-      onMouseUpRef.current?.(toPx(e))
+      const px = toPx(e)
+      const { price, time } = convert(px)
+      onMouseUpRef.current?.(price, time, px)
     }
     container.addEventListener('mousemove', mmHandler)
     container.addEventListener('mousedown', mdHandler, true)

@@ -30,8 +30,8 @@ export type DrawingInteraction = {
   handlers: {
     onChartClick: (price: number, time: number | null, px: PointPx) => void
     onMouseMove: (price: number | null, time: number | null, px: PointPx) => void
-    onMouseDown: (px: PointPx) => void
-    onMouseUp: (px: PointPx) => void
+    onMouseDown: (price: number | null, time: number | null, px: PointPx) => void
+    onMouseUp: (price: number | null, time: number | null, px: PointPx) => void
     onEscape: () => void
   }
 }
@@ -104,14 +104,12 @@ export function useDrawingInteraction({
       modeRef.current.onMouseMove?.({ point: { price, time }, pointerPx: px }, ctx)
       bump()
     },
-    onMouseDown: (px: PointPx) => {
-      modeRef.current.onMouseDown?.({ point: { price: NaN, time: null }, pointerPx: px }, ctx)
+    onMouseDown: (price: number | null, time: number | null, px: PointPx) => {
+      modeRef.current.onMouseDown?.({ point: { price: price ?? NaN, time }, pointerPx: px }, ctx)
       bump()
     },
-    onMouseUp: (px: PointPx) => {
-      // mouseup 時も最新価格を提供したい
-      const price = chartApiRef.current?.yToPrice(px.y) ?? NaN
-      modeRef.current.onMouseUp?.({ point: { price, time: null }, pointerPx: px }, ctx)
+    onMouseUp: (price: number | null, time: number | null, px: PointPx) => {
+      modeRef.current.onMouseUp?.({ point: { price: price ?? NaN, time }, pointerPx: px }, ctx)
       bump()
     },
     onEscape: () => {
@@ -144,4 +142,5 @@ const noopChartApi: ChartApi = {
   yToPrice: () => null,
   timeToX: () => null,
   xToTime: () => null,
+  setScrollEnabled: () => {},
 }
