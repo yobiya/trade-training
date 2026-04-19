@@ -99,6 +99,19 @@ export type StatsSummary = {
   profit_factor: number
 }
 
+export type StyleStatsRow = {
+  style_id: string | null
+  style_name: string
+  primary_timeframe: string | null
+  total_trades: number
+  win_count: number
+  loss_count: number
+  win_rate: number
+  total_pips: number
+  avg_pips_per_trade: number
+  profit_factor: number
+}
+
 export type SessionFilter = {
   date_from?: string
   date_to?: string

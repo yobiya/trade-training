@@ -7,6 +7,7 @@ import type {
   SessionFilter,
   SessionListItem,
   StatsSummary,
+  StyleStatsRow,
   TradeResponse,
   TradeSession,
   TradingStyle,
@@ -113,6 +114,7 @@ export const api = {
   stats: {
     summary: (symbol?: string) =>
       request<StatsSummary>(`/stats/summary${symbol ? `?symbol=${symbol}` : ''}`),
+    byStyle: () => request<StyleStatsRow[]>('/stats/by-style'),
   },
 
   tradingStyles: {

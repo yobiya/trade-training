@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, ApiError } from '../api/client'
-import type { SessionListItem, StatsSummary } from '../api/client'
+import type { SessionListItem, StatsSummary, StyleStatsRow } from '../api/client'
 import { StatsBar } from '../components/StatsBar'
+import { StyleStatsTable } from '../components/StyleStatsTable'
 import { DAYS_OF_WEEK, TRADING_SESSIONS } from '../constants'
 import { formatJST } from '../utils/datetime'
 
@@ -14,6 +15,8 @@ type Props = {
 export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [stats, setStats] = useState<StatsSummary | null>(null)
+  const [styleStats, setStyleStats] = useState<StyleStatsRow[]>([])
+  const [showStyleStats, setShowStyleStats] = useState(false)
   const [creating, setCreating] = useState(false)
   const [showFilter, setShowFilter] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
@@ -23,12 +26,14 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [list, statsRes] = await Promise.all([
+    const [list, statsRes, styleRes] = await Promise.all([
       api.sessions.list(),
       api.stats.summary(),
+      api.stats.byStyle(),
     ])
     setSessions(list)
     setStats(statsRes)
+    setStyleStats(styleRes)
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -76,6 +81,21 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
       </header>
 
       <StatsBar stats={stats} />
+
+      <div className="style-stats-toggle-bar">
+        <button
+          type="button"
+          className="filter-toggle"
+          onClick={() => setShowStyleStats(v => !v)}
+        >
+          スタイル別成績 {showStyleStats ? '▲' : '▼'}
+        </button>
+      </div>
+      {showStyleStats && (
+        <div className="style-stats-container">
+          <StyleStatsTable rows={styleStats} />
+        </div>
+      )}
 
       <div className="new-session">
         <button onClick={() => void handleCreate()} disabled={creating} className="create-btn">
