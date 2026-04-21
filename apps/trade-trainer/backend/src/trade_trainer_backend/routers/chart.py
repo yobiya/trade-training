@@ -65,6 +65,7 @@ def get_chart(
     timeframe: str = "M5",
     bars: int = _DEFAULT_BARS,
     before: datetime | None = None,  # 指定時は before より前の bars 本を返す(遅延ロード用)
+    symbol: str | None = None,  # 銘柄選定中は任意銘柄のチャートを取得するために指定(§6.1)
     db: Session = Depends(get_db),
 ) -> ChartResponse:
     s = db.get(TradeSession, session_id)
@@ -90,10 +91,15 @@ def get_chart(
     else:
         to_dt = current_pos
 
-    fd = db.get(SessionFinalDecision, session_id)
-    if fd is None or not fd.symbol:
-        raise HTTPException(status_code=409, detail="Symbol not selected for this session")
-    symbol = fd.symbol
+    # symbol クエリ指定時は銘柄選定中でもチャート取得可(§6.1)。
+    # 未指定時は確定銘柄を参照。
+    if symbol:
+        symbol = symbol.upper()
+    else:
+        fd = db.get(SessionFinalDecision, session_id)
+        if fd is None or not fd.symbol:
+            raise HTTPException(status_code=409, detail="Symbol not selected for this session")
+        symbol = fd.symbol
 
     from market_data.accessor import get_ohlc
 

@@ -7,15 +7,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from shared_schema.models.trading import SessionFinalDecision, TradeSession
+from shared_schema.models.trading import SessionCandidate, SessionFinalDecision, TradeSession
 from trade_trainer_backend.config import Settings, get_settings
 from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.session import (
+    CandidateResponse,
+    CreateCandidateRequest,
     CreateSessionRequest,
     SelectSymbolRequest,
     SessionListItem,
     SessionResponse,
     SkipSessionRequest,
+    UpdateCandidateRequest,
 )
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -33,6 +36,10 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
     from market_data.accessor import get_symbol_digits
     digits = get_symbol_digits(symbol) if symbol else 5
 
+    candidates = db.scalars(
+        select(SessionCandidate).where(SessionCandidate.session_id == s.id).order_by(SessionCandidate.id)
+    ).all()
+
     return SessionResponse(
         id=s.id,
         symbol=symbol or "",
@@ -44,6 +51,7 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
         has_active_trade=active_trade is not None,
         is_complete=is_complete,
         digits=digits,
+        candidates=[CandidateResponse.model_validate(c) for c in candidates],
     )
 
 
@@ -164,22 +172,96 @@ def select_symbol(
     body: SelectSymbolRequest,
     db: Session = Depends(get_db),
 ) -> SessionResponse:
-    """銘柄選定(仕様書 §4.1 Phase 2)。日時先行・銘柄後のフローで呼ばれる。"""
+    """銘柄選定(仕様書 §4.1 Phase 2, §6.3.2)。
+    確定した銘柄を SessionFinalDecision.symbol に保存し、他候補の見送り理由も一括反映する。"""
     s = db.get(TradeSession, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    symbol = body.symbol.upper()
     fd = db.get(SessionFinalDecision, session_id)
     if fd is None:
         fd = SessionFinalDecision(
             session_id=session_id,
-            symbol=body.symbol.upper(),
+            symbol=symbol,
             has_entry=False,
         )
         db.add(fd)
     else:
-        fd.symbol = body.symbol.upper()
+        fd.symbol = symbol
+
+    # 候補の is_selected 更新 + 見送り理由の一括保存(§6.3.2)
+    candidates = db.scalars(
+        select(SessionCandidate).where(SessionCandidate.session_id == session_id)
+    ).all()
+    for c in candidates:
+        c.is_selected = c.symbol.upper() == symbol
+        if not c.is_selected and body.skip_reasons is not None:
+            reason = body.skip_reasons.get(c.id)
+            if reason is not None:
+                c.skip_reason = reason
+
     db.commit()
     return _build_response(s, db)
+
+
+# 仕様書 §6.3 ウォッチリスト(候補)CRUD
+@router.post("/{session_id}/candidates", response_model=CandidateResponse, status_code=201)
+def add_candidate(
+    session_id: str,
+    body: CreateCandidateRequest,
+    db: Session = Depends(get_db),
+) -> CandidateResponse:
+    s = db.get(TradeSession, session_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    symbol = body.symbol.upper()
+    existing = db.scalars(
+        select(SessionCandidate).where(
+            SessionCandidate.session_id == session_id,
+            SessionCandidate.symbol == symbol,
+        )
+    ).first()
+    if existing:
+        if body.memo is not None:
+            existing.memo = body.memo
+        db.commit()
+        db.refresh(existing)
+        return CandidateResponse.model_validate(existing)
+    c = SessionCandidate(session_id=session_id, symbol=symbol, memo=body.memo, is_selected=False)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return CandidateResponse.model_validate(c)
+
+
+@router.patch("/{session_id}/candidates/{candidate_id}", response_model=CandidateResponse)
+def update_candidate(
+    session_id: str,
+    candidate_id: int,
+    body: UpdateCandidateRequest,
+    db: Session = Depends(get_db),
+) -> CandidateResponse:
+    c = db.get(SessionCandidate, candidate_id)
+    if c is None or c.session_id != session_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    if body.memo is not None:
+        c.memo = body.memo
+    db.commit()
+    db.refresh(c)
+    return CandidateResponse.model_validate(c)
+
+
+@router.delete("/{session_id}/candidates/{candidate_id}", status_code=204)
+def delete_candidate(
+    session_id: str,
+    candidate_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    c = db.get(SessionCandidate, candidate_id)
+    if c is None or c.session_id != session_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    db.delete(c)
+    db.commit()
 
 
 @router.get("", response_model=list[SessionListItem])

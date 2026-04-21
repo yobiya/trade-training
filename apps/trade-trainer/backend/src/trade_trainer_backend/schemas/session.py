@@ -14,6 +14,9 @@ class CreateSessionRequest(BaseModel):
 
 class SelectSymbolRequest(BaseModel):
     symbol: str
+    # §6.3.2: 選定確定時に他候補の見送り理由を一括保存する。
+    # key = candidate.id、value = 見送り理由文字列(任意)。
+    skip_reasons: dict[int, str | None] | None = None
 
 
 class AdvanceRequest(BaseModel):
@@ -22,6 +25,26 @@ class AdvanceRequest(BaseModel):
 
 class SkipSessionRequest(BaseModel):
     reason: str | None = None
+
+
+# §6.3.1 候補管理(ウォッチリスト)
+class CreateCandidateRequest(BaseModel):
+    symbol: str
+    memo: str | None = None
+
+
+class UpdateCandidateRequest(BaseModel):
+    memo: str | None = None
+
+
+class CandidateResponse(BaseModel):
+    id: int
+    symbol: str
+    memo: str | None
+    is_selected: bool
+    skip_reason: str | None
+
+    model_config = {"from_attributes": True}
 
 
 class SessionResponse(BaseModel):
@@ -35,6 +58,7 @@ class SessionResponse(BaseModel):
     has_active_trade: bool
     is_complete: bool  # skip or trade exited
     digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
+    candidates: list[CandidateResponse] = []  # §6.3 ウォッチリスト
 
     model_config = {"from_attributes": True}
 

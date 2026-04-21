@@ -4,6 +4,7 @@ import type {
   CreateDrawingRequest,
   Drawing,
   ScenarioInput,
+  SessionCandidate,
   SessionFilter,
   SessionListItem,
   StatsSummary,
@@ -59,22 +60,38 @@ export const api = {
     list: (limit = 20, offset = 0) =>
       request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),
     get: (id: string) => request<TradeSession>(`/sessions/${id}`),
-    selectSymbol: (id: string, symbol: string) =>
+    selectSymbol: (id: string, symbol: string, skipReasons?: Record<number, string | null>) =>
       request<TradeSession>(`/sessions/${id}/symbol`, {
         method: 'POST',
-        body: JSON.stringify({ symbol }),
+        body: JSON.stringify({ symbol, skip_reasons: skipReasons }),
       }),
-    skip: (id: string) =>
-      request<TradeSession>(`/sessions/${id}/skip`, { method: 'POST' }),
+    skip: (id: string, reason?: string) =>
+      request<TradeSession>(`/sessions/${id}/skip`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    addCandidate: (id: string, symbol: string, memo?: string) =>
+      request<SessionCandidate>(`/sessions/${id}/candidates`, {
+        method: 'POST',
+        body: JSON.stringify({ symbol, memo }),
+      }),
+    updateCandidate: (id: string, candidateId: number, memo: string | null) =>
+      request<SessionCandidate>(`/sessions/${id}/candidates/${candidateId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ memo }),
+      }),
+    deleteCandidate: (id: string, candidateId: number) =>
+      request<void>(`/sessions/${id}/candidates/${candidateId}`, { method: 'DELETE' }),
   },
 
   chart: {
-    get: (sessionId: string, timeframe = 'M5', bars = 200, before?: number) => {
+    get: (sessionId: string, timeframe = 'M5', bars = 200, before?: number, symbol?: string) => {
       const params = new URLSearchParams({ timeframe, bars: String(bars) })
       if (before !== undefined) {
         // UNIX 秒 → ISO (UTC)
         params.set('before', new Date(before * 1000).toISOString())
       }
+      if (symbol) params.set('symbol', symbol)
       return request<ChartResponse>(`/sessions/${sessionId}/chart?${params.toString()}`)
     },
     advance: (sessionId: string, bars = 1) =>

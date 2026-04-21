@@ -13,6 +13,14 @@ export type SessionListItem = {
   is_complete: boolean
 }
 
+export type SessionCandidate = {
+  id: number
+  symbol: string
+  memo: string | null
+  is_selected: boolean
+  skip_reason: string | null
+}
+
 export type TradeSession = {
   id: string
   symbol: string
@@ -24,6 +32,7 @@ export type TradeSession = {
   has_active_trade: boolean
   is_complete: boolean
   digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
+  candidates: SessionCandidate[]
 }
 
 export type ChartResponse = {
