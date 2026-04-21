@@ -81,6 +81,10 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     if (!cb) {
       cb = (handle: ChartHandle | null) => {
         setChartHandles(prev => {
+          // 同一参照なら更新しない(React は ref 更新時に前と同じ値でも呼ぶことがあり、
+          // state を新しい Map で置き換えると再レンダ → DrawingOverlay などの依存先が
+          // アンマウント/マウントで暴れて無限ループになる)
+          if (prev.get(tf) === (handle ?? undefined)) return prev
           const next = new Map(prev)
           if (handle) next.set(tf, handle)
           else next.delete(tf)

@@ -57,6 +57,7 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
     if (!cb) {
       cb = (handle: ChartHandle | null) => {
         setChartHandles(prev => {
+          if (prev.get(tf) === (handle ?? undefined)) return prev
           const next = new Map(prev)
           if (handle) next.set(tf, handle)
           else next.delete(tf)
