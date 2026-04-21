@@ -38,10 +38,3 @@ export const TRADING_SESSIONS: { v: string; label: string }[] = [
   { v: 'london', label: 'ロンドン 16-25' },
   { v: 'ny', label: 'NY 22-06' },
 ]
-
-// 仕様書 §7.4 固定タグ候補
-export const PRESET_TAGS: string[] = [
-  '押し目買い', '戻り売り', 'ブレイクアウト', 'レンジ逆張り',
-  '3波狙い', 'C波狙い', 'ダマシ警戒',
-  '指標前', '指標後', '指標スキップ', '指標無風',
-]

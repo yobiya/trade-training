@@ -1,5 +1,4 @@
 import type { ScenarioInput } from '../api/client'
-import { PRESET_TAGS } from '../constants'
 
 type Props = {
   value: ScenarioInput
@@ -7,8 +6,7 @@ type Props = {
   disabled?: boolean
 }
 
-// テキストフィールドの宣言的定義。仕様書 §7.1 の項目順。
-// 将来の並び替え・ラベル変更を 1 箇所で管理するため配列にする。
+// テキストフィールドの宣言的定義。仕様書 §7 の項目順。
 type TextField = {
   key: keyof ScenarioInput & string
   label: string
@@ -24,7 +22,7 @@ const ENV_FIELDS: TextField[] = [
 ]
 const SELECTION_FIELDS: TextField[] = [
   { key: 'symbol_reason', label: '銘柄選定理由 *', placeholder: 'なぜこのペアを選んだか', rows: 2, required: true },
-  { key: 'skipped_candidates', label: '見送った候補と理由 *', placeholder: '他の候補と選ばなかった理由', rows: 2, required: true },
+  { key: 'skipped_candidates', label: '比較候補の総評', placeholder: '他候補との全体比較の印象(任意。候補別の詳細は銘柄選定画面のメモで記録)', rows: 2, required: false },
 ]
 const SCENARIO_FIELDS: TextField[] = [
   { key: 'scenario_main', label: 'メインシナリオ *', placeholder: '想定する主要な展開', rows: 3, required: true },
@@ -45,30 +43,12 @@ export function isScenarioValid(value: ScenarioInput): boolean {
     const v = value[key]
     if (typeof v !== 'string' || v.trim().length === 0) return false
   }
-  return (value.tags?.length ?? 0) > 0
+  return true
 }
 
 export function ScenarioForm({ value, onChange, disabled }: Props) {
-  const tags = value.tags ?? []
-
   function setField(key: keyof ScenarioInput, v: string) {
     onChange({ ...value, [key]: v })
-  }
-  function toggleTag(t: string) {
-    const next = tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t]
-    onChange({ ...value, tags: next })
-  }
-  function addCustomTag(input: string) {
-    const trimmed = input.trim().replace(/^#/, '')
-    if (!trimmed || tags.includes(trimmed)) return
-    onChange({ ...value, tags: [...tags, trimmed] })
-  }
-  function onCustomKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      addCustomTag(e.currentTarget.value)
-      e.currentTarget.value = ''
-    }
   }
 
   function renderTextField(f: TextField) {
@@ -100,36 +80,6 @@ export function ScenarioForm({ value, onChange, disabled }: Props) {
 
       <div className="scenario-group-title">エントリー</div>
       {ENTRY_FIELDS.map(renderTextField)}
-
-      <label className="scenario-label">タグ *</label>
-      <div className="tag-chips">
-        {PRESET_TAGS.map(t => (
-          <button
-            key={t}
-            type="button"
-            className={`chip ${tags.includes(t) ? 'active' : ''}`}
-            onClick={() => toggleTag(t)}
-            disabled={disabled}
-          >#{t}</button>
-        ))}
-        {tags.filter(t => !PRESET_TAGS.includes(t)).map(t => (
-          <button
-            key={t}
-            type="button"
-            className="chip active custom"
-            onClick={() => toggleTag(t)}
-            disabled={disabled}
-            title="クリックで削除"
-          >#{t} ×</button>
-        ))}
-      </div>
-      <input
-        type="text"
-        className="scenario-custom-tag"
-        placeholder="カスタムタグ(Enter で追加)"
-        onKeyDown={onCustomKey}
-        disabled={disabled}
-      />
     </div>
   )
 }

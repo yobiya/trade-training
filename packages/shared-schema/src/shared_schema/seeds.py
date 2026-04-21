@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from shared_schema.models.config import (
-    DEFAULT_FIXED_TAGS,
     DEFAULT_SPREADS,
     DEFAULT_SYMBOLS,
     DEFAULT_TIMEFRAME_PRESETS,
@@ -70,8 +69,6 @@ def seed_settings(session: Session) -> None:
             symbols=DEFAULT_SYMBOLS,
             spreads=DEFAULT_SPREADS,
             timeframe_presets=DEFAULT_TIMEFRAME_PRESETS,
-            tags_fixed=DEFAULT_FIXED_TAGS,
-            tags_custom=[],
             time_filter_presets=None,
             event_importance_threshold=3,
             event_currencies=None,

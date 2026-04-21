@@ -34,7 +34,6 @@ def _scenario_to_response(sc: Scenario | None) -> ScenarioResponse | None:
         scenario_alt1=sc.scenario_alt1,
         scenario_alt2=sc.scenario_alt2,
         entry_basis=sc.entry_basis,
-        tags=list(sc.tags) if sc.tags else [],
         exit_memo=sc.exit_memo,
         reflection=sc.reflection,
     )
@@ -112,7 +111,6 @@ def enter_trade(
             scenario_alt1=sc.scenario_alt1,
             scenario_alt2=sc.scenario_alt2,
             entry_basis=sc.entry_basis,
-            tags=sc.tags,
         )
         db.add(scenario)
 

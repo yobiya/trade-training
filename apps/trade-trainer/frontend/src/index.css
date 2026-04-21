@@ -490,22 +490,6 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   resize: vertical;
 }
 .scenario-textarea:focus { outline: 1px solid var(--accent); }
-.tag-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-bottom: 4px;
-}
-.tag-chips .chip {
-  padding: 2px 6px;
-  font-size: 10px;
-}
-.tag-chips .chip.custom { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
-.scenario-custom-tag {
-  width: 100%;
-  padding: 4px 8px;
-  font-size: 11px;
-}
 .scenario-hint {
   color: var(--loss);
   font-size: 11px;
@@ -528,15 +512,6 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   font-weight: 600;
   margin-right: 4px;
   font-size: 10px;
-}
-.readout-tag {
-  display: inline-block;
-  background: var(--bg3);
-  padding: 1px 6px;
-  border-radius: 10px;
-  margin-right: 3px;
-  font-size: 10px;
-  color: var(--text);
 }
 
 /* Indicator panel */

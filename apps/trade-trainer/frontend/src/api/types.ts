@@ -41,7 +41,7 @@ export type AdvanceResponse = {
   trade_pips_pnl: number | null
 }
 
-// 仕様書 §7.1 シナリオメモ
+// 仕様書 §7 シナリオメモ
 export type ScenarioInput = {
   environment?: string | null
   market_view?: string | null
@@ -53,7 +53,6 @@ export type ScenarioInput = {
   scenario_alt1?: string | null
   scenario_alt2?: string | null
   entry_basis?: string | null
-  tags?: string[]
 }
 
 export type ScenarioResponse = {
@@ -67,7 +66,6 @@ export type ScenarioResponse = {
   scenario_alt1: string | null
   scenario_alt2: string | null
   entry_basis: string | null
-  tags: string[]
   exit_memo: string | null
   reflection: string | null
 }

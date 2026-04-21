@@ -22,13 +22,6 @@ DEFAULT_SPREADS = {
     "EURGBP": 1.0,
 }
 
-# 固定タグ初期値(仕様書 7.4)
-DEFAULT_FIXED_TAGS = [
-    "押し目買い", "戻り売り", "ブレイクアウト", "レンジ逆張り",
-    "3波狙い", "C波狙い", "ダマシ警戒",
-    "指標前", "指標後", "指標スキップ", "指標無風",
-]
-
 # 時間軸プリセット初期値
 DEFAULT_TIMEFRAME_PRESETS = [
     {"name": "短期", "timeframes": ["M5", "M15", "H1", "H4"]},
@@ -46,8 +39,6 @@ class Setting(Base):
     symbols: Mapped[Any] = mapped_column(JSON)  # list[str]
     spreads: Mapped[Any] = mapped_column(JSON)  # dict[str, float]
     timeframe_presets: Mapped[Any] = mapped_column(JSON)  # list[dict]
-    tags_fixed: Mapped[Any] = mapped_column(JSON)  # list[str]
-    tags_custom: Mapped[Any] = mapped_column(JSON)  # list[str]
     time_filter_presets: Mapped[Any] = mapped_column(JSON, nullable=True)  # list[dict]
     event_importance_threshold: Mapped[int] = mapped_column(Integer, default=3)  # 星3以上
     event_currencies: Mapped[Any] = mapped_column(JSON, nullable=True)  # list[str] | None = チャートペアに連動

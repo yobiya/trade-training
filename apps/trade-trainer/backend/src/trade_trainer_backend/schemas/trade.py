@@ -4,18 +4,17 @@ from pydantic import BaseModel
 
 
 class ScenarioInput(BaseModel):
-    """エントリー時に記録するシナリオメモ(仕様書 §7.1 完全版)。"""
+    """エントリー時に記録するシナリオメモ(仕様書 §7)。"""
     environment: str | None = None          # 環境認識(必須) - 上位足のトレンド・相場状況
     market_view: str | None = None          # 相場観(必須) - 自分で読んだ通貨強弱
     symbol_reason: str | None = None        # 銘柄選定理由(必須)
-    skipped_candidates: str | None = None   # 見送った候補と理由(必須)
+    skipped_candidates: str | None = None   # 比較候補の総評(任意、§7.1)
     event_recognition: str | None = None    # 指標認識(必須)
     wave_count: str | None = None           # 波動カウント(任意) - エリオット仮説
     scenario_main: str | None = None        # メインシナリオ(必須)
     scenario_alt1: str | None = None        # 代替シナリオ1(必須)
     scenario_alt2: str | None = None        # 代替シナリオ2(任意 - 視野狭窄のシグナル)
     entry_basis: str | None = None          # エントリー根拠(必須)
-    tags: list[str] = []                    # タグ(必須)
 
 
 class ScenarioResponse(BaseModel):
@@ -29,7 +28,6 @@ class ScenarioResponse(BaseModel):
     scenario_alt1: str | None
     scenario_alt2: str | None
     entry_basis: str | None
-    tags: list[str]
     exit_memo: str | None
     reflection: str | None
 

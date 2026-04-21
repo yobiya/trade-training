@@ -60,11 +60,10 @@ class SessionCandidate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"))
     symbol: Mapped[str] = mapped_column(String(20))
-    add_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)  # 候補を見ながら残す自由記述(§6.3.1)
     is_selected: Mapped[bool] = mapped_column(Boolean, default=False)  # 最終選定されたか
-    skip_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # 見送り理由
+    skip_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # 見送り理由(§6.3.2)
     followup_ohlc: Mapped[Any] = mapped_column(JSON, nullable=True)  # {10: [...], 50: [...], 200: [...]}
-    eval_tags: Mapped[Any] = mapped_column(JSON, nullable=True)  # list[str]
 
     session: Mapped["TradeSession"] = relationship("TradeSession", back_populates="candidates")
 
@@ -77,10 +76,9 @@ class SessionFinalDecision(Base):
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), primary_key=True)
     symbol: Mapped[str | None] = mapped_column(String(20), nullable=True)
     has_entry: Mapped[bool] = mapped_column(Boolean, default=False)
-    skip_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skip_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # 層 2 見送り理由(§7.3) / 全候補見送り時の自由記述
     considered_styles: Mapped[Any] = mapped_column(JSON, nullable=True)  # list[str]
     followup_ohlc: Mapped[Any] = mapped_column(JSON, nullable=True)
-    eval_tags: Mapped[Any] = mapped_column(JSON, nullable=True)  # list[str]
 
     session: Mapped["TradeSession"] = relationship("TradeSession", back_populates="final_decision")
 
@@ -137,7 +135,6 @@ class Scenario(Base):
     scenario_alt1: Mapped[str | None] = mapped_column(Text, nullable=True)  # 代替シナリオ1
     scenario_alt2: Mapped[str | None] = mapped_column(Text, nullable=True)  # 代替シナリオ2(任意)
     entry_basis: Mapped[str | None] = mapped_column(Text, nullable=True)  # エントリー根拠
-    tags: Mapped[Any] = mapped_column(JSON, nullable=True)  # list[str]
     exit_memo: Mapped[str | None] = mapped_column(Text, nullable=True)  # 決済時メモ
     reflection: Mapped[str | None] = mapped_column(Text, nullable=True)  # 振り返りメモ
 

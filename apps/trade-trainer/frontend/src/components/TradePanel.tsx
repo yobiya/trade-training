@@ -31,7 +31,7 @@ export function TradePanel({
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
   const [exitPrice, setExitPrice] = useState('')
-  const [scenario, setScenario] = useState<ScenarioInput>({ tags: [] })
+  const [scenario, setScenario] = useState<ScenarioInput>({})
   const [styleId, setStyleId] = useState('')
   const [styleReason, setStyleReason] = useState('')
 
@@ -46,7 +46,7 @@ export function TradePanel({
     const tpv = parseFloat(tp) || undefined
     await onEnter({ direction, price: p, sl: slv, tp: tpv, scenario, styleId, styleReason })
     setPrice(''); setSl(''); setTp('')
-    setScenario({ tags: [] })
+    setScenario({})
     setStyleId(''); setStyleReason('')
   }
 
@@ -97,11 +97,6 @@ export function TradePanel({
               {sc.scenario_alt2 && <div className="scenario-block"><span className="scenario-readout-label">代替2</span>{sc.scenario_alt2}</div>}
               {sc.wave_count && <div className="scenario-block"><span className="scenario-readout-label">波動</span>{sc.wave_count}</div>}
               {sc.entry_basis && <div className="scenario-block"><span className="scenario-readout-label">根拠</span>{sc.entry_basis}</div>}
-              {sc.tags.length > 0 && (
-                <div className="scenario-block">
-                  {sc.tags.map(t => <span key={t} className="readout-tag">#{t}</span>)}
-                </div>
-              )}
             </div>
           )}
           {activeTrade.is_open && (
@@ -167,7 +162,7 @@ export function TradePanel({
             className="buy-btn"
             onClick={() => handleEnter('buy')}
             disabled={loading || !ready}
-            title={!ready ? 'メモ・根拠・タグ・スタイル・理由は必須です' : ''}
+            title={!ready ? 'メモ・根拠・スタイル・理由は必須です' : ''}
           >
             BUY
           </button>
@@ -175,13 +170,13 @@ export function TradePanel({
             className="sell-btn"
             onClick={() => handleEnter('sell')}
             disabled={loading || !ready}
-            title={!ready ? 'メモ・根拠・タグ・スタイル・理由は必須です' : ''}
+            title={!ready ? 'メモ・根拠・スタイル・理由は必須です' : ''}
           >
             SELL
           </button>
         </div>
         {!ready && (
-          <p className="scenario-hint">メモ・根拠・タグ・スタイル・選定理由は全て入力必須です</p>
+          <p className="scenario-hint">メモ・根拠・スタイル・選定理由は全て入力必須です</p>
         )}
       </div>
     </div>
