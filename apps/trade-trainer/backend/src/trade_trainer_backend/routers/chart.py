@@ -118,6 +118,12 @@ def get_chart(
 
     if df is None:
         df = get_ohlc(symbol, timeframe, to_dt - timedelta(minutes=tf_minutes), to_dt)
+
+    # データが全く取れなかった場合(キャッシュ未ヒット・MT5 未接続・週末長期休場など)は
+    # 空 bars で返す。500 を返すとフロントで動作が止まるため、UI 側で「データなし」を扱わせる。
+    if df is None or len(df) == 0:
+        return ChartResponse(bars=[], current_position=current_pos, timeframe=timeframe)
+
     df = df.tail(bars)
 
     return ChartResponse(
