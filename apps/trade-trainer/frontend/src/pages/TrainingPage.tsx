@@ -8,7 +8,7 @@ import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { TIMEFRAMES, UPPER_TFS } from '../constants'
+import { TIMEFRAMES, UPPER_TFS, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
@@ -37,6 +37,7 @@ function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | nul
         id: d.id,
         price: Number(previewMatch?.data.price ?? d.data.price),
         label: d.label ?? undefined,
+        color: getTimeframeColor(d.timeframe),  // §5.3: 作成時 TF の色で識別
       }
     })
   // プレビュー中の新規作成(未保存)にも対応できるよう、未保存 preview の水平線も足す余地あり
@@ -220,6 +221,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
               drawings={drawings}
               preview={interaction.preview}
               activeTimeframe={timeframe}
+              hoveredId={interaction.hoveredId}
             />
           </div>
         </div>

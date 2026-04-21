@@ -82,4 +82,6 @@ export interface DrawingMode {
   onEscape?(ctx: ModeContext): void
   /** 作成中・編集中の仮描画 */
   getPreview?(): Drawing | null
+  /** ホバー中の描画 ID(Idle モードのみで有効。§5.3 TF バッジ表示用) */
+  getHoveredDrawingId?(): number | null
 }

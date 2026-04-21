@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 import type { Drawing } from '../../api/types'
+import { getTimeframeColor } from '../../constants'
 import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
 
 // 標準的なリトレースメントレベル
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const LINE_HIT_TOLERANCE_PX = 6
 const HANDLE_HIT_TOLERANCE_PX = 8
-const FIB_COLOR = '#d2a8ff'
 
 type FP = { t: number; price: number }
 
@@ -75,6 +75,7 @@ export const fibonacciTool: ToolMetadata = {
 
     const [x1, x2] = xA < xB ? [xA, xB] : [xB, xA]
     const isPreview = drawing.id < 0
+    const color = getTimeframeColor(drawing.timeframe)
 
     return (
       <g>
@@ -87,7 +88,7 @@ export const fibonacciTool: ToolMetadata = {
             <g key={level}>
               <line
                 x1={x1} y1={y} x2={x2} y2={y}
-                stroke={FIB_COLOR}
+                stroke={color}
                 strokeWidth={0.8}
                 strokeOpacity={0.7}
                 strokeDasharray={isPreview ? '4 3' : undefined}
@@ -95,7 +96,7 @@ export const fibonacciTool: ToolMetadata = {
               <text
                 x={x1 + 4}
                 y={y - 2}
-                fill={FIB_COLOR}
+                fill={color}
                 fontSize={10}
                 fontFamily="monospace"
               >
@@ -107,14 +108,14 @@ export const fibonacciTool: ToolMetadata = {
         {/* A-B 対角線(視覚的アンカー) */}
         <line
           x1={xA} y1={yA} x2={xB} y2={yB}
-          stroke={FIB_COLOR}
+          stroke={color}
           strokeWidth={1}
           strokeOpacity={0.35}
           strokeDasharray="2 3"
         />
         {/* 端点マーカー */}
-        <circle cx={xA} cy={yA} r={3} fill={FIB_COLOR} />
-        <circle cx={xB} cy={yB} r={3} fill={FIB_COLOR} />
+        <circle cx={xA} cy={yA} r={3} fill={color} />
+        <circle cx={xB} cy={yB} r={3} fill={color} />
       </g>
     )
   },

@@ -38,3 +38,20 @@ export const TRADING_SESSIONS: { v: string; label: string }[] = [
   { v: 'london', label: 'ロンドン 16-25' },
   { v: 'ny', label: 'NY 22-06' },
 ]
+
+// 時間足ごとの描画色(仕様書 §5.3)。
+// 作成時の timeframe により描画色を固定し、どの時間足の視点で引かれたかを識別する。
+const TIMEFRAME_COLORS: Record<string, string> = {
+  M5: '#58a6ff',   // スカイブルー
+  M15: '#56d4dd',  // ティール
+  M30: '#26a69a',  // 緑
+  H1: '#e3b341',   // 黄
+  H4: '#f0883e',   // オレンジ
+  D1: '#d2a8ff',   // 紫
+}
+const DEFAULT_TIMEFRAME_COLOR = '#e3b341'
+
+export function getTimeframeColor(tf: string | null | undefined): string {
+  if (!tf) return DEFAULT_TIMEFRAME_COLOR
+  return TIMEFRAME_COLORS[tf] ?? DEFAULT_TIMEFRAME_COLOR
+}

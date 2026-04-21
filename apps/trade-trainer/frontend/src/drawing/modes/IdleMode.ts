@@ -13,12 +13,16 @@ import { MovingTrendlineHandleMode } from './MovingTrendlineHandleMode'
 export class IdleMode implements DrawingMode {
   readonly id = 'idle'
   private currentCursor: string = 'default'
+  private hoveredId: number | null = null
 
   get cursor(): string { return this.currentCursor }
+
+  getHoveredDrawingId(): number | null { return this.hoveredId }
 
   onMouseMove(e: PointerPayload, ctx: ModeContext): void {
     const hit = findHit(ctx.drawings, e.pointerPx, ctx.chartApi)
     this.currentCursor = hit ? cursorForHit(hit) : 'default'
+    this.hoveredId = hit?.drawingId ?? null
   }
 
   onMouseDown(e: PointerPayload, ctx: ModeContext): void {

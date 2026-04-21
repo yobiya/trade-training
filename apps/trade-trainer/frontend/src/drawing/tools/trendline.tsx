@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Drawing } from '../../api/types'
+import { getTimeframeColor } from '../../constants'
 import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
 
 // 線(または端点)の当たり判定範囲(px)
@@ -68,7 +69,7 @@ export const trendlineTool: ToolMetadata = {
     const b = pointToPx(pts[1], api)
     if (!a || !b) return null
     const isPreview = drawing.id < 0
-    const color = isPreview ? '#58a6ff' : '#e3b341'
+    const color = getTimeframeColor(drawing.timeframe)
     return (
       <g>
         <line

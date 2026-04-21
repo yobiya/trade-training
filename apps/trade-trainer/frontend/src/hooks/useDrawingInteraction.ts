@@ -22,6 +22,8 @@ type Params = {
 export type DrawingInteraction = {
   cursor: string
   preview: Drawing | null
+  /** ホバー中の描画 ID(§5.3 TF バッジ表示用) */
+  hoveredId: number | null
   /** 現在アクティブな作成ツール(Drawing*Mode 中のみ非 null)。ボタンのハイライトに使う。 */
   activeTool: DrawingKind | null
   /** ツールボタンから呼ぶ。null で Idle に戻る。 */
@@ -121,6 +123,7 @@ export function useDrawingInteraction({
   return {
     cursor: mode.cursor ?? 'default',
     preview: mode.getPreview?.() ?? null,
+    hoveredId: mode.getHoveredDrawingId?.() ?? null,
     activeTool: getActiveTool(mode),
     selectTool,
     handlers,
