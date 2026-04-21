@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Drawing, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
@@ -8,7 +8,7 @@ import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { TIMEFRAMES, UPPER_TFS, getTimeframeColor } from '../constants'
+import { TIMEFRAMES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
@@ -46,23 +46,53 @@ function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | nul
 
 export function TrainingPage({ sessionId, onBack }: Props) {
   const [session, setSession] = useState<TradeSession | null>(null)
-  const [timeframe, setTimeframe] = useState('M5')
+  // 仕様書 §5.1: エントリー足(最上段)とアクティブ TF(描画作成時の作成 TF)。
+  // アクティブ TF はマウスが乗ったチャートで切り替わる。
+  const [entryTf, setEntryTf] = useState('M5')
+  const [activeTf, setActiveTf] = useState('M5')
+  const [hiddenTfs, setHiddenTfs] = useState<Set<string>>(new Set())
   const [activeTrade, setActiveTrade] = useState<TradeResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<string | null>(null)
   const [advancing, setAdvancing] = useState(false)
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
 
-  const { barsByTf, upperTfs, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, timeframe)
+  // 表示順序: エントリー足を最上段に、残りは TIMEFRAMES 順(小 → 大)。
+  const visibleTfs = useMemo(() => {
+    const rest = TIMEFRAMES.filter(tf => tf !== entryTf && !hiddenTfs.has(tf))
+    const head = hiddenTfs.has(entryTf) ? [] : [entryTf]
+    return [...head, ...rest]
+  }, [entryTf, hiddenTfs])
+
+  const { barsByTf, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, visibleTfs, entryTf)
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
   const tradingStyles = useTradingStyles()
 
-  const [mainChartHandle, setMainChartHandle] = useState<ChartHandle | null>(null)
+  const chartHandlesRef = useRef<Map<string, ChartHandle>>(new Map())
+  const [chartHandles, setChartHandles] = useState<Map<string, ChartHandle>>(new Map())
   const chartApiRef = useRef<ChartApi | null>(null)
-  const setMainChartRef = useCallback((handle: ChartHandle | null) => {
-    setMainChartHandle(handle)
-    chartApiRef.current = handle?.api ?? null
+
+  const setChartRef = useCallback((tf: string) => (handle: ChartHandle | null) => {
+    const map = chartHandlesRef.current
+    if (handle) map.set(tf, handle)
+    else map.delete(tf)
+    setChartHandles(new Map(map))
   }, [])
+
+  function handleChartMouseEnter(tf: string) {
+    setActiveTf(tf)
+    const handle = chartHandlesRef.current.get(tf)
+    chartApiRef.current = handle?.api ?? null
+  }
+
+  function toggleTfVisibility(tf: string) {
+    setHiddenTfs(prev => {
+      const next = new Set(prev)
+      if (next.has(tf)) next.delete(tf)
+      else next.add(tf)
+      return next
+    })
+  }
 
   const handleCreateDrawing = useCallback(async (body: CreateDrawingBody): Promise<Drawing> => {
     return addDrawing(body)
@@ -78,7 +108,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
 
   const interaction = useDrawingInteraction({
     drawings,
-    activeTimeframe: timeframe,
+    activeTimeframe: activeTf,
     chartApiRef,
     onCreate: handleCreateDrawing,
     onUpdate: handleUpdateDrawing,
@@ -166,15 +196,29 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           <span className="position">{formatJST(session?.current_position, '')}</span>
         </div>
         <div className="tf-selector">
+          <span className="tf-selector-label">エントリー足:</span>
           {TIMEFRAMES.map(tf => (
-            <button
-              key={tf}
-              className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
-              onClick={() => setTimeframe(tf)}
-              title={`メイン: ${tf}${UPPER_TFS[tf]?.length ? ' / 上位: ' + UPPER_TFS[tf].join(', ') : ''}`}
-            >
+            <label key={`entry-${tf}`} className={`tf-entry-radio ${entryTf === tf ? 'active' : ''}`}>
+              <input
+                type="radio"
+                name="entry-tf"
+                checked={entryTf === tf}
+                onChange={() => setEntryTf(tf)}
+              />
               {tf}
-            </button>
+            </label>
+          ))}
+          <span className="tf-selector-sep">|</span>
+          <span className="tf-selector-label">表示:</span>
+          {TIMEFRAMES.map(tf => (
+            <label key={`show-${tf}`} className={`tf-show-check ${!hiddenTfs.has(tf) ? 'active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={!hiddenTfs.has(tf)}
+                onChange={() => toggleTfVisibility(tf)}
+              />
+              {tf}
+            </label>
           ))}
         </div>
       </header>
@@ -182,48 +226,40 @@ export function TrainingPage({ sessionId, onBack }: Props) {
       {notification && <div className="notification">{notification}</div>}
 
       <div className="training-body">
-        <div className="chart-area">
-          {upperTfs.length > 0 && (
-            <div className="upper-charts">
-              {upperTfs.map(tf => (
-                <div key={tf} className="upper-chart">
-                  <div className="tf-badge">{tf}</div>
-                  <Chart
-                    bars={barsByTf[tf] ?? []}
-                    timeframe={tf}
-                    digits={session?.digits}
-                    onNeedMoreHistory={(earliest) => loadMoreHistory(tf, earliest)}
-                    priceLines={priceLinesForTf(drawings, tf, interaction.preview)}
-                    indicators={indicators}
-                  />
-                </div>
-              ))}
+        <div className="chart-area chart-stack">
+          {visibleTfs.map(tf => (
+            <div
+              key={tf}
+              className={`stacked-chart ${activeTf === tf ? 'active' : ''}`}
+              onMouseEnter={() => handleChartMouseEnter(tf)}
+            >
+              <div className="tf-badge" style={{ background: getTimeframeColor(tf) }}>{tf}</div>
+              <Chart
+                ref={setChartRef(tf)}
+                bars={barsByTf[tf] ?? []}
+                timeframe={tf}
+                digits={session?.digits}
+                cursor={activeTf === tf ? interaction.cursor : undefined}
+                onNeedMoreHistory={(earliest) => loadMoreHistory(tf, earliest)}
+                onChartClick={activeTf === tf ? interaction.handlers.onChartClick : undefined}
+                onMouseMove={activeTf === tf ? interaction.handlers.onMouseMove : undefined}
+                onMouseDown={activeTf === tf ? interaction.handlers.onMouseDown : undefined}
+                onMouseUp={activeTf === tf ? interaction.handlers.onMouseUp : undefined}
+                priceLines={priceLinesForTf(drawings, tf, interaction.preview)}
+                indicators={indicators}
+              />
+              <DrawingOverlay
+                chartHandle={chartHandles.get(tf) ?? null}
+                drawings={drawings}
+                preview={activeTf === tf ? interaction.preview : null}
+                activeTimeframe={tf}
+                hoveredId={activeTf === tf ? interaction.hoveredId : null}
+              />
             </div>
+          ))}
+          {visibleTfs.length === 0 && (
+            <div className="empty-chart-hint">表示する時間足を選択してください</div>
           )}
-          <div className="main-chart">
-            <div className="tf-badge main">{timeframe}</div>
-            <Chart
-              ref={setMainChartRef}
-              bars={barsByTf[timeframe] ?? []}
-              timeframe={timeframe}
-              digits={session?.digits}
-              cursor={interaction.cursor}
-              onNeedMoreHistory={(earliest) => loadMoreHistory(timeframe, earliest)}
-              onChartClick={interaction.handlers.onChartClick}
-              onMouseMove={interaction.handlers.onMouseMove}
-              onMouseDown={interaction.handlers.onMouseDown}
-              onMouseUp={interaction.handlers.onMouseUp}
-              priceLines={priceLinesForTf(drawings, timeframe, interaction.preview)}
-              indicators={indicators}
-            />
-            <DrawingOverlay
-              chartHandle={mainChartHandle}
-              drawings={drawings}
-              preview={interaction.preview}
-              activeTimeframe={timeframe}
-              hoveredId={interaction.hoveredId}
-            />
-          </div>
         </div>
         <div className="sidebar">
           <TradePanel

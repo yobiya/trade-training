@@ -311,9 +311,25 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .session-info { flex: 1; display: flex; gap: 12px; align-items: center; }
 .symbol { font-weight: 700; font-size: 15px; }
 .position { color: var(--text-dim); font-size: 12px; }
-.tf-selector { display: flex; gap: 4px; }
+.tf-selector { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.tf-selector-label { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
+.tf-selector-sep { color: var(--border); margin: 0 4px; }
 .tf-btn { padding: 4px 8px; font-size: 11px; }
 .tf-btn.active { background: var(--accent); border-color: var(--accent); color: #0d1117; }
+.tf-entry-radio, .tf-show-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.tf-entry-radio input, .tf-show-check input { accent-color: var(--accent); }
+.tf-entry-radio.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+.tf-show-check.active { color: var(--text); border-color: var(--accent-dim, #344968); }
 
 .notification {
   position: fixed;
@@ -340,43 +356,47 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   flex-direction: column;
   min-height: 0;
 }
-.upper-charts {
-  display: flex;
-  flex-direction: row;
-  gap: 2px;
-  flex-shrink: 0;
-  height: 32%;
-  min-height: 160px;
-  border-bottom: 1px solid var(--border);
+/* §5.1 マルチタイムフレーム縦積み: 全 TF を画面幅フルで縦に並べる */
+.chart-stack {
+  overflow-y: auto;
   background: var(--bg);
 }
-.upper-chart {
-  flex: 1;
+.stacked-chart {
   position: relative;
-  min-width: 0;
-  min-height: 0;
-  border-right: 1px solid var(--border);
+  flex: 1 0 260px;  /* 高さは TF 数に応じて均等配分、最小 260px */
+  min-height: 260px;
+  border-bottom: 1px solid var(--border);
 }
-.upper-chart:last-child { border-right: none; }
-.main-chart {
-  flex: 1;
-  position: relative;
-  min-height: 0;
+.stacked-chart.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0.35;
 }
 .tf-badge {
   position: absolute;
   top: 4px;
   left: 6px;
   background: rgba(22, 27, 34, 0.85);
-  color: var(--text-dim);
+  color: #0d1117;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   z-index: 10;
   pointer-events: none;
 }
-.tf-badge.main { color: var(--accent); font-size: 12px; }
+.empty-chart-hint {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
 .sidebar {
   width: 300px;
   flex-shrink: 0;
