@@ -68,20 +68,32 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
   const tradingStyles = useTradingStyles()
 
-  const chartHandlesRef = useRef<Map<string, ChartHandle>>(new Map())
   const [chartHandles, setChartHandles] = useState<Map<string, ChartHandle>>(new Map())
   const chartApiRef = useRef<ChartApi | null>(null)
 
-  const setChartRef = useCallback((tf: string) => (handle: ChartHandle | null) => {
-    const map = chartHandlesRef.current
-    if (handle) map.set(tf, handle)
-    else map.delete(tf)
-    setChartHandles(new Map(map))
+  // ref コールバックは TF ごとに 1 つに固定する。毎レンダリングで新しい関数を
+  // 返すと Chart の ref が再設定されて無限ループになる(Chart → setState →
+  // 再レンダ → 新 ref → Chart → ...)。
+  const chartRefCallbacksRef = useRef<Map<string, (handle: ChartHandle | null) => void>>(new Map())
+  const setChartRef = useCallback((tf: string) => {
+    let cb = chartRefCallbacksRef.current.get(tf)
+    if (!cb) {
+      cb = (handle: ChartHandle | null) => {
+        setChartHandles(prev => {
+          const next = new Map(prev)
+          if (handle) next.set(tf, handle)
+          else next.delete(tf)
+          return next
+        })
+      }
+      chartRefCallbacksRef.current.set(tf, cb)
+    }
+    return cb
   }, [])
 
   function handleChartMouseEnter(tf: string) {
     setActiveTf(tf)
-    const handle = chartHandlesRef.current.get(tf)
+    const handle = chartHandles.get(tf)
     chartApiRef.current = handle?.api ?? null
   }
 
