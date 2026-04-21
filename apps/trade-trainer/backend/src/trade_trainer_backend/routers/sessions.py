@@ -314,14 +314,18 @@ def skip_session(
     body: SkipSessionRequest,
     db: Session = Depends(get_db),
 ) -> SessionResponse:
-    """見送り: エントリーせずにセッションを完了する。"""
+    """見送り: エントリーせずにセッションを完了する(§7.3 層 2 / §9.1 全候補見送り)。"""
     s = db.get(TradeSession, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="Session not found")
     fd = db.get(SessionFinalDecision, session_id)
-    if fd:
-        fd.has_entry = False
-        fd.skip_reason = body.reason
+    if fd is None:
+        fd = SessionFinalDecision(session_id=session_id, has_entry=False)
+        db.add(fd)
+    fd.has_entry = False
+    fd.skip_reason = body.reason
+    if body.considered_styles is not None:
+        fd.considered_styles = body.considered_styles
     db.commit()
     return _build_response(s, db)
 

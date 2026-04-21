@@ -17,7 +17,7 @@ type Props = {
   activeTrade: TradeResponse | null
   currentPrice: number | null
   onEnter: (args: EnterArgs) => Promise<void>
-  onExit: (price: number, reason: string) => Promise<void>
+  onExit: (price: number, reason: string, exitMemo?: string) => Promise<void>
   loading: boolean
   digits: number
   styles: TradingStyle[]
@@ -31,6 +31,7 @@ export function TradePanel({
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
   const [exitPrice, setExitPrice] = useState('')
+  const [exitMemo, setExitMemo] = useState('')
   const [scenario, setScenario] = useState<ScenarioInput>({})
   const [styleId, setStyleId] = useState('')
   const [styleReason, setStyleReason] = useState('')
@@ -53,8 +54,9 @@ export function TradePanel({
   async function handleExit() {
     const p = parseFloat(exitPrice) || currentPrice
     if (p == null) return
-    await onExit(p, 'manual')
+    await onExit(p, 'manual', exitMemo.trim() || undefined)
     setExitPrice('')
+    setExitMemo('')
   }
 
   if (activeTrade) {
@@ -100,17 +102,27 @@ export function TradePanel({
             </div>
           )}
           {activeTrade.is_open && (
-            <div className="exit-row">
-              <input
-                type="number"
-                placeholder={`決済価格 (${currentPrice ?? ''})`}
-                value={exitPrice}
-                onChange={e => setExitPrice(e.target.value)}
-                step={step}
+            <div className="exit-form">
+              <div className="exit-row">
+                <input
+                  type="number"
+                  placeholder={`決済価格 (${currentPrice ?? ''})`}
+                  value={exitPrice}
+                  onChange={e => setExitPrice(e.target.value)}
+                  step={step}
+                />
+                <button onClick={handleExit} disabled={loading} className="exit-btn">
+                  決済
+                </button>
+              </div>
+              <textarea
+                className="exit-memo-textarea"
+                placeholder="決済時メモ(任意、§7.4.1): なぜ切ったか"
+                value={exitMemo}
+                onChange={e => setExitMemo(e.target.value)}
+                rows={2}
+                disabled={loading}
               />
-              <button onClick={handleExit} disabled={loading} className="exit-btn">
-                決済
-              </button>
             </div>
           )}
         </div>

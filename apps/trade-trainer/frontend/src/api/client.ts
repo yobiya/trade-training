@@ -65,10 +65,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ symbol, skip_reasons: skipReasons }),
       }),
-    skip: (id: string, reason?: string) =>
+    skip: (id: string, reason?: string, consideredStyles?: string[]) =>
       request<TradeSession>(`/sessions/${id}/skip`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason, considered_styles: consideredStyles }),
       }),
     addCandidate: (id: string, symbol: string, memo?: string) =>
       request<SessionCandidate>(`/sessions/${id}/candidates`, {

@@ -6,6 +6,7 @@ import type { ChartHandle, PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
+import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
 import { TIMEFRAMES, getTimeframeColor } from '../constants'
@@ -181,10 +182,10 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     }
   }
 
-  async function handleExit(price: number, reason: string) {
+  async function handleExit(price: number, reason: string, exitMemo?: string) {
     setLoading(true)
     try {
-      const trade = await api.trades.exit(sessionId, { price, reason })
+      const trade = await api.trades.exit(sessionId, { price, reason, exit_memo: exitMemo })
       setActiveTrade(trade)
       const pips = trade.pips_pnl ?? 0
       notify(`決済: ${price} (${pips > 0 ? '+' : ''}${pips} pips)`)
@@ -193,8 +194,11 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     }
   }
 
-  async function handleSkip() {
-    await api.sessions.skip(sessionId)
+  const [skipping, setSkipping] = useState(false)
+
+  async function handleSkipConfirm(reason: string, consideredStyles: string[]) {
+    await api.sessions.skip(sessionId, reason, consideredStyles)
+    setSkipping(false)
     notify('見送り')
     onBack()
   }
@@ -307,11 +311,18 @@ export function TrainingPage({ sessionId, onBack }: Props) {
               ▶▶ +5本
             </button>
             {!activeTrade?.is_open && (
-              <button onClick={() => void handleSkip()} className="skip-btn">見送り</button>
+              <button onClick={() => setSkipping(true)} className="skip-btn">見送り</button>
             )}
           </div>
         </div>
       </div>
+      {skipping && (
+        <SkipEntryModal
+          styles={tradingStyles}
+          onConfirm={handleSkipConfirm}
+          onCancel={() => setSkipping(false)}
+        />
+      )}
     </div>
   )
 }

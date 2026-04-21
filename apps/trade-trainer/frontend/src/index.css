@@ -404,6 +404,36 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .modal-actions button.primary { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 700; }
 .modal-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* §7.3 見送りモーダル */
+.skip-styles { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.skip-style-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text);
+}
+.skip-style-chip.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+
+/* §7.4.1 決済時メモ */
+.exit-form { display: flex; flex-direction: column; gap: 4px; }
+.exit-memo-textarea {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  resize: vertical;
+}
+
 /* Training page */
 .training-page {
   display: flex;
