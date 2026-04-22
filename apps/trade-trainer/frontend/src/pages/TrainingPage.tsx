@@ -6,6 +6,7 @@ import type { PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
+import { PostReviewPanel } from '../components/PostReviewPanel'
 import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
@@ -257,6 +258,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             onRemove={(id) => void removeDrawing(id)}
             digits={session?.digits ?? 5}
           />
+          <PostReviewPanel sessionId={sessionId} />
           <div className="action-buttons">
             <button
               onClick={() => void handleAdvance()}

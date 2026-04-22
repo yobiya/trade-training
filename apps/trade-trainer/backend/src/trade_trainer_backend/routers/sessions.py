@@ -7,9 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from shared_schema.models.trading import SessionCandidate, SessionFinalDecision, TradeSession
+from shared_schema.models.trading import SessionCandidate, SessionFinalDecision, Trade, TradeSession
 from trade_trainer_backend.config import Settings, get_settings
 from trade_trainer_backend.deps import get_db
+from trade_trainer_backend.schemas.post_review import (
+    CandidateReview,
+    EntryReview,
+    PostReviewResponse,
+    SkipReview,
+    StageEvalResp,
+)
 from trade_trainer_backend.schemas.session import (
     CandidateResponse,
     CreateCandidateRequest,
@@ -20,6 +27,7 @@ from trade_trainer_backend.schemas.session import (
     SkipSessionRequest,
     UpdateCandidateRequest,
 )
+from trade_trainer_backend.services.post_eval import evaluate_symbol
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -292,6 +300,80 @@ def list_sessions(
             )
         )
     return result
+
+
+@router.get("/{session_id}/post-review", response_model=PostReviewResponse)
+def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostReviewResponse:
+    """仕様書 §9.2 見送り事後検証 + §9.4 1 セッション単位の振り返り表示。
+    層 1 / 層 2 / エントリー済みトレードについて、presented_at 起点の
+    3 段階(10/50/200 本先)事後評価を on-demand で返す(§10 により DB 保存はしない)。"""
+    s = db.get(TradeSession, session_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ref_dt = s.presented_at
+    if ref_dt.tzinfo is None:
+        ref_dt = ref_dt.replace(tzinfo=timezone.utc)
+
+    def to_stage_resp(stages: list) -> list[StageEvalResp]:
+        return [StageEvalResp(**st.__dict__) for st in stages]
+
+    # 層 1: 非選定候補
+    candidate_reviews: list[CandidateReview] = []
+    for c in db.scalars(
+        select(SessionCandidate).where(
+            SessionCandidate.session_id == session_id,
+            SessionCandidate.is_selected.is_(False),
+        ).order_by(SessionCandidate.id)
+    ).all():
+        rv = evaluate_symbol(c.symbol, ref_dt)
+        candidate_reviews.append(CandidateReview(
+            symbol=c.symbol,
+            memo=c.memo,
+            skip_reason=c.skip_reason,
+            ref_price=rv.ref_price,
+            stages=to_stage_resp(rv.stages),
+        ))
+
+    # 層 2: エントリー見送り(symbol が確定しているが has_entry=False)
+    fd = db.get(SessionFinalDecision, session_id)
+    skip_review: SkipReview | None = None
+    entry_review: EntryReview | None = None
+    if fd is not None and fd.symbol:
+        if not fd.has_entry:
+            rv = evaluate_symbol(fd.symbol, ref_dt)
+            skip_review = SkipReview(
+                symbol=fd.symbol,
+                reason=fd.skip_reason,
+                considered_styles=fd.considered_styles,
+                ref_price=rv.ref_price,
+                stages=to_stage_resp(rv.stages),
+            )
+        else:
+            # エントリー済みトレードの振り返り
+            trade = db.scalars(
+                select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
+            ).first()
+            if trade is not None:
+                rv = evaluate_symbol(trade.symbol, ref_dt)
+                entry_review = EntryReview(
+                    symbol=trade.symbol,
+                    direction=trade.direction,
+                    entry_price=trade.entry_price,
+                    sl=trade.sl,
+                    tp=trade.tp,
+                    exit_price=trade.exit_price,
+                    exit_reason=trade.exit_reason,
+                    pips_pnl=trade.pips_pnl,
+                    ref_price=rv.ref_price,
+                    stages=to_stage_resp(rv.stages),
+                )
+
+    return PostReviewResponse(
+        candidates=candidate_reviews,
+        skip=skip_review,
+        entry=entry_review,
+    )
 
 
 @router.delete("/{session_id}", status_code=204)

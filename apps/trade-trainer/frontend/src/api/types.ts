@@ -94,6 +94,50 @@ export type TradeResponse = {
   style_selection_reason: string | null
 }
 
+// 仕様書 §9.2 / §9.4 セッション単位の事後振り返り
+export type StageEval = {
+  bars: number                // 10 / 50 / 200
+  max_up_pips: number
+  max_down_pips: number
+  max_abs_pips: number
+  label: 'opportunity_loss' | 'correct' | 'neutral'
+}
+
+export type CandidateReview = {
+  symbol: string
+  memo: string | null
+  skip_reason: string | null
+  ref_price: number | null
+  stages: StageEval[]
+}
+
+export type SkipReview = {
+  symbol: string
+  reason: string | null
+  considered_styles: string[] | null
+  ref_price: number | null
+  stages: StageEval[]
+}
+
+export type EntryReview = {
+  symbol: string
+  direction: string
+  entry_price: number
+  sl: number | null
+  tp: number | null
+  exit_price: number | null
+  exit_reason: string | null
+  pips_pnl: number | null
+  ref_price: number | null
+  stages: StageEval[]
+}
+
+export type PostReviewResponse = {
+  candidates: CandidateReview[]
+  skip: SkipReview | null
+  entry: EntryReview | null
+}
+
 export type SessionFilter = {
   date_from?: string
   date_to?: string

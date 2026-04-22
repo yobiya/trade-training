@@ -3,6 +3,7 @@ import type {
   ChartResponse,
   CreateDrawingRequest,
   Drawing,
+  PostReviewResponse,
   ScenarioInput,
   SessionCandidate,
   SessionFilter,
@@ -82,6 +83,8 @@ export const api = {
       request<void>(`/sessions/${id}/candidates/${candidateId}`, { method: 'DELETE' }),
     close: (id: string) =>
       request<void>(`/sessions/${id}`, { method: 'DELETE' }),
+    postReview: (id: string) =>
+      request<PostReviewResponse>(`/sessions/${id}/post-review`),
   },
 
   chart: {

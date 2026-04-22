@@ -736,3 +736,64 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   cursor: pointer;
 }
 .close-session-btn:hover { opacity: 0.9; }
+
+/* §9.2 / §9.4 振り返りパネル */
+.post-review {
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.post-review-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.post-review-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+}
+.review-section { display: flex; flex-direction: column; gap: 4px; }
+.review-section h4 { margin: 0; font-size: 12px; color: var(--accent); }
+.review-meta { color: var(--text-dim); font-size: 11px; }
+.review-reason { color: var(--text); font-style: italic; }
+.review-candidate {
+  padding: 6px 0;
+  border-top: 1px solid var(--bg3);
+}
+.review-candidate:first-child { border-top: none; }
+.stage-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.stage-cell {
+  flex: 1 0 auto;
+  min-width: 80px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 10px;
+  text-align: center;
+}
+.stage-bars { color: var(--text-dim); font-size: 10px; }
+.stage-label { font-weight: 700; margin: 2px 0; }
+.stage-pips { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.stage-cell.stage-opportunity_loss { border-color: var(--loss); background: rgba(239, 83, 80, 0.12); }
+.stage-cell.stage-opportunity_loss .stage-label { color: var(--loss); }
+.stage-cell.stage-correct { border-color: var(--profit); background: rgba(38, 166, 154, 0.12); }
+.stage-cell.stage-correct .stage-label { color: var(--profit); }
+.stage-cell.stage-neutral { border-color: var(--border); }
+.stage-cell.stage-neutral .stage-label { color: var(--text-dim); }
+.post-review .hint { color: var(--text-dim); font-size: 11px; margin: 0; }
+.pnl.profit { color: var(--profit); font-weight: 600; }
+.pnl.loss { color: var(--loss); font-weight: 600; }
