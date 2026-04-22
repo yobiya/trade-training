@@ -11,13 +11,26 @@ _SessionLocal: sessionmaker[Session] | None = None
 
 
 def create_db_engine(db_path: str | Path = "trading.db") -> Engine:
-    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    # 複数リクエストが並列で DB を書き込むため(例: 銘柄選定画面で 8 銘柄分の
+    # OHLC を market-data がキャッシュ INSERT するケース)、SQLite のロック
+    # 競合時に待機できるよう connect_args で timeout を指定する。
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        echo=False,
+        connect_args={"timeout": 30.0},
+    )
 
     @event.listens_for(engine, "connect")
     def configure_sqlite(dbapi_conn: object, _: object) -> None:
         cursor = dbapi_conn.cursor()  # type: ignore[union-attr]
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
+        # busy_timeout: ロック解放待ちのミリ秒。並列 INSERT で "database is locked"
+        # を回避する。SQLite は WAL でも書き込みは直列化されるため、短期の
+        # 競合は待機して次に譲る運用が安全。
+        cursor.execute("PRAGMA busy_timeout=30000")
+        # synchronous=NORMAL: WAL と組み合わせで書き込み速度を上げつつ耐障害性も確保
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
     return engine
