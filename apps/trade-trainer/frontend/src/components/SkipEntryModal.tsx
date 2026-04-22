@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { TradingStyle } from '../api/client'
+import { Modal } from './Modal'
 
 type Props = {
   styles: TradingStyle[]
@@ -39,47 +40,45 @@ export function SkipEntryModal({ styles, onConfirm, onCancel }: Props) {
   const activeStyles = styles.filter(s => s.is_active)
 
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2>エントリーを見送る</h2>
-        <p className="modal-hint">見送り理由 *(なぜこのペアを入らないと判断したか)</p>
-        <textarea
-          rows={4}
-          value={reason}
-          onChange={e => setReason(e.target.value)}
-          placeholder="ポイント合致せず / トレンド逆行 / ボラ不足 等、なぜ入らないと判断したか"
-          autoFocus
-        />
+    <Modal onClose={onCancel}>
+      <h2>エントリーを見送る</h2>
+      <p className="modal-hint">見送り理由 *(なぜこのペアを入らないと判断したか)</p>
+      <textarea
+        rows={4}
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder="ポイント合致せず / トレンド逆行 / ボラ不足 等、なぜ入らないと判断したか"
+        autoFocus
+      />
 
-        {activeStyles.length > 0 && (
-          <>
-            <p className="modal-hint" style={{ marginTop: 12 }}>検討したスタイル(任意、§8.5)</p>
-            <div className="skip-styles">
-              {activeStyles.map(s => (
-                <label key={s.id} className={`skip-style-chip ${considered.has(s.id) ? 'active' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={considered.has(s.id)}
-                    onChange={() => toggleStyle(s.id)}
-                  />
-                  {s.name}
-                </label>
-              ))}
-            </div>
-          </>
-        )}
+      {activeStyles.length > 0 && (
+        <>
+          <p className="modal-hint" style={{ marginTop: 12 }}>検討したスタイル(任意、§8.5)</p>
+          <div className="skip-styles">
+            {activeStyles.map(s => (
+              <label key={s.id} className={`skip-style-chip ${considered.has(s.id) ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={considered.has(s.id)}
+                  onChange={() => toggleStyle(s.id)}
+                />
+                {s.name}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
 
-        <div className="modal-actions">
-          <button onClick={onCancel} disabled={busy}>キャンセル</button>
-          <button
-            className="primary"
-            onClick={() => void handleSubmit()}
-            disabled={busy || !reason.trim()}
-          >
-            見送り確定
-          </button>
-        </div>
+      <div className="modal-actions">
+        <button onClick={onCancel} disabled={busy}>キャンセル</button>
+        <button
+          className="primary"
+          onClick={() => void handleSubmit()}
+          disabled={busy || !reason.trim()}
+        >
+          見送り確定
+        </button>
       </div>
-    </div>
+    </Modal>
   )
 }

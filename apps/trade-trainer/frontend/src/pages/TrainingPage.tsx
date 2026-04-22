@@ -2,15 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Drawing, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
-import type { ChartHandle, PriceLine } from '../components/Chart'
+import type { PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
 import { SkipEntryModal } from '../components/SkipEntryModal'
+import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
 import { TIMEFRAMES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
+import { isDrawingVisibleOnTf } from '../drawing/visibility'
+import { useChartRefCache } from '../hooks/useChartRefCache'
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
 import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
@@ -20,13 +23,6 @@ import { formatJST } from '../utils/datetime'
 type Props = {
   sessionId: string
   onBack: () => void
-}
-
-// 仕様書 §5.3 デフォルト表示範囲
-function isDrawingVisibleOnTf(d: Drawing, tf: string): boolean {
-  if (d.visible_on_timeframes) return d.visible_on_timeframes.includes(tf)
-  if (d.kind === 'line' || d.kind === 'trendline') return true
-  return d.timeframe === tf
 }
 
 function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | null): PriceLine[] {
@@ -69,37 +65,12 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
   const tradingStyles = useTradingStyles()
 
-  const [chartHandles, setChartHandles] = useState<Map<string, ChartHandle>>(new Map())
+  const { handles: chartHandles, setRef: setChartRef } = useChartRefCache()
   const chartApiRef = useRef<ChartApi | null>(null)
-
-  // ref コールバックは TF ごとに 1 つに固定する。毎レンダリングで新しい関数を
-  // 返すと Chart の ref が再設定されて無限ループになる(Chart → setState →
-  // 再レンダ → 新 ref → Chart → ...)。
-  const chartRefCallbacksRef = useRef<Map<string, (handle: ChartHandle | null) => void>>(new Map())
-  const setChartRef = useCallback((tf: string) => {
-    let cb = chartRefCallbacksRef.current.get(tf)
-    if (!cb) {
-      cb = (handle: ChartHandle | null) => {
-        setChartHandles(prev => {
-          // 同一参照なら更新しない(React は ref 更新時に前と同じ値でも呼ぶことがあり、
-          // state を新しい Map で置き換えると再レンダ → DrawingOverlay などの依存先が
-          // アンマウント/マウントで暴れて無限ループになる)
-          if (prev.get(tf) === (handle ?? undefined)) return prev
-          const next = new Map(prev)
-          if (handle) next.set(tf, handle)
-          else next.delete(tf)
-          return next
-        })
-      }
-      chartRefCallbacksRef.current.set(tf, cb)
-    }
-    return cb
-  }, [])
 
   function handleChartMouseEnter(tf: string) {
     setActiveTf(tf)
-    const handle = chartHandles.get(tf)
-    chartApiRef.current = handle?.api ?? null
+    chartApiRef.current = chartHandles.get(tf)?.api ?? null
   }
 
   function toggleTfVisibility(tf: string) {
@@ -215,32 +186,12 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           <span className="symbol">{session?.symbol ?? '—'}</span>
           <span className="position">{formatJST(session?.current_position, '')}</span>
         </div>
-        <div className="tf-selector">
-          <span className="tf-selector-label">エントリー足:</span>
-          {TIMEFRAMES.map(tf => (
-            <label key={`entry-${tf}`} className={`tf-entry-radio ${entryTf === tf ? 'active' : ''}`}>
-              <input
-                type="radio"
-                name="entry-tf"
-                checked={entryTf === tf}
-                onChange={() => setEntryTf(tf)}
-              />
-              {tf}
-            </label>
-          ))}
-          <span className="tf-selector-sep">|</span>
-          <span className="tf-selector-label">表示:</span>
-          {TIMEFRAMES.map(tf => (
-            <label key={`show-${tf}`} className={`tf-show-check ${!hiddenTfs.has(tf) ? 'active' : ''}`}>
-              <input
-                type="checkbox"
-                checked={!hiddenTfs.has(tf)}
-                onChange={() => toggleTfVisibility(tf)}
-              />
-              {tf}
-            </label>
-          ))}
-        </div>
+        <TimeframeSelector
+          entryTf={entryTf}
+          onEntryChange={setEntryTf}
+          hiddenTfs={hiddenTfs}
+          onToggleVisibility={toggleTfVisibility}
+        />
       </header>
 
       {notification && <div className="notification">{notification}</div>}

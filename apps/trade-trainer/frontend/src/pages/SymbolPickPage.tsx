@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
-import type { ChartHandle } from '../components/Chart'
+import { Modal } from '../components/Modal'
+import { TimeframeSelector } from '../components/TimeframeSelector'
 import { SYMBOLS, TIMEFRAMES, getTimeframeColor } from '../constants'
 import { formatJST } from '../utils/datetime'
+import { useChartRefCache } from '../hooks/useChartRefCache'
 import { useSymbolPickCharts } from '../hooks/useSymbolPickCharts'
 
 type Props = {
@@ -50,24 +52,7 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
     sessionId, currentSymbol, visibleTfs,
   )
 
-  const [, setChartHandles] = useState<Map<string, ChartHandle>>(new Map())
-  const chartRefCallbacksRef = useRef<Map<string, (h: ChartHandle | null) => void>>(new Map())
-  const setChartRef = useCallback((tf: string) => {
-    let cb = chartRefCallbacksRef.current.get(tf)
-    if (!cb) {
-      cb = (handle: ChartHandle | null) => {
-        setChartHandles(prev => {
-          if (prev.get(tf) === (handle ?? undefined)) return prev
-          const next = new Map(prev)
-          if (handle) next.set(tf, handle)
-          else next.delete(tf)
-          return next
-        })
-      }
-      chartRefCallbacksRef.current.set(tf, cb)
-    }
-    return cb
-  }, [])
+  const { setRef: setChartRef } = useChartRefCache()
 
   function toggleTfVisibility(tf: string) {
     setHiddenTfs(prev => {
@@ -146,23 +131,12 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
           <span className="symbol">{currentSymbol}</span>
           <span className="position">{formatJST(session?.presented_at, '')}</span>
         </div>
-        <div className="tf-selector">
-          <span className="tf-selector-label">エントリー足:</span>
-          {TIMEFRAMES.map(tf => (
-            <label key={`entry-${tf}`} className={`tf-entry-radio ${entryTf === tf ? 'active' : ''}`}>
-              <input type="radio" name="entry-tf" checked={entryTf === tf} onChange={() => setEntryTf(tf)} />
-              {tf}
-            </label>
-          ))}
-          <span className="tf-selector-sep">|</span>
-          <span className="tf-selector-label">表示:</span>
-          {TIMEFRAMES.map(tf => (
-            <label key={`show-${tf}`} className={`tf-show-check ${!hiddenTfs.has(tf) ? 'active' : ''}`}>
-              <input type="checkbox" checked={!hiddenTfs.has(tf)} onChange={() => toggleTfVisibility(tf)} />
-              {tf}
-            </label>
-          ))}
-        </div>
+        <TimeframeSelector
+          entryTf={entryTf}
+          onEntryChange={setEntryTf}
+          hiddenTfs={hiddenTfs}
+          onToggleVisibility={toggleTfVisibility}
+        />
       </header>
 
       <div className="training-body pick-body">
@@ -250,58 +224,54 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
       </div>
 
       {confirming === 'select' && (
-        <div className="modal-backdrop" onClick={() => setConfirming(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{currentSymbol} で選定</h2>
-            {otherCandidates.length > 0 ? (
-              <>
-                <p className="modal-hint">他の候補を見送る理由を残せます(任意)。候補メモが入っていれば初期値として表示。</p>
-                <div className="skip-reason-list">
-                  {otherCandidates.map(c => (
-                    <div key={c.id} className="skip-reason-row">
-                      <label>{c.symbol}</label>
-                      <textarea
-                        rows={2}
-                        placeholder="見送り理由(任意)"
-                        defaultValue={c.memo ?? ''}
-                        onChange={e => setSkipReasonsDraft(prev => ({ ...prev, [c.id]: e.target.value }))}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="modal-hint">他の候補はありません。確定しますか?</p>
-            )}
-            <div className="modal-actions">
-              <button onClick={() => setConfirming(null)} disabled={busy}>キャンセル</button>
-              <button className="primary" onClick={() => void handleConfirmSelect()} disabled={busy}>
-                確定
-              </button>
-            </div>
+        <Modal onClose={() => setConfirming(null)}>
+          <h2>{currentSymbol} で選定</h2>
+          {otherCandidates.length > 0 ? (
+            <>
+              <p className="modal-hint">他の候補を見送る理由を残せます(任意)。候補メモが入っていれば初期値として表示。</p>
+              <div className="skip-reason-list">
+                {otherCandidates.map(c => (
+                  <div key={c.id} className="skip-reason-row">
+                    <label>{c.symbol}</label>
+                    <textarea
+                      rows={2}
+                      placeholder="見送り理由(任意)"
+                      defaultValue={c.memo ?? ''}
+                      onChange={e => setSkipReasonsDraft(prev => ({ ...prev, [c.id]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="modal-hint">他の候補はありません。確定しますか?</p>
+          )}
+          <div className="modal-actions">
+            <button onClick={() => setConfirming(null)} disabled={busy}>キャンセル</button>
+            <button className="primary" onClick={() => void handleConfirmSelect()} disabled={busy}>
+              確定
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirming === 'skip-all' && (
-        <div className="modal-backdrop" onClick={() => setConfirming(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>全候補を見送り</h2>
-            <p className="modal-hint">見送り理由(任意)</p>
-            <textarea
-              rows={3}
-              value={skipAllReason}
-              onChange={e => setSkipAllReason(e.target.value)}
-              placeholder="優位性のある銘柄が見つからなかった 等"
-            />
-            <div className="modal-actions">
-              <button onClick={() => setConfirming(null)} disabled={busy}>キャンセル</button>
-              <button className="primary" onClick={() => void handleSkipAll()} disabled={busy}>
-                見送り確定
-              </button>
-            </div>
+        <Modal onClose={() => setConfirming(null)}>
+          <h2>全候補を見送り</h2>
+          <p className="modal-hint">見送り理由(任意)</p>
+          <textarea
+            rows={3}
+            value={skipAllReason}
+            onChange={e => setSkipAllReason(e.target.value)}
+            placeholder="優位性のある銘柄が見つからなかった 等"
+          />
+          <div className="modal-actions">
+            <button onClick={() => setConfirming(null)} disabled={busy}>キャンセル</button>
+            <button className="primary" onClick={() => void handleSkipAll()} disabled={busy}>
+              見送り確定
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

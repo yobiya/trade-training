@@ -3,6 +3,7 @@ import type { Drawing } from '../api/client'
 import { getTimeframeColor } from '../constants'
 import { TOOLS } from '../drawing/tools/registry'
 import type { ChartApi } from '../drawing/types'
+import { isDrawingVisibleOnTf } from '../drawing/visibility'
 import type { ChartHandle } from './Chart'
 
 type Props = {
@@ -12,12 +13,6 @@ type Props = {
   activeTimeframe: string
   /** ホバー中の描画 ID(§5.3 TF バッジ表示用) */
   hoveredId?: number | null
-}
-
-function isVisibleOnTf(d: Drawing, tf: string): boolean {
-  if (d.visible_on_timeframes) return d.visible_on_timeframes.includes(tf)
-  if (d.kind === 'line' || d.kind === 'trendline') return true
-  return d.timeframe === tf
 }
 
 /**
@@ -71,7 +66,7 @@ export function DrawingOverlay({ chartHandle, drawings, preview, activeTimeframe
   if (!chartHandle) return null
   const api = chartHandle.api
 
-  const visible = drawings.filter(d => isVisibleOnTf(d, activeTimeframe))
+  const visible = drawings.filter(d => isDrawingVisibleOnTf(d, activeTimeframe))
   const hovered = hoveredId != null ? visible.find(d => d.id === hoveredId) : null
 
   return (
