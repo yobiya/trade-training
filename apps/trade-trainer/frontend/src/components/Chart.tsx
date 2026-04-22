@@ -130,6 +130,9 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' },
       grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
       timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      // 仕様書 §5.1.3: 素のホイール = ページスクロール、Ctrl+ホイール = ズーム
+      // ライブラリ標準のホイールズームを無効化し、自前の wheel ハンドラで分岐する
+      handleScale: { mouseWheel: false },
     })
     const series = chart.addCandlestickSeries({
       upColor: '#26a69a',
@@ -194,11 +197,36 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     container.addEventListener('mousedown', mdHandler, true)
     window.addEventListener('mouseup', muHandler)
 
+    // 仕様書 §5.1.3: Ctrl+ホイール = 時間軸ズーム、素のホイール = ページスクロール
+    // マウス位置の logical 座標を中心にしてズームする(Figma/Google Maps 等に揃える)。
+    const ZOOM_FACTOR = 1.1
+    const wheelHandler = (e: WheelEvent) => {
+      if (!e.ctrlKey) return  // 素のホイールはバブルしてページスクロールに委ねる
+      e.preventDefault()
+      const ts = chartRef.current?.timeScale()
+      if (!ts) return
+      const range = ts.getVisibleLogicalRange()
+      if (!range) return
+      const px = toPx(e as unknown as MouseEvent)
+      const centerLogical = ts.coordinateToLogical(px.x)
+      if (centerLogical == null) return
+      const width = range.to - range.from
+      const scale = e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
+      const newWidth = width * scale
+      const ratio = (centerLogical - range.from) / width
+      const newFrom = centerLogical - newWidth * ratio
+      const newTo = newFrom + newWidth
+      ts.setVisibleLogicalRange({ from: newFrom, to: newTo })
+    }
+    // passive: false にしないと preventDefault できない
+    container.addEventListener('wheel', wheelHandler, { passive: false })
+
     return () => {
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(rangeHandler)
       chart.unsubscribeClick(clickHandler)
       container.removeEventListener('mousemove', mmHandler)
       container.removeEventListener('mousedown', mdHandler, true)
+      container.removeEventListener('wheel', wheelHandler)
       window.removeEventListener('mouseup', muHandler)
       chart.remove()
       chartRef.current = null
