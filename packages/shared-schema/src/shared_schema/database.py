@@ -1,3 +1,4 @@
+import os
 from collections.abc import Generator
 from pathlib import Path
 
@@ -22,12 +23,44 @@ def create_db_engine(db_path: str | Path = "trading.db") -> Engine:
     return engine
 
 
+def _run_migrations(db_path: str | Path) -> None:
+    """alembic upgrade head を Python API 経由で実行する。
+
+    起動時に自動適用することで、モデル変更に追従する migration を
+    手動実行する必要をなくす(開発体験と本番両方での取りこぼし防止)。
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    # packages/shared-schema/alembic.ini の絶対パスを解決
+    cfg_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    if not cfg_path.exists():
+        # 配布環境で alembic.ini が同梱されていない場合はスキップ
+        # (この場合は呼び出し側が独自にマイグレーションを管理する)
+        return
+    migrations_dir = cfg_path.parent / "migrations"
+    if not migrations_dir.exists():
+        return
+    config = Config(str(cfg_path))
+    # alembic.ini の script_location は相対パスなので、呼び出し側の cwd に依らず
+    # 動作するよう絶対パスに書き換える
+    config.set_main_option("script_location", str(migrations_dir))
+    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+    command.upgrade(config, "head")
+
+
 def init_db(db_path: str | Path = "trading.db") -> None:
-    """DB を初期化してテーブルを作成する。アプリ起動時に1回呼ぶ。"""
+    """DB を初期化してテーブルを作成する。アプリ起動時に1回呼ぶ。
+
+    alembic upgrade head を自動実行してスキーマを最新にしたあと、
+    モデル側で追加されたカラム(未マイグレーション)があれば補完する。
+    """
     global _engine, _SessionLocal
 
     from shared_schema.base import Base
     from shared_schema.models import config, market, trading  # noqa: F401 (model registration)
+
+    _run_migrations(db_path)
 
     _engine = create_db_engine(db_path)
     _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
