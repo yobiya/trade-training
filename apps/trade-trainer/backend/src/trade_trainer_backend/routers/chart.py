@@ -105,23 +105,39 @@ def get_chart(
 
     # 週末・祝日・データ欠損に備え、目標本数に達するまで指数的に from_dt を遡る。
     # 最大で ~18 倍(週末 2 日を数回跨いでも賄える範囲)まで拡張する。
+    # market-data が例外を投げるケース(MT5 未接続・プロバイダー異常)も空データ扱いにする。
     max_multiplier = 32
     multiplier = 1
     df = None
+    last_error: Exception | None = None
     while multiplier <= max_multiplier:
         fetch_minutes = bars * tf_minutes * multiplier + _BARS_FETCH_BUFFER * tf_minutes
         from_dt = to_dt - timedelta(minutes=fetch_minutes)
-        df = get_ohlc(symbol, timeframe, from_dt, to_dt)
+        try:
+            df = get_ohlc(symbol, timeframe, from_dt, to_dt)
+        except Exception as e:  # noqa: BLE001 — プロバイダー由来の例外を握りつぶして空扱いにする
+            last_error = e
+            df = None
         if df is not None and len(df) >= bars:
             break
         multiplier *= 2
 
     if df is None:
-        df = get_ohlc(symbol, timeframe, to_dt - timedelta(minutes=tf_minutes), to_dt)
+        try:
+            df = get_ohlc(symbol, timeframe, to_dt - timedelta(minutes=tf_minutes), to_dt)
+        except Exception as e:  # noqa: BLE001
+            last_error = e
+            df = None
 
     # データが全く取れなかった場合(キャッシュ未ヒット・MT5 未接続・週末長期休場など)は
     # 空 bars で返す。500 を返すとフロントで動作が止まるため、UI 側で「データなし」を扱わせる。
     if df is None or len(df) == 0:
+        if last_error is not None:
+            import logging
+            logging.getLogger(__name__).warning(
+                "get_ohlc failed for %s %s (session=%s): %s",
+                symbol, timeframe, session_id, last_error,
+            )
         return ChartResponse(bars=[], current_position=current_pos, timeframe=timeframe)
 
     df = df.tail(bars)
