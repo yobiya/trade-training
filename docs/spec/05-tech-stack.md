@@ -79,12 +79,7 @@ fx-app/ (Gitリポジトリルート)
 │   │   └── frontend/
 │   │       ├── package.json
 │   │       └── src/
-│   ├── trade-live/        # アプリC
-│   │   ├── backend/
-│   │   │   ├── pyproject.toml
-│   │   │   └── src/
-│   │   └── frontend/
-│   └── trade-analyzer/       # アプリD
+│   └── trade-live/        # アプリC
 │       ├── backend/
 │       │   ├── pyproject.toml
 │       │   └── src/
@@ -149,13 +144,10 @@ npm run dev --workspace=apps/trade-trainer/frontend
 - 配色テーマを警告色系にしてトレーニングと区別
 - 仮想環境: `apps/trade-live/backend/.venv`(uv管理)
 
-### 15.5 アプリD: trade-analyzer
-- バックエンド: **Python** + **FastAPI**
-- フロントエンド: **React** + **TypeScript** + グラフ描画ライブラリ(Recharts 等)
-- AI分析: ローカルPython(定量集計) + **Claude API**(定性分析)
-- DB読み込みのみ(MT5接続なし)
-- 実行環境: Windows VPS(本番)、手元PC(開発)
-- 仮想環境: `apps/trade-analyzer/backend/.venv`(uv管理)
+### 15.5 AI 分析の配置
+- [§10](./03-analysis.md#10-集計機能を採用しない方針) により横断集計機能は採用しないため、**独立した集計アプリ(trade-analyzer)は持たない**
+- §11 AI 分析は trade-trainer 本体の機能として統合し、セッション詳細画面から 1 セッション単位で呼び出す
+- AI 呼び出しは Claude API(バックエンドから直接)、結果はファイルストレージに保存([§11.7](./03-analysis.md#117-分析結果の永続化ファイルストレージ))
 
 ### 15.6 運用構成
 
@@ -167,7 +159,6 @@ npm run dev --workspace=apps/trade-trainer/frontend
 | market-data CLI (経済指標日次更新) | VPS(Windowsタスクスケジューラで日次実行) |
 | アプリB (trade-trainer) | VPS(Webサーバーとして常時稼働) |
 | アプリC (trade-live) | VPS(Webサーバーとして常時稼働) |
-| アプリD (trade-analyzer) | VPS(Webサーバーとして常時稼働) |
 | SQLite DB | VPS(全アプリが同一ファイルを参照) |
 
 **アクセス方法**
@@ -178,12 +169,12 @@ npm run dev --workspace=apps/trade-trainer/frontend
 **認証の方針(単一ユーザー運用)**
 - 単一ユーザー前提のため、**パスワード1つのみ**(環境変数 or 設定ファイルで管理)
 - FastAPI のセッションミドルウェア(Starlette `SessionMiddleware` 等)で HttpOnly Cookie 管理
-- 3アプリ(B/C/D)で**同一セッションストア**(SQLite or Redis)を共有し、片方でログインすれば他も有効
+- 2 アプリ(B/C)で**同一セッションストア**(SQLite or Redis)を共有し、片方でログインすれば他も有効
 - JWT は採用しない: ステートレスの恩恵がない単一ユーザー運用かつ localStorage 格納時の XSS リスクを回避するため
 - CSRF 対策は FastAPI 標準(SameSite=Lax Cookie)で対応
 
 **VPSスペック目安**
-- 推奨メモリ: 4GB以上(MT5 + 3アプリ + DB の同居を考慮)
+- 推奨メモリ: 4GB以上(MT5 + 2 アプリ + DB の同居を考慮)
 - ストレージ: 20GB以上(データ蓄積の余裕を見て)
 - OS: Windows Server(MT5 Python APIの動作環境)
 
@@ -243,8 +234,8 @@ npm run dev --workspace=apps/trade-trainer/frontend
 - **共通基盤を最優先**: `shared-schema` `market-data` `common-ui-lib` を最初に設計する。後から規約変更すると全アプリに波及するので、初期から丁寧に
 - **データ構造を先に固める**: AI分析・リアル連携を見越して、シナリオメモ項目・スタイル・保有中メモ・modeフラグは最初から揃える(タグ・自己評価は不採用、[§7.6](./02-trainer.md#76-タグ構造化選択式入力を採用しない方針) 参照)
 - **market-dataが全ての土台**: データ取得パスがなければ何も始まらない。Phase 1でMT5Provider + キャッシュ層を完成させる
-- **アプリBのMVPは「1つのセッションを最後まで回せる」最小構成**: チャート表示、エントリー、決済、基本集計
+- **アプリBのMVPは「1つのセッションを最後まで回せる」最小構成**: チャート表示、エントリー、決済、セッション履歴表示(集計機能は [§10](./03-analysis.md#10-集計機能を採用しない方針) により不採用)
 - **銘柄選定フローは Phase 2 から**: MVP はランダム銘柄直指定で良い
-- **アプリDはデータが溜まってから**: Phase 1-3 で1〜2ヶ月運用してデータが蓄積されてから組み込む
+- **AI 分析(§11)はデータが溜まってから**: Phase 1-3 で1〜2ヶ月運用してセッションが蓄積されてから組み込む(Phase 4 で trade-trainer に統合)
 - **アプリCは最後**: 実発注を伴うため、他アプリが安定してから着手。デモ口座で十分な検証後に実口座へ
 - **発注コードの絶対的隔離**: アプリBには発注関連の依存ライブラリ(MT5パッケージの発注系関数)を含めない。market-dataパッケージも取得機能のみで発注APIは露出させない。誤って将来の改修で混入しないよう、CIで依存関係チェックを入れるのも検討
