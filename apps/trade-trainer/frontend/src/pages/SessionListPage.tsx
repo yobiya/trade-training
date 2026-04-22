@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, ApiError } from '../api/client'
-import type { SessionListItem, StatsSummary, StyleStatsRow } from '../api/client'
-import { StatsBar } from '../components/StatsBar'
-import { StyleStatsTable } from '../components/StyleStatsTable'
+import type { SessionListItem } from '../api/client'
 import { DAYS_OF_WEEK, TRADING_SESSIONS } from '../constants'
 import { formatJST } from '../utils/datetime'
 
@@ -12,11 +10,12 @@ type Props = {
   onLogout: () => void
 }
 
+/**
+ * 仕様書 §10.3: 完了セッションは閉じると破棄されるため、一覧には進行中 / 保留中のみが並ぶ。
+ * 集計機能(勝率・期待値・スタイル別成績等)は §10 により採用しない。
+ */
 export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
-  const [stats, setStats] = useState<StatsSummary | null>(null)
-  const [styleStats, setStyleStats] = useState<StyleStatsRow[]>([])
-  const [showStyleStats, setShowStyleStats] = useState(false)
   const [creating, setCreating] = useState(false)
   const [showFilter, setShowFilter] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
@@ -26,14 +25,8 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [list, statsRes, styleRes] = await Promise.all([
-      api.sessions.list(),
-      api.stats.summary(),
-      api.stats.byStyle(),
-    ])
+    const list = await api.sessions.list()
     setSessions(list)
-    setStats(statsRes)
-    setStyleStats(styleRes)
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -79,23 +72,6 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
         <h1>Trade Trainer</h1>
         <button onClick={onLogout} className="logout-btn">ログアウト</button>
       </header>
-
-      <StatsBar stats={stats} />
-
-      <div className="style-stats-toggle-bar">
-        <button
-          type="button"
-          className="filter-toggle"
-          onClick={() => setShowStyleStats(v => !v)}
-        >
-          スタイル別成績 {showStyleStats ? '▲' : '▼'}
-        </button>
-      </div>
-      {showStyleStats && (
-        <div className="style-stats-container">
-          <StyleStatsTable rows={styleStats} />
-        </div>
-      )}
 
       <div className="new-session">
         <button onClick={() => void handleCreate()} disabled={creating} className="create-btn">
@@ -158,8 +134,8 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
           >
             <span className="session-symbol">{s.symbol || '銘柄未選定'}</span>
             <span className="session-date">{formatJST(s.presented_at)}</span>
-            <span className={`session-status ${s.is_complete ? 'entered' : 'skip'}`}>
-              {s.is_complete ? '完了' : s.symbol ? '未処理' : '銘柄未選定'}
+            <span className="session-status">
+              {s.symbol ? '進行中' : '銘柄未選定'}
             </span>
           </div>
         ))}

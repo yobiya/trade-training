@@ -31,7 +31,6 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
     active_trade = db.scalars(
         select(Trade).where(Trade.session_id == s.id, Trade.exit_time.is_(None))
     ).first()
-    is_complete = fd is not None and (fd.has_entry is False or active_trade is None)
 
     from market_data.accessor import get_symbol_digits
     digits = get_symbol_digits(symbol) if symbol else 5
@@ -49,7 +48,6 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
         mode=s.mode,
         is_suspended=s.is_suspended,
         has_active_trade=active_trade is not None,
-        is_complete=is_complete,
         digits=digits,
         candidates=[CandidateResponse.model_validate(c) for c in candidates],
     )
@@ -270,6 +268,8 @@ def list_sessions(
     offset: int = 0,
     db: Session = Depends(get_db),
 ) -> list[SessionListItem]:
+    """仕様書 §10.3: 完了セッションは UI から参照できない(閉じると DB からも削除)。
+    DB に残っているセッションはすべて進行中 or 保留中。"""
     sessions = db.scalars(
         select(TradeSession)
         .where(TradeSession.mode == "training")
@@ -281,11 +281,6 @@ def list_sessions(
     result = []
     for s in sessions:
         fd = db.get(SessionFinalDecision, s.id)
-        from shared_schema.models.trading import Trade
-        active = db.scalars(
-            select(Trade).where(Trade.session_id == s.id, Trade.exit_time.is_(None))
-        ).first()
-        is_complete = fd is not None and (fd.has_entry is False or active is None)
         result.append(
             SessionListItem(
                 id=s.id,
@@ -294,10 +289,20 @@ def list_sessions(
                 presented_at=s.presented_at,
                 mode=s.mode,
                 is_suspended=s.is_suspended,
-                is_complete=is_complete,
             )
         )
     return result
+
+
+@router.delete("/{session_id}", status_code=204)
+def close_session(session_id: str, db: Session = Depends(get_db)) -> None:
+    """セッションを閉じる(=破棄)。仕様書 §10.3 セッションライフサイクルの終端。
+    関連する候補・最終判断・トレード・シナリオ・描画・保有中メモは cascade で削除される。"""
+    s = db.get(TradeSession, session_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    db.delete(s)
+    db.commit()
 
 
 @router.get("/{session_id}", response_model=SessionResponse)

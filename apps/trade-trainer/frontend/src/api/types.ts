@@ -10,7 +10,6 @@ export type SessionListItem = {
   presented_at: string
   mode: string
   is_suspended: boolean
-  is_complete: boolean
 }
 
 export type SessionCandidate = {
@@ -30,7 +29,6 @@ export type TradeSession = {
   mode: string
   is_suspended: boolean
   has_active_trade: boolean
-  is_complete: boolean
   digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
   candidates: SessionCandidate[]
 }
@@ -94,29 +92,6 @@ export type TradeResponse = {
   scenario: ScenarioResponse | null
   style_id: string | null
   style_selection_reason: string | null
-}
-
-export type StatsSummary = {
-  total_trades: number
-  win_count: number
-  loss_count: number
-  win_rate: number
-  total_pips: number
-  avg_pips_per_trade: number
-  profit_factor: number
-}
-
-export type StyleStatsRow = {
-  style_id: string | null
-  style_name: string
-  primary_timeframe: string | null
-  total_trades: number
-  win_count: number
-  loss_count: number
-  win_rate: number
-  total_pips: number
-  avg_pips_per_trade: number
-  profit_factor: number
 }
 
 export type SessionFilter = {

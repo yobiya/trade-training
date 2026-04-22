@@ -174,7 +174,14 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   async function handleSkipConfirm(reason: string, consideredStyles: string[]) {
     await api.sessions.skip(sessionId, reason, consideredStyles)
     setSkipping(false)
-    notify('見送り')
+    notify('見送り確定 — 振り返りが終わったら「セッションを閉じる」')
+  }
+
+  async function handleCloseSession() {
+    // §10.3: セッションを閉じる = 破棄。関連データは cascade で削除される。
+    const ok = window.confirm('このセッションを閉じて破棄します。振り返りメモ・AI 分析結果・描画も削除されます。よろしいですか?')
+    if (!ok) return
+    await api.sessions.close(sessionId)
     onBack()
   }
 
@@ -268,6 +275,13 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             {!activeTrade?.is_open && (
               <button onClick={() => setSkipping(true)} className="skip-btn">見送り</button>
             )}
+            <button
+              onClick={() => void handleCloseSession()}
+              className="close-session-btn"
+              title="振り返りが終わったらこのボタンでセッションを破棄します(§10.3)"
+            >
+              セッションを閉じる
+            </button>
           </div>
         </div>
       </div>

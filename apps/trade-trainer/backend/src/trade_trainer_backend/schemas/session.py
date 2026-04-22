@@ -59,7 +59,6 @@ class SessionResponse(BaseModel):
     mode: str
     is_suspended: bool
     has_active_trade: bool
-    is_complete: bool  # skip or trade exited
     digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
     candidates: list[CandidateResponse] = []  # §6.3 ウォッチリスト
 
@@ -73,6 +72,5 @@ class SessionListItem(BaseModel):
     presented_at: datetime
     mode: str
     is_suspended: bool
-    is_complete: bool
 
     model_config = {"from_attributes": True}

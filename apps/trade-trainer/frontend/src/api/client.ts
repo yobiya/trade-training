@@ -7,8 +7,6 @@ import type {
   SessionCandidate,
   SessionFilter,
   SessionListItem,
-  StatsSummary,
-  StyleStatsRow,
   TradeResponse,
   TradeSession,
   TradingStyle,
@@ -82,6 +80,8 @@ export const api = {
       }),
     deleteCandidate: (id: string, candidateId: number) =>
       request<void>(`/sessions/${id}/candidates/${candidateId}`, { method: 'DELETE' }),
+    close: (id: string) =>
+      request<void>(`/sessions/${id}`, { method: 'DELETE' }),
   },
 
   chart: {
@@ -126,12 +126,6 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ reflection }),
       }),
-  },
-
-  stats: {
-    summary: (symbol?: string) =>
-      request<StatsSummary>(`/stats/summary${symbol ? `?symbol=${symbol}` : ''}`),
-    byStyle: () => request<StyleStatsRow[]>('/stats/by-style'),
   },
 
   tradingStyles: {
