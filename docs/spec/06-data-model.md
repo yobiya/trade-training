@@ -150,6 +150,8 @@ Setting
 ├─ 時間フィルタプリセット
 ├─ 事後評価パラメータ(lookahead_bars, opportunity_pips, noise_pips、§9.3)
 ├─ 経済指標表示設定(重要度閾値、表示通貨、シェーディング範囲)
+├─ メモ見出しテンプレート(§7.2.3): candidate_memo_template / session_note_template (TEXT)
+├─ メモテンプレート有効フラグ(bool、既定 true)
 └─ リスク設定(1トレード許容損失%/金額)
 
 IndicatorConfig (インジケーター設定のバージョン管理)
