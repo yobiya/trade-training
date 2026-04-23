@@ -3,20 +3,12 @@ from pydantic import BaseModel
 
 
 class CreateSessionRequest(BaseModel):
-    # 仕様書 §1.2/§4.1: 日時起点フロー。銘柄は後続で select-symbol エンドポイントで設定する。
-    symbol: str | None = None
+    # 仕様書 §1.2/§4.1/§6.1(統合フロー): 日時起点。銘柄はエントリー時に確定するためここでは指定しない。
     date_from: datetime | None = None  # None = 過去5年の範囲でランダム選択
     date_to: datetime | None = None    # None = 30日前まで
     # 仕様書 §4.1: 時間フィルタ。指定された条件に合致する日時のみを抽選する。
     days: list[int] | None = None      # 曜日フィルタ (0=月, 6=日)。空/None は全曜日
     sessions: list[str] | None = None  # "tokyo"|"london"|"ny"。空/None は全時間帯
-
-
-class SelectSymbolRequest(BaseModel):
-    symbol: str
-    # §6.3.2: 選定確定時に他候補の見送り理由を一括保存する。
-    # key = candidate.id、value = 見送り理由文字列(任意)。
-    skip_reasons: dict[int, str | None] | None = None
 
 
 class AdvanceRequest(BaseModel):

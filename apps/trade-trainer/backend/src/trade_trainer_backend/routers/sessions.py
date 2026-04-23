@@ -22,7 +22,6 @@ from trade_trainer_backend.schemas.session import (
     CandidateResponse,
     CreateCandidateRequest,
     CreateSessionRequest,
-    SelectSymbolRequest,
     SessionListItem,
     SessionResponse,
     SkipSessionRequest,
@@ -44,12 +43,16 @@ def _memo_templates(db: Session) -> tuple[str | None, str | None]:
 
 
 def _build_response(s: TradeSession, db: Session) -> SessionResponse:
-    fd = db.get(SessionFinalDecision, s.id)
-    symbol = fd.symbol if fd else ""
+    """統合フロー(§6.1): エントリー銘柄は `Trade.symbol` から取得する。
+    アクティブ Trade → 最新 Trade の順で参照。どちらも無ければ分析中ステータス(symbol="")。"""
     from shared_schema.models.trading import Trade
     active_trade = db.scalars(
         select(Trade).where(Trade.session_id == s.id, Trade.exit_time.is_(None))
     ).first()
+    latest_trade = db.scalars(
+        select(Trade).where(Trade.session_id == s.id).order_by(Trade.entry_time.desc())
+    ).first()
+    symbol = (active_trade or latest_trade).symbol if (active_trade or latest_trade) else ""
 
     from market_data.accessor import get_symbol_digits
     digits = get_symbol_digits(symbol) if symbol else 5
@@ -175,55 +178,10 @@ def create_session(
         note=note_tpl,
     )
     db.add(ts)
-    # 銘柄は任意。指定があれば即座に SessionFinalDecision を作成する。
-    if body.symbol:
-        fd = SessionFinalDecision(
-            session_id=session_id,
-            symbol=body.symbol.upper(),
-            has_entry=False,
-        )
-        db.add(fd)
+    # 統合フロー(§6.1): 銘柄はエントリー時に Trade.symbol として確定するため、ここでは記録しない
     db.commit()
     db.refresh(ts)
     return _build_response(ts, db)
-
-
-@router.post("/{session_id}/symbol", response_model=SessionResponse)
-def select_symbol(
-    session_id: str,
-    body: SelectSymbolRequest,
-    db: Session = Depends(get_db),
-) -> SessionResponse:
-    """銘柄選定(仕様書 §4.1 Phase 2, §6.3.2)。
-    確定した銘柄を SessionFinalDecision.symbol に保存し、他候補の見送り理由も一括反映する。"""
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    symbol = body.symbol.upper()
-    fd = db.get(SessionFinalDecision, session_id)
-    if fd is None:
-        fd = SessionFinalDecision(
-            session_id=session_id,
-            symbol=symbol,
-            has_entry=False,
-        )
-        db.add(fd)
-    else:
-        fd.symbol = symbol
-
-    # 候補の is_selected 更新 + 見送り理由の一括保存(§6.3.2)
-    candidates = db.scalars(
-        select(SessionCandidate).where(SessionCandidate.session_id == session_id)
-    ).all()
-    for c in candidates:
-        c.is_selected = c.symbol.upper() == symbol
-        if not c.is_selected and body.skip_reasons is not None:
-            reason = body.skip_reasons.get(c.id)
-            if reason is not None:
-                c.skip_reason = reason
-
-    db.commit()
-    return _build_response(s, db)
 
 
 # 仕様書 §6.3 ウォッチリスト(候補)CRUD
@@ -307,11 +265,14 @@ def list_sessions(
 
     result = []
     for s in sessions:
-        fd = db.get(SessionFinalDecision, s.id)
+        # 統合フロー(§6.1): 一覧表示用 symbol は Trade.symbol から取る
+        trade = db.scalars(
+            select(Trade).where(Trade.session_id == s.id).order_by(Trade.entry_time.desc())
+        ).first()
         result.append(
             SessionListItem(
                 id=s.id,
-                symbol=fd.symbol if fd else "",
+                symbol=trade.symbol if trade else "",
                 started_at=s.started_at,
                 presented_at=s.presented_at,
                 mode=s.mode,
@@ -354,39 +315,39 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
             stages=to_stage_resp(rv.stages),
         ))
 
-    # 層 2: エントリー見送り(symbol が確定しているが has_entry=False)
+    # 統合フロー(§6.1): エントリー銘柄は Trade.symbol から取る。
+    # エントリー済み(Trade あり): entry_review を作る
+    # 見送り確定(Trade 無し + fd.has_entry=False + skip_reason): skip_review を作る
+    # 分析中(Trade 無し + fd 未作成 or has_entry 未設定): どちらも None
     fd = db.get(SessionFinalDecision, session_id)
     skip_review: SkipReview | None = None
     entry_review: EntryReview | None = None
-    if fd is not None and fd.symbol:
-        if not fd.has_entry:
-            rv = evaluate_symbol(fd.symbol, ref_dt)
-            skip_review = SkipReview(
-                symbol=fd.symbol,
-                reason=fd.skip_reason,
-                considered_styles=fd.considered_styles,
-                ref_price=rv.ref_price,
-                stages=to_stage_resp(rv.stages),
-            )
-        else:
-            # エントリー済みトレードの振り返り
-            trade = db.scalars(
-                select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
-            ).first()
-            if trade is not None:
-                rv = evaluate_symbol(trade.symbol, ref_dt)
-                entry_review = EntryReview(
-                    symbol=trade.symbol,
-                    direction=trade.direction,
-                    entry_price=trade.entry_price,
-                    sl=trade.sl,
-                    tp=trade.tp,
-                    exit_price=trade.exit_price,
-                    exit_reason=trade.exit_reason,
-                    pips_pnl=trade.pips_pnl,
-                    ref_price=rv.ref_price,
-                    stages=to_stage_resp(rv.stages),
-                )
+    trade = db.scalars(
+        select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
+    ).first()
+    if trade is not None:
+        rv = evaluate_symbol(trade.symbol, ref_dt)
+        entry_review = EntryReview(
+            symbol=trade.symbol,
+            direction=trade.direction,
+            entry_price=trade.entry_price,
+            sl=trade.sl,
+            tp=trade.tp,
+            exit_price=trade.exit_price,
+            exit_reason=trade.exit_reason,
+            pips_pnl=trade.pips_pnl,
+            ref_price=rv.ref_price,
+            stages=to_stage_resp(rv.stages),
+        )
+    elif fd is not None and not fd.has_entry and (fd.skip_reason or fd.considered_styles):
+        # セッション全体を skip した記録(特定銘柄に紐付かない)
+        skip_review = SkipReview(
+            symbol="",
+            reason=fd.skip_reason,
+            considered_styles=fd.considered_styles,
+            ref_price=None,
+            stages=[],
+        )
 
     return PostReviewResponse(
         candidates=candidate_reviews,

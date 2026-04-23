@@ -21,17 +21,26 @@ def _to_response(d: Drawing) -> DrawingResponse:
         kind=d.kind,
         data=d.data,
         label=d.label,
+        symbol=d.symbol,
         timeframe=d.timeframe,
         visible_on_timeframes=list(d.visible_on_timeframes) if d.visible_on_timeframes else None,
     )
 
 
 @router.get("/sessions/{session_id}/drawings", response_model=list[DrawingResponse])
-def list_drawings(session_id: str, db: Session = Depends(get_db)) -> list[DrawingResponse]:
+def list_drawings(
+    session_id: str,
+    symbol: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[DrawingResponse]:
+    """仕様書 §5.3 / §6.1 統合フロー: symbol が指定されたら該当銘柄の描画のみ返す。"""
     s = db.get(TradeSession, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    rows = db.scalars(select(Drawing).where(Drawing.session_id == session_id)).all()
+    stmt = select(Drawing).where(Drawing.session_id == session_id)
+    if symbol:
+        stmt = stmt.where(Drawing.symbol == symbol.upper())
+    rows = db.scalars(stmt).all()
     return [_to_response(d) for d in rows]
 
 
@@ -46,6 +55,7 @@ def create_drawing(
         raise HTTPException(status_code=404, detail="Session not found")
     d = Drawing(
         session_id=session_id,
+        symbol=body.symbol.upper() if body.symbol else None,
         kind=body.kind,
         data=body.data,
         label=body.label,

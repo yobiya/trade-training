@@ -59,11 +59,8 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
   }
 
   function handleOpenSession(s: SessionListItem) {
-    if (!s.symbol) {
-      onStartNew(s.id)
-    } else {
-      onOpenSession(s.id)
-    }
+    // 統合フロー(§6.1): 銘柄未確定でも同じ SessionPage を開く(分析中フェーズから再開)
+    onOpenSession(s.id)
   }
 
   return (
@@ -132,10 +129,10 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
             className="session-item"
             onClick={() => handleOpenSession(s)}
           >
-            <span className="session-symbol">{s.symbol || '銘柄未選定'}</span>
+            <span className="session-symbol">{s.symbol || '分析中'}</span>
             <span className="session-date">{formatJST(s.presented_at)}</span>
             <span className="session-status">
-              {s.symbol ? '進行中' : '銘柄未選定'}
+              {s.symbol ? '進行中' : '分析中'}
             </span>
           </div>
         ))}

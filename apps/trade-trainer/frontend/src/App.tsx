@@ -2,14 +2,12 @@ import { useState } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
 import { SessionListPage } from './pages/SessionListPage'
-import { SymbolPickPage } from './pages/SymbolPickPage'
-import { TrainingPage } from './pages/TrainingPage'
+import { SessionPage } from './pages/SessionPage'
 import './index.css'
 
 type View =
   | { page: 'list' }
-  | { page: 'symbol-pick'; sessionId: string }
-  | { page: 'training'; sessionId: string }
+  | { page: 'session'; sessionId: string }
 
 function App() {
   const { authenticated, login, logout } = useAuth()
@@ -23,19 +21,9 @@ function App() {
     return <LoginPage onLogin={login} />
   }
 
-  if (view.page === 'symbol-pick') {
+  if (view.page === 'session') {
     return (
-      <SymbolPickPage
-        sessionId={view.sessionId}
-        onSelected={() => setView({ page: 'training', sessionId: view.sessionId })}
-        onBack={() => setView({ page: 'list' })}
-      />
-    )
-  }
-
-  if (view.page === 'training') {
-    return (
-      <TrainingPage
+      <SessionPage
         sessionId={view.sessionId}
         onBack={() => setView({ page: 'list' })}
       />
@@ -44,8 +32,8 @@ function App() {
 
   return (
     <SessionListPage
-      onStartNew={id => setView({ page: 'symbol-pick', sessionId: id })}
-      onOpenSession={id => setView({ page: 'training', sessionId: id })}
+      onStartNew={id => setView({ page: 'session', sessionId: id })}
+      onOpenSession={id => setView({ page: 'session', sessionId: id })}
       onLogout={logout}
     />
   )

@@ -7,12 +7,13 @@ import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
 import { MemoPanel } from '../components/MemoPanel'
+import { Modal } from '../components/Modal'
 import { PostReviewPanel } from '../components/PostReviewPanel'
 import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { TIMEFRAMES, getTimeframeColor } from '../constants'
+import { SYMBOLS, TIMEFRAMES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { isDrawingVisibleOnTf } from '../drawing/visibility'
 import { useChartRefCache } from '../hooks/useChartRefCache'
@@ -27,8 +28,10 @@ type Props = {
   onBack: () => void
 }
 
+type Phase = 'analyzing' | 'holding' | 'reviewing'
+
 function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | null): PriceLine[] {
-  const base = drawings
+  return drawings
     .filter(d => d.kind === 'line' && isDrawingVisibleOnTf(d, tf))
     .map(d => {
       const previewMatch = preview?.id === d.id ? preview : null
@@ -36,35 +39,61 @@ function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | nul
         id: d.id,
         price: Number(previewMatch?.data.price ?? d.data.price),
         label: d.label ?? undefined,
-        color: getTimeframeColor(d.timeframe),  // §5.3: 作成時 TF の色で識別
+        color: getTimeframeColor(d.timeframe),
       }
     })
-  // プレビュー中の新規作成(未保存)にも対応できるよう、未保存 preview の水平線も足す余地あり
-  return base
 }
 
-export function TrainingPage({ sessionId, onBack }: Props) {
+/**
+ * 仕様書 §6.1 統合フロー: 1 画面で分析 → エントリー → 保有 → 振り返り を通す。
+ * - 分析中: 銘柄切替・描画・インジ・時間進行・メモ・★ 候補・エントリー・見送り
+ * - 保有中: 銘柄は Trade.symbol に固定、時間進行 / 決済
+ * - 振り返り: Trade 結果 + PostReviewPanel、続き観察のために時間進行継続可能
+ */
+export function SessionPage({ sessionId, onBack }: Props) {
   const [session, setSession] = useState<TradeSession | null>(null)
-  // 仕様書 §5.1: エントリー足(最上段)とアクティブ TF(描画作成時の作成 TF)。
-  // アクティブ TF はマウスが乗ったチャートで切り替わる。
+  const [activeTrade, setActiveTrade] = useState<TradeResponse | null>(null)
+  const [latestTrade, setLatestTrade] = useState<TradeResponse | null>(null)
+
+  // 分析フェーズで表示中の銘柄。エントリー後は Trade.symbol に固定される。
+  const [analyzingSymbol, setAnalyzingSymbol] = useState<string>(SYMBOLS[0])
+
   const [entryTf, setEntryTf] = useState('M5')
   const [activeTf, setActiveTf] = useState('M5')
   const [hiddenTfs, setHiddenTfs] = useState<Set<string>>(new Set())
-  const [activeTrade, setActiveTrade] = useState<TradeResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<string | null>(null)
   const [advancing, setAdvancing] = useState(false)
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
+  const [skipping, setSkipping] = useState(false)
+  const [memoOpen, setMemoOpen] = useState(false)
+  const [confirmSkipAll, setConfirmSkipAll] = useState(false)
+  const [skipAllReasonDraft, setSkipAllReasonDraft] = useState('')
 
-  // 表示順序: エントリー足を最上段に、残りは TIMEFRAMES 順(小 → 大)。
+  // フェーズ判定
+  const phase: Phase = activeTrade
+    ? 'holding'
+    : (latestTrade && latestTrade.exit_time)
+      ? 'reviewing'
+      : 'analyzing'
+
+  // 現在の対象銘柄
+  const currentSymbol = phase === 'analyzing'
+    ? analyzingSymbol
+    : (activeTrade?.symbol ?? latestTrade?.symbol ?? analyzingSymbol)
+
+  // 表示順序: エントリー足を最上段
   const visibleTfs = useMemo(() => {
     const rest = TIMEFRAMES.filter(tf => tf !== entryTf && !hiddenTfs.has(tf))
     const head = hiddenTfs.has(entryTf) ? [] : [entryTf]
     return [...head, ...rest]
   }, [entryTf, hiddenTfs])
 
-  const { barsByTf, currentPrice, reloadAll, loadMoreHistory } = useCharts(sessionId, visibleTfs, entryTf)
-  const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } = useDrawings(sessionId)
+  const { barsByTf, currentPrice, reloadAll, loadMoreHistory } = useCharts(
+    sessionId, currentSymbol, visibleTfs, entryTf,
+  )
+  const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } =
+    useDrawings(sessionId, currentSymbol)
   const tradingStyles = useTradingStyles()
 
   const { handles: chartHandles, setRef: setChartRef } = useChartRefCache()
@@ -113,7 +142,21 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   useEffect(() => {
     void api.sessions.get(sessionId).then(setSession)
     void api.trades.getActive(sessionId).then(setActiveTrade)
+    void api.trades.getLatest(sessionId).then(setLatestTrade)
   }, [sessionId])
+
+  // 仕様書 §7.3: M キーでメモパネルをトグル
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'm' && e.key !== 'M') return
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      e.preventDefault()
+      setMemoOpen(v => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   async function handleAdvance(n: number = 1) {
     setAdvancing(true)
@@ -123,6 +166,8 @@ export function TrainingPage({ sessionId, onBack }: Props) {
       if (res.trade_auto_closed) {
         const pips = res.trade_pips_pnl ?? 0
         notify(`自動決済: ${res.trade_exit_reason?.toUpperCase()} @ ${res.trade_exit_price} (${pips > 0 ? '+' : ''}${pips} pips)`)
+        const closed = await api.trades.getLatest(sessionId)
+        setLatestTrade(closed)
         setActiveTrade(null)
       }
       const s = await api.sessions.get(sessionId)
@@ -142,6 +187,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     setLoading(true)
     try {
       const trade = await api.trades.enter(sessionId, {
+        symbol: currentSymbol,
         direction: args.direction,
         price: args.price,
         sl: args.sl,
@@ -149,7 +195,10 @@ export function TrainingPage({ sessionId, onBack }: Props) {
         style_id: args.styleId,
       })
       setActiveTrade(trade)
-      notify(`エントリー: ${args.direction.toUpperCase()} @ ${args.price}`)
+      setLatestTrade(trade)
+      const s = await api.sessions.get(sessionId)
+      setSession(s)
+      notify(`エントリー: ${args.direction.toUpperCase()} ${currentSymbol} @ ${args.price}`)
     } finally {
       setLoading(false)
     }
@@ -159,7 +208,8 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     setLoading(true)
     try {
       const trade = await api.trades.exit(sessionId, { price, reason })
-      setActiveTrade(trade)
+      setActiveTrade(null)
+      setLatestTrade(trade)
       const pips = trade.pips_pnl ?? 0
       notify(`決済: ${price} (${pips > 0 ? '+' : ''}${pips} pips)`)
     } finally {
@@ -167,43 +217,67 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     }
   }
 
-  const [skipping, setSkipping] = useState(false)
-  const [memoOpen, setMemoOpen] = useState(false)
-
-  // 仕様書 §7.3: M キーでメモパネルをトグル
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'm' && e.key !== 'M') return
-      // input/textarea フォーカス中は無視
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      e.preventDefault()
-      setMemoOpen(v => !v)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   async function handleSkipConfirm(reason: string, consideredStyles: string[]) {
     await api.sessions.skip(sessionId, reason, consideredStyles)
+    const s = await api.sessions.get(sessionId)
+    setSession(s)
     setSkipping(false)
     notify('見送り確定 — 振り返りが終わったら「セッションを閉じる」')
   }
 
+  async function handleSkipAllConfirm() {
+    await api.sessions.skip(sessionId, skipAllReasonDraft || undefined)
+    const s = await api.sessions.get(sessionId)
+    setSession(s)
+    setConfirmSkipAll(false)
+    setSkipAllReasonDraft('')
+    notify('全候補を見送り — 振り返りが終わったら「セッションを閉じる」')
+  }
+
   async function handleCloseSession() {
-    // §10.3: セッションを閉じる = 破棄。関連データは cascade で削除される。
     const ok = window.confirm('このセッションを閉じて破棄します。振り返りメモ・AI 分析結果・描画も削除されます。よろしいですか?')
     if (!ok) return
     await api.sessions.close(sessionId)
     onBack()
   }
 
+  async function toggleCandidate() {
+    if (!session) return
+    const existing = session.candidates.find(c => c.symbol === currentSymbol)
+    if (existing) {
+      await api.sessions.deleteCandidate(sessionId, existing.id)
+    } else {
+      await api.sessions.addCandidate(sessionId, currentSymbol)
+    }
+    const s = await api.sessions.get(sessionId)
+    setSession(s)
+  }
+
+  const candidates = session?.candidates ?? []
+  const isCurrentStar = candidates.some(c => c.symbol === currentSymbol)
+
   return (
-    <div className="training-page">
+    <div className="training-page session-page">
       <header className="training-header">
         <button onClick={onBack} className="back-btn">← 一覧</button>
         <div className="session-info">
-          <span className="symbol">{session?.symbol ?? '—'}</span>
+          {phase === 'analyzing' ? (
+            <select
+              className="symbol-dropdown"
+              value={currentSymbol}
+              onChange={e => setAnalyzingSymbol(e.target.value)}
+            >
+              {SYMBOLS.map(sym => {
+                const star = candidates.some(c => c.symbol === sym) ? '★ ' : ''
+                return <option key={sym} value={sym}>{star}{sym}</option>
+              })}
+            </select>
+          ) : (
+            <span className="symbol">{currentSymbol}</span>
+          )}
+          <span className="phase-badge">
+            {phase === 'analyzing' ? '分析中' : phase === 'holding' ? '保有中' : '振り返り'}
+          </span>
           <span className="position">{formatJST(session?.current_position, '')}</span>
         </div>
         <TimeframeSelector
@@ -259,16 +333,32 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             <div className="empty-chart-hint">表示する時間足を選択してください</div>
           )}
         </div>
+
         <div className="sidebar">
-          <TradePanel
-            activeTrade={activeTrade}
-            currentPrice={currentPrice}
-            onEnter={handleEnter}
-            onExit={handleExit}
-            loading={loading}
-            digits={session?.digits ?? 5}
-            styles={tradingStyles}
-          />
+          {phase === 'analyzing' && (
+            <div className="pick-candidate-header">
+              <span>候補: {currentSymbol}</span>
+              <button
+                className={`star-btn ${isCurrentStar ? 'on' : ''}`}
+                onClick={() => void toggleCandidate()}
+              >
+                {isCurrentStar ? '★ 解除' : '☆ 追加'}
+              </button>
+            </div>
+          )}
+
+          {phase !== 'reviewing' && (
+            <TradePanel
+              activeTrade={activeTrade}
+              currentPrice={currentPrice}
+              onEnter={handleEnter}
+              onExit={handleExit}
+              loading={loading}
+              digits={session?.digits ?? 5}
+              styles={tradingStyles}
+            />
+          )}
+
           <IndicatorPanel active={indicators} onChange={setIndicators} />
           <DrawingTools
             activeTool={interaction.activeTool}
@@ -277,7 +367,9 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             onRemove={(id) => void removeDrawing(id)}
             digits={session?.digits ?? 5}
           />
-          <PostReviewPanel sessionId={sessionId} />
+
+          {phase === 'reviewing' && <PostReviewPanel sessionId={sessionId} />}
+
           <div className="action-buttons">
             <button
               onClick={() => void handleAdvance()}
@@ -293,8 +385,15 @@ export function TrainingPage({ sessionId, onBack }: Props) {
             >
               ▶▶ +5本
             </button>
-            {!activeTrade?.is_open && (
-              <button onClick={() => setSkipping(true)} className="skip-btn">見送り</button>
+            {phase === 'analyzing' && (
+              <>
+                <button onClick={() => setSkipping(true)} className="skip-btn">見送り</button>
+                {candidates.length > 0 && (
+                  <button onClick={() => setConfirmSkipAll(true)} className="skip-all-btn">
+                    全候補見送り
+                  </button>
+                )}
+              </>
             )}
             <button
               onClick={() => void handleCloseSession()}
@@ -306,6 +405,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           </div>
         </div>
       </div>
+
       {skipping && (
         <SkipEntryModal
           styles={tradingStyles}
@@ -313,10 +413,30 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           onCancel={() => setSkipping(false)}
         />
       )}
+
+      {confirmSkipAll && (
+        <Modal onClose={() => setConfirmSkipAll(false)}>
+          <h2>全候補を見送り</h2>
+          <p className="modal-hint">見送り理由(任意)</p>
+          <textarea
+            rows={3}
+            value={skipAllReasonDraft}
+            onChange={e => setSkipAllReasonDraft(e.target.value)}
+            placeholder="優位性のある銘柄が見つからなかった 等"
+          />
+          <div className="modal-actions">
+            <button onClick={() => setConfirmSkipAll(false)}>キャンセル</button>
+            <button className="primary" onClick={() => void handleSkipAllConfirm()}>
+              見送り確定
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {memoOpen && session && (
         <MemoPanel
           session={session}
-          initialSymbol={session.symbol || null}
+          initialSymbol={currentSymbol}
           onClose={() => setMemoOpen(false)}
           onChange={setSession}
         />

@@ -51,6 +51,7 @@ export type AdvanceResponse = {
 
 export type TradeResponse = {
   id: string
+  symbol: string
   direction: 'buy' | 'sell'
   entry_price: number
   sl: number | null
@@ -140,6 +141,7 @@ export type DrawingKind = 'line' | 'trendline' | 'fibonacci'
 export type Drawing = {
   id: number
   session_id: string
+  symbol: string | null
   kind: DrawingKind
   data: Record<string, unknown>
   label: string | null
@@ -151,6 +153,7 @@ export type CreateDrawingRequest = {
   kind: DrawingKind
   data: Record<string, unknown>
   label?: string | null
+  symbol?: string | null
   timeframe?: string | null
   visible_on_timeframes?: string[] | null
 }

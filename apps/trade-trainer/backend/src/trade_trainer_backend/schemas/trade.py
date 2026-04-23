@@ -5,7 +5,11 @@ from pydantic import BaseModel
 
 class EnterTradeRequest(BaseModel):
     """仕様書 §7.4: エントリー必須は方向・価格・SL・TP・スタイル id のみ。
-    根拠・シナリオ等は横断メモ(Session.note)/ 銘柄別メモ(SessionCandidate.memo)に自由記述。"""
+    根拠・シナリオ等は横断メモ(Session.note)/ 銘柄別メモ(SessionCandidate.memo)に自由記述。
+
+    統合フロー(§6.1)対応: エントリーアクションで銘柄が確定するため、`symbol` を必須にする。
+    """
+    symbol: str
     direction: Literal["buy", "sell"]
     price: float
     sl: float
@@ -21,6 +25,7 @@ class ExitTradeRequest(BaseModel):
 
 class TradeResponse(BaseModel):
     id: str
+    symbol: str
     direction: str
     entry_price: float
     sl: float

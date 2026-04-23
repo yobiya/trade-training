@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from shared_schema.models.trading import SessionFinalDecision, Trade, TradeSession
+from shared_schema.models.trading import Trade, TradeSession
 from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.chart import AdvanceResponse, ChartResponse, OhlcBar
 
@@ -91,15 +91,17 @@ def get_chart(
     else:
         to_dt = current_pos
 
-    # symbol クエリ指定時は銘柄選定中でもチャート取得可(§6.1)。
-    # 未指定時は確定銘柄を参照。
+    # 統合フロー(§6.1): symbol はフロントが必ず指定する。
+    # 未指定のフォールバックはエントリー済 Trade.symbol のみ(後方互換)。
     if symbol:
         symbol = symbol.upper()
     else:
-        fd = db.get(SessionFinalDecision, session_id)
-        if fd is None or not fd.symbol:
-            raise HTTPException(status_code=409, detail="Symbol not selected for this session")
-        symbol = fd.symbol
+        trade = db.scalars(
+            select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
+        ).first()
+        if trade is None:
+            raise HTTPException(status_code=400, detail="symbol query required in analyzing phase")
+        symbol = trade.symbol
 
     from market_data.accessor import get_ohlc
 
@@ -163,16 +165,8 @@ def advance_session(
     current_pos = s.current_position.replace(tzinfo=timezone.utc)
     new_pos = current_pos + timedelta(minutes=5 * bars)
 
-    fd = db.get(SessionFinalDecision, session_id)
-    if fd is None or not fd.symbol:
-        raise HTTPException(status_code=409, detail="Symbol not selected for this session")
-    symbol = fd.symbol
-
-    # 新しい M5 バーを取得(SL/TP チェック用)
-    from market_data.accessor import get_ohlc
-    new_m5 = get_ohlc(symbol, "M5", current_pos + timedelta(minutes=5), new_pos)
-
-    # アクティブなトレードの SL/TP チェック
+    # 統合フロー(§6.1): アクティブ Trade が無い分析フェーズでは銘柄が確定していないため、
+    # SL/TP 自動決済チェックは行わず、単に時間だけ進める。
     trade = db.scalars(
         select(Trade).where(Trade.session_id == session_id, Trade.exit_time.is_(None))
     ).first()
@@ -181,26 +175,30 @@ def advance_session(
     exit_reason = None
     exit_price = None
     pips_pnl = None
+    new_m5_bars: list[OhlcBar] = []
 
-    if trade is not None and not new_m5.empty:
-        hit = _check_sl_tp(trade, new_m5)
-        if hit:
-            exit_reason, exit_price = hit
-            pips_pnl = _calculate_pips(symbol, trade.direction, trade.entry_price, exit_price)
-            trade.exit_time = new_pos.replace(tzinfo=None)
-            trade.exit_price = exit_price
-            trade.exit_reason = exit_reason
-            trade.pips_pnl = pips_pnl
-            auto_closed = True
-            # SessionFinalDecision の has_entry を True に更新
-            if fd:
-                fd.has_entry = True
+    if trade is not None:
+        from market_data.accessor import get_ohlc
+        symbol = trade.symbol
+        new_m5 = get_ohlc(symbol, "M5", current_pos + timedelta(minutes=5), new_pos)
+
+        if not new_m5.empty:
+            hit = _check_sl_tp(trade, new_m5)
+            if hit:
+                exit_reason, exit_price = hit
+                pips_pnl = _calculate_pips(symbol, trade.direction, trade.entry_price, exit_price)
+                trade.exit_time = new_pos.replace(tzinfo=None)
+                trade.exit_price = exit_price
+                trade.exit_reason = exit_reason
+                trade.pips_pnl = pips_pnl
+                auto_closed = True
+            new_m5_bars = _df_to_bars(new_m5)
 
     s.current_position = new_pos.replace(tzinfo=None)
     db.commit()
 
     return AdvanceResponse(
-        new_bars=_df_to_bars(new_m5),
+        new_bars=new_m5_bars,
         current_position=new_pos,
         trade_auto_closed=auto_closed,
         trade_exit_reason=exit_reason,

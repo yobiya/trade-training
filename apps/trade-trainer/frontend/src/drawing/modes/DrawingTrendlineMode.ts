@@ -48,6 +48,7 @@ export class DrawingTrendlineMode implements DrawingMode {
     return {
       id: -1,
       session_id: '',
+      symbol: null,
       kind: 'trendline',
       data: { points: [this.firstPoint, this.currentPoint] },
       label: null,

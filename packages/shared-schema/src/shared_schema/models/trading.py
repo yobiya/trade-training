@@ -135,7 +135,9 @@ class Drawing(Base):
     __tablename__ = "drawings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"))
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), index=True)
+    # 仕様書 §5.3 / §5.5: 描画は銘柄別に紐付き、銘柄切替時に該当銘柄のみ表示される
+    symbol: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     kind: Mapped[str] = mapped_column(String(20))  # "line"|"fibonacci"|"label"|"trendline"
     data: Mapped[Any] = mapped_column(JSON)  # 座標データ(kind ごとに構造が異なる)
     label: Mapped[str | None] = mapped_column(String(100), nullable=True)

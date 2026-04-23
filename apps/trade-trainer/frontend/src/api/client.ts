@@ -59,11 +59,6 @@ export const api = {
     list: (limit = 20, offset = 0) =>
       request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),
     get: (id: string) => request<TradeSession>(`/sessions/${id}`),
-    selectSymbol: (id: string, symbol: string, skipReasons?: Record<number, string | null>) =>
-      request<TradeSession>(`/sessions/${id}/symbol`, {
-        method: 'POST',
-        body: JSON.stringify({ symbol, skip_reasons: skipReasons }),
-      }),
     skip: (id: string, reason?: string, consideredStyles?: string[]) =>
       request<TradeSession>(`/sessions/${id}/skip`, {
         method: 'POST',
@@ -112,6 +107,7 @@ export const api = {
     getLatest: (sessionId: string) =>
       request<TradeResponse | null>(`/sessions/${sessionId}/trade/latest`),
     enter: (sessionId: string, body: {
+      symbol: string
       direction: 'buy' | 'sell'
       price: number
       sl: number
@@ -156,8 +152,10 @@ export const api = {
   },
 
   drawings: {
-    list: (sessionId: string) =>
-      request<Drawing[]>(`/sessions/${sessionId}/drawings`),
+    list: (sessionId: string, symbol?: string) => {
+      const q = symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''
+      return request<Drawing[]>(`/sessions/${sessionId}/drawings${q}`)
+    },
     create: (sessionId: string, body: CreateDrawingRequest) =>
       request<Drawing>(`/sessions/${sessionId}/drawings`, {
         method: 'POST',

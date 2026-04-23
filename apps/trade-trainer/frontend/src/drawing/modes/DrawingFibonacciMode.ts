@@ -48,6 +48,7 @@ export class DrawingFibonacciMode implements DrawingMode {
     return {
       id: -1,
       session_id: '',
+      symbol: null,
       kind: 'fibonacci',
       data: { points: [this.firstPoint, this.currentPoint] },
       label: null,
