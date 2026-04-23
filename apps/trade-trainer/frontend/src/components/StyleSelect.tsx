@@ -4,17 +4,16 @@ type Props = {
   styles: TradingStyle[]
   styleId: string
   onStyleIdChange: (id: string) => void
-  reason: string
-  onReasonChange: (v: string) => void
   disabled?: boolean
 }
 
 /**
- * エントリー前のトレードスタイル選択(仕様書 §7.1 / §8.4)。
- * 選択スタイルの想定値(SL 幅・RR 等)を参考表示し、スタイル選定理由の記入を促す。
+ * エントリー前のトレードスタイル選択(仕様書 §8.4)。
+ * 選択スタイルの想定値(SL 幅・RR 等)を参考表示する。
+ * 選定理由は横断メモ(§7.2.2)に自由記述(ここでは入力欄を持たない)。
  */
 export function StyleSelect({
-  styles, styleId, onStyleIdChange, reason, onReasonChange, disabled,
+  styles, styleId, onStyleIdChange, disabled,
 }: Props) {
   const selected = styles.find(s => s.id === styleId)
 
@@ -41,16 +40,6 @@ export function StyleSelect({
           <span>SL: {selected.typical_sl_pips} pips</span>
         </div>
       )}
-
-      <label className="scenario-label">スタイル選定理由</label>
-      <textarea
-        className="scenario-textarea"
-        value={reason}
-        onChange={e => onReasonChange(e.target.value)}
-        disabled={disabled}
-        placeholder="なぜこのスタイルを選んだか、他スタイルを選ばなかった理由"
-        rows={2}
-      />
     </div>
   )
 }

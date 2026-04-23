@@ -60,9 +60,15 @@ class SessionResponse(BaseModel):
     is_suspended: bool
     has_active_trade: bool
     digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
+    note: str | None = None  # §7.2.2 横断メモ
     candidates: list[CandidateResponse] = []  # §6.3 ウォッチリスト
 
     model_config = {"from_attributes": True}
+
+
+class UpdateNoteRequest(BaseModel):
+    """§7.2.2 横断メモの更新リクエスト。"""
+    note: str | None = None
 
 
 class SessionListItem(BaseModel):

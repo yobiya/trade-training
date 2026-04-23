@@ -6,7 +6,6 @@ from shared_schema.models.market import EconomicEvent, OhlcM5
 from shared_schema.models.trading import (
     Drawing,
     HoldingMemo,
-    Scenario,
     SessionCandidate,
     SessionFinalDecision,
     Trade,
@@ -30,7 +29,6 @@ __all__ = [
     "SessionFinalDecision",
     "Trade",
     "TradingStyle",
-    "Scenario",
     "HoldingMemo",
     "Drawing",
     # config

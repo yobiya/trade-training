@@ -4,10 +4,10 @@ import type {
   CreateDrawingRequest,
   Drawing,
   PostReviewResponse,
-  ScenarioInput,
   SessionCandidate,
   SessionFilter,
   SessionListItem,
+  SettingsResponse,
   TradeResponse,
   TradeSession,
   TradingStyle,
@@ -85,6 +85,11 @@ export const api = {
       request<void>(`/sessions/${id}`, { method: 'DELETE' }),
     postReview: (id: string) =>
       request<PostReviewResponse>(`/sessions/${id}/post-review`),
+    updateNote: (id: string, note: string | null) =>
+      request<TradeSession>(`/sessions/${id}/note`, {
+        method: 'PATCH',
+        body: JSON.stringify({ note }),
+      }),
   },
 
   chart: {
@@ -109,25 +114,27 @@ export const api = {
     enter: (sessionId: string, body: {
       direction: 'buy' | 'sell'
       price: number
-      sl?: number
+      sl: number
       tp?: number
-      scenario?: ScenarioInput
       style_id?: string
-      style_selection_reason?: string
     }) =>
       request<TradeResponse>(`/sessions/${sessionId}/trade/enter`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    exit: (sessionId: string, body: { price: number; reason: string; exit_memo?: string }) =>
+    exit: (sessionId: string, body: { price: number; reason: string }) =>
       request<TradeResponse>(`/sessions/${sessionId}/trade/exit`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    reflection: (sessionId: string, reflection: string) =>
-      request<TradeResponse>(`/sessions/${sessionId}/trade/reflection`, {
-        method: 'POST',
-        body: JSON.stringify({ reflection }),
+  },
+
+  settings: {
+    get: () => request<SettingsResponse>('/settings'),
+    update: (body: Partial<SettingsResponse>) =>
+      request<SettingsResponse>('/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
       }),
   },
 

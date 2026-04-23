@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import type { ScenarioInput, TradeResponse, TradingStyle } from '../api/client'
-import { ScenarioForm, isScenarioValid } from './ScenarioForm'
+import type { TradeResponse, TradingStyle } from '../api/client'
 import { StyleSelect } from './StyleSelect'
 
 type EnterArgs = {
@@ -8,21 +7,23 @@ type EnterArgs = {
   price: number
   sl: number
   tp: number | undefined
-  scenario: ScenarioInput
   styleId: string
-  styleReason: string
 }
 
 type Props = {
   activeTrade: TradeResponse | null
   currentPrice: number | null
   onEnter: (args: EnterArgs) => Promise<void>
-  onExit: (price: number, reason: string, exitMemo?: string) => Promise<void>
+  onExit: (price: number, reason: string) => Promise<void>
   loading: boolean
   digits: number
   styles: TradingStyle[]
 }
 
+/**
+ * 仕様書 §7.4: エントリー時の必須は 方向・価格・SL・TP・スタイル id のみ。
+ * 根拠・シナリオ・選定理由等はメモパネル(§7.3)で書く。
+ */
 export function TradePanel({
   activeTrade, currentPrice, onEnter, onExit, loading, digits, styles,
 }: Props) {
@@ -31,39 +32,28 @@ export function TradePanel({
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
   const [exitPrice, setExitPrice] = useState('')
-  const [exitMemo, setExitMemo] = useState('')
-  const [scenario, setScenario] = useState<ScenarioInput>({})
   const [styleId, setStyleId] = useState('')
-  const [styleReason, setStyleReason] = useState('')
-
-  const scenarioValid = isScenarioValid(scenario)
-  const styleValid = styleId !== '' && styleReason.trim().length > 0
 
   async function handleEnter(direction: 'buy' | 'sell') {
     const p = parseFloat(price)
     const slv = parseFloat(sl)
-    if (isNaN(p) || isNaN(slv)) return
-    if (!scenarioValid || !styleValid) return
+    if (isNaN(p) || isNaN(slv) || !styleId) return
     const tpv = parseFloat(tp) || undefined
-    await onEnter({ direction, price: p, sl: slv, tp: tpv, scenario, styleId, styleReason })
-    setPrice(''); setSl(''); setTp('')
-    setScenario({})
-    setStyleId(''); setStyleReason('')
+    await onEnter({ direction, price: p, sl: slv, tp: tpv, styleId })
+    setPrice(''); setSl(''); setTp(''); setStyleId('')
   }
 
   async function handleExit() {
     const p = parseFloat(exitPrice) || currentPrice
     if (p == null) return
-    await onExit(p, 'manual', exitMemo.trim() || undefined)
+    await onExit(p, 'manual')
     setExitPrice('')
-    setExitMemo('')
   }
 
   if (activeTrade) {
     const pnlClass = activeTrade.pips_pnl == null
       ? ''
       : activeTrade.pips_pnl >= 0 ? 'profit' : 'loss'
-    const sc = activeTrade.scenario
     const style = styles.find(s => s.id === activeTrade.style_id)
     return (
       <div className="trade-panel">
@@ -79,26 +69,9 @@ export function TradePanel({
           {activeTrade.pips_pnl != null && (
             <div className={`pnl ${pnlClass}`}>{activeTrade.pips_pnl > 0 ? '+' : ''}{activeTrade.pips_pnl} pips</div>
           )}
-          {(style || activeTrade.style_selection_reason) && (
+          {style && (
             <div className="scenario-readout">
-              {style && <div className="scenario-block"><span className="scenario-readout-label">スタイル</span>{style.name}</div>}
-              {activeTrade.style_selection_reason && (
-                <div className="scenario-block"><span className="scenario-readout-label">選定理由</span>{activeTrade.style_selection_reason}</div>
-              )}
-            </div>
-          )}
-          {sc && (
-            <div className="scenario-readout">
-              {sc.environment && <div className="scenario-block"><span className="scenario-readout-label">環境</span>{sc.environment}</div>}
-              {sc.market_view && <div className="scenario-block"><span className="scenario-readout-label">相場観</span>{sc.market_view}</div>}
-              {sc.event_recognition && <div className="scenario-block"><span className="scenario-readout-label">指標</span>{sc.event_recognition}</div>}
-              {sc.symbol_reason && <div className="scenario-block"><span className="scenario-readout-label">銘柄理由</span>{sc.symbol_reason}</div>}
-              {sc.skipped_candidates && <div className="scenario-block"><span className="scenario-readout-label">見送り候補</span>{sc.skipped_candidates}</div>}
-              {sc.scenario_main && <div className="scenario-block"><span className="scenario-readout-label">メイン</span>{sc.scenario_main}</div>}
-              {sc.scenario_alt1 && <div className="scenario-block"><span className="scenario-readout-label">代替1</span>{sc.scenario_alt1}</div>}
-              {sc.scenario_alt2 && <div className="scenario-block"><span className="scenario-readout-label">代替2</span>{sc.scenario_alt2}</div>}
-              {sc.wave_count && <div className="scenario-block"><span className="scenario-readout-label">波動</span>{sc.wave_count}</div>}
-              {sc.entry_basis && <div className="scenario-block"><span className="scenario-readout-label">根拠</span>{sc.entry_basis}</div>}
+              <div className="scenario-block"><span className="scenario-readout-label">スタイル</span>{style.name}</div>
             </div>
           )}
           {activeTrade.is_open && (
@@ -115,14 +88,7 @@ export function TradePanel({
                   決済
                 </button>
               </div>
-              <textarea
-                className="exit-memo-textarea"
-                placeholder="決済時メモ(任意、§7.4.1): なぜ切ったか"
-                value={exitMemo}
-                onChange={e => setExitMemo(e.target.value)}
-                rows={2}
-                disabled={loading}
-              />
+              <p className="memo-inline-hint">決済所感は M キー/メモボタンで横断メモに追記</p>
             </div>
           )}
         </div>
@@ -130,18 +96,15 @@ export function TradePanel({
     )
   }
 
-  const ready = price && sl && scenarioValid && styleValid
+  const ready = !!(price && sl && styleId)
 
   return (
     <div className="trade-panel">
       <div className="entry-form">
-        <ScenarioForm value={scenario} onChange={setScenario} disabled={loading} />
         <StyleSelect
           styles={styles}
           styleId={styleId}
           onStyleIdChange={setStyleId}
-          reason={styleReason}
-          onReasonChange={setStyleReason}
           disabled={loading}
         />
         <div className="price-row">
@@ -174,7 +137,7 @@ export function TradePanel({
             className="buy-btn"
             onClick={() => handleEnter('buy')}
             disabled={loading || !ready}
-            title={!ready ? 'メモ・根拠・スタイル・理由は必須です' : ''}
+            title={!ready ? '価格・SL・スタイルは必須' : ''}
           >
             BUY
           </button>
@@ -182,14 +145,12 @@ export function TradePanel({
             className="sell-btn"
             onClick={() => handleEnter('sell')}
             disabled={loading || !ready}
-            title={!ready ? 'メモ・根拠・スタイル・理由は必須です' : ''}
+            title={!ready ? '価格・SL・スタイルは必須' : ''}
           >
             SELL
           </button>
         </div>
-        {!ready && (
-          <p className="scenario-hint">メモ・根拠・スタイル・選定理由は全て入力必須です</p>
-        )}
+        <p className="memo-inline-hint">根拠・シナリオは M キー/メモボタンでメモパネルに書く(§7.3)</p>
       </div>
     </div>
   )

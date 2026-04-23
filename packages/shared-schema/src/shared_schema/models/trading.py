@@ -37,6 +37,7 @@ class TradeSession(Base):
     mode: Mapped[str] = mapped_column(String(10))  # "training" | "real"
     time_filter: Mapped[Any] = mapped_column(JSON, nullable=True)  # {sessions, days, date_range}
     is_suspended: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)  # §7.2.2 横断メモ(相場観・比較・シナリオ・振り返りなど)
 
     candidates: Mapped[list["SessionCandidate"]] = relationship(
         "SessionCandidate", back_populates="session", cascade="all, delete-orphan"
@@ -105,40 +106,14 @@ class Trade(Base):
     lot: Mapped[float | None] = mapped_column(Float, nullable=True)  # real のみ
     mt5_order_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # real のみ
     style_id: Mapped[str | None] = mapped_column(ForeignKey("trading_styles.id"), nullable=True)
-    style_selection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     followup_ohlc: Mapped[Any] = mapped_column(JSON, nullable=True)  # 後悔指標データ
     created_at: Mapped[datetime] = mapped_column(DateTime)  # UTC
 
     session: Mapped["TradeSession"] = relationship("TradeSession", back_populates="trades")
     style: Mapped["TradingStyle | None"] = relationship("TradingStyle", back_populates="trades")
-    scenario: Mapped["Scenario | None"] = relationship(
-        "Scenario", back_populates="trade", uselist=False, cascade="all, delete-orphan"
-    )
     holding_memos: Mapped[list["HoldingMemo"]] = relationship(
         "HoldingMemo", back_populates="trade", cascade="all, delete-orphan"
     )
-
-
-class Scenario(Base):
-    """シナリオメモ。Trade と 1対1(仕様書 7章)。"""
-
-    __tablename__ = "scenarios"
-
-    trade_id: Mapped[str] = mapped_column(ForeignKey("trades.id"), primary_key=True)
-    environment: Mapped[str | None] = mapped_column(Text, nullable=True)  # 環境認識
-    market_view: Mapped[str | None] = mapped_column(Text, nullable=True)  # 相場観
-    symbol_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # 銘柄選定理由
-    skipped_candidates: Mapped[str | None] = mapped_column(Text, nullable=True)  # 見送った候補
-    event_recognition: Mapped[str | None] = mapped_column(Text, nullable=True)  # 指標認識
-    wave_count: Mapped[str | None] = mapped_column(Text, nullable=True)  # 波動カウント
-    scenario_main: Mapped[str | None] = mapped_column(Text, nullable=True)  # メインシナリオ
-    scenario_alt1: Mapped[str | None] = mapped_column(Text, nullable=True)  # 代替シナリオ1
-    scenario_alt2: Mapped[str | None] = mapped_column(Text, nullable=True)  # 代替シナリオ2(任意)
-    entry_basis: Mapped[str | None] = mapped_column(Text, nullable=True)  # エントリー根拠
-    exit_memo: Mapped[str | None] = mapped_column(Text, nullable=True)  # 決済時メモ
-    reflection: Mapped[str | None] = mapped_column(Text, nullable=True)  # 振り返りメモ
-
-    trade: Mapped["Trade"] = relationship("Trade", back_populates="scenario")
 
 
 class HoldingMemo(Base):

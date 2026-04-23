@@ -6,6 +6,7 @@ import type { PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { IndicatorPanel } from '../components/IndicatorPanel'
+import { MemoPanel } from '../components/MemoPanel'
 import { PostReviewPanel } from '../components/PostReviewPanel'
 import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
@@ -136,9 +137,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     price: number
     sl: number
     tp: number | undefined
-    scenario: import('../api/client').ScenarioInput
     styleId: string
-    styleReason: string
   }) {
     setLoading(true)
     try {
@@ -147,9 +146,7 @@ export function TrainingPage({ sessionId, onBack }: Props) {
         price: args.price,
         sl: args.sl,
         tp: args.tp,
-        scenario: args.scenario,
         style_id: args.styleId,
-        style_selection_reason: args.styleReason,
       })
       setActiveTrade(trade)
       notify(`エントリー: ${args.direction.toUpperCase()} @ ${args.price}`)
@@ -158,10 +155,10 @@ export function TrainingPage({ sessionId, onBack }: Props) {
     }
   }
 
-  async function handleExit(price: number, reason: string, exitMemo?: string) {
+  async function handleExit(price: number, reason: string) {
     setLoading(true)
     try {
-      const trade = await api.trades.exit(sessionId, { price, reason, exit_memo: exitMemo })
+      const trade = await api.trades.exit(sessionId, { price, reason })
       setActiveTrade(trade)
       const pips = trade.pips_pnl ?? 0
       notify(`決済: ${price} (${pips > 0 ? '+' : ''}${pips} pips)`)
@@ -171,6 +168,21 @@ export function TrainingPage({ sessionId, onBack }: Props) {
   }
 
   const [skipping, setSkipping] = useState(false)
+  const [memoOpen, setMemoOpen] = useState(false)
+
+  // 仕様書 §7.3: M キーでメモパネルをトグル
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'm' && e.key !== 'M') return
+      // input/textarea フォーカス中は無視
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      e.preventDefault()
+      setMemoOpen(v => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   async function handleSkipConfirm(reason: string, consideredStyles: string[]) {
     await api.sessions.skip(sessionId, reason, consideredStyles)
@@ -200,6 +212,13 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           hiddenTfs={hiddenTfs}
           onToggleVisibility={toggleTfVisibility}
         />
+        <button
+          onClick={() => setMemoOpen(v => !v)}
+          className="memo-open-btn"
+          title="M キーでも開閉できます"
+        >
+          📝 メモ
+        </button>
       </header>
 
       {notification && <div className="notification">{notification}</div>}
@@ -292,6 +311,14 @@ export function TrainingPage({ sessionId, onBack }: Props) {
           styles={tradingStyles}
           onConfirm={handleSkipConfirm}
           onCancel={() => setSkipping(false)}
+        />
+      )}
+      {memoOpen && session && (
+        <MemoPanel
+          session={session}
+          initialSymbol={session.symbol || null}
+          onClose={() => setMemoOpen(false)}
+          onChange={setSession}
         />
       )}
     </div>

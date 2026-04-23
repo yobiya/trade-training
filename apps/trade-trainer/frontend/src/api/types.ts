@@ -30,6 +30,7 @@ export type TradeSession = {
   is_suspended: boolean
   has_active_trade: boolean
   digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
+  note: string | null  // §7.2.2 横断メモ
   candidates: SessionCandidate[]
 }
 
@@ -48,35 +49,6 @@ export type AdvanceResponse = {
   trade_pips_pnl: number | null
 }
 
-// 仕様書 §7 シナリオメモ
-export type ScenarioInput = {
-  environment?: string | null
-  market_view?: string | null
-  symbol_reason?: string | null
-  skipped_candidates?: string | null
-  event_recognition?: string | null
-  wave_count?: string | null
-  scenario_main?: string | null
-  scenario_alt1?: string | null
-  scenario_alt2?: string | null
-  entry_basis?: string | null
-}
-
-export type ScenarioResponse = {
-  environment: string | null
-  market_view: string | null
-  symbol_reason: string | null
-  skipped_candidates: string | null
-  event_recognition: string | null
-  wave_count: string | null
-  scenario_main: string | null
-  scenario_alt1: string | null
-  scenario_alt2: string | null
-  entry_basis: string | null
-  exit_memo: string | null
-  reflection: string | null
-}
-
 export type TradeResponse = {
   id: string
   direction: 'buy' | 'sell'
@@ -89,9 +61,14 @@ export type TradeResponse = {
   exit_time: string | null
   pips_pnl: number | null
   is_open: boolean
-  scenario: ScenarioResponse | null
   style_id: string | null
-  style_selection_reason: string | null
+}
+
+// 仕様書 §7.2.3 メモテンプレート等の設定
+export type SettingsResponse = {
+  candidate_memo_template: string | null
+  session_note_template: string | null
+  memo_template_enabled: boolean
 }
 
 // 仕様書 §9.2 / §9.4 セッション単位の事後振り返り

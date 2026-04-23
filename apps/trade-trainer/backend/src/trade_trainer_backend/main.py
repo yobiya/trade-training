@@ -11,6 +11,7 @@ from trade_trainer_backend.config import get_settings
 from trade_trainer_backend.routers.chart import router as chart_router
 from trade_trainer_backend.routers.drawings import router as drawings_router
 from trade_trainer_backend.routers.sessions import router as sessions_router
+from trade_trainer_backend.routers.settings import router as settings_router
 from trade_trainer_backend.routers.trades import router as trades_router
 from trade_trainer_backend.routers.trading_styles import router as trading_styles_router
 
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(trades_router, prefix="/api")
     app.include_router(drawings_router, prefix="/api")
     app.include_router(trading_styles_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
 
     @app.get("/health")
     async def health() -> dict[str, str]:

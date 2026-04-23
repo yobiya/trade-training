@@ -737,6 +737,89 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 }
 .close-session-btn:hover { opacity: 0.9; }
 
+/* §7.3 メモパネル */
+.memo-open-btn {
+  padding: 6px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.memo-open-btn:hover { background: var(--bg3); }
+
+.memo-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 600px;
+  max-width: 90vw;
+  max-height: 80vh;
+}
+.memo-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.memo-panel-header h2 { margin: 0; font-size: 14px; }
+.memo-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 6px;
+}
+.memo-close-btn:hover { color: var(--accent); }
+
+.memo-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.memo-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.memo-section-header label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.memo-symbol-select {
+  padding: 2px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+}
+.memo-textarea {
+  width: 100%;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  resize: vertical;
+  line-height: 1.5;
+}
+.memo-textarea:focus { outline: 1px solid var(--accent); }
+.memo-empty-hint { color: var(--text-dim); font-size: 11px; }
+
+.memo-inline-hint {
+  color: var(--text-dim);
+  font-size: 10px;
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
 /* §9.2 / §9.4 振り返りパネル */
 .post-review {
   border-top: 1px solid var(--border);

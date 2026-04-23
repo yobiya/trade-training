@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
+import { MemoPanel } from '../components/MemoPanel'
 import { Modal } from '../components/Modal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { SYMBOLS, TIMEFRAMES, getTimeframeColor } from '../constants'
@@ -31,10 +32,24 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
   const [confirming, setConfirming] = useState<'select' | 'skip-all' | null>(null)
   const [skipAllReason, setSkipAllReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [memoOpen, setMemoOpen] = useState(false)
 
   useEffect(() => {
     void api.sessions.get(sessionId).then(setSession)
   }, [sessionId])
+
+  // 仕様書 §7.3: M キーでメモパネルをトグル
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'm' && e.key !== 'M') return
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      e.preventDefault()
+      setMemoOpen(v => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const candidates = session?.candidates ?? []
   const currentCandidate = useMemo(
@@ -83,15 +98,6 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
     }
   }
 
-  async function updateCurrentMemo(memo: string) {
-    if (!currentCandidate) return
-    setSession(s => s ? {
-      ...s,
-      candidates: s.candidates.map(c => c.id === currentCandidate.id ? { ...c, memo } : c),
-    } : s)
-    await api.sessions.updateCandidate(sessionId, currentCandidate.id, memo || null)
-  }
-
   async function handleConfirmSelect() {
     if (!session) return
     setBusy(true)
@@ -137,6 +143,13 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
           hiddenTfs={hiddenTfs}
           onToggleVisibility={toggleTfVisibility}
         />
+        <button
+          onClick={() => setMemoOpen(v => !v)}
+          className="memo-open-btn"
+          title="M キーでも開閉できます"
+        >
+          📝 メモ
+        </button>
       </header>
 
       <div className="training-body pick-body">
@@ -166,7 +179,7 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
 
           <div className="pick-candidate-memo">
             <div className="pick-candidate-header">
-              <span>候補メモ ({currentSymbol})</span>
+              <span>候補: {currentSymbol}</span>
               <button
                 className={`star-btn ${currentCandidate ? 'on' : ''}`}
                 onClick={() => void toggleCandidate()}
@@ -175,14 +188,7 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
                 {currentCandidate ? '★ 解除' : '☆ 追加'}
               </button>
             </div>
-            <textarea
-              className="pick-memo-textarea"
-              placeholder={currentCandidate ? 'この候補の気づき(任意)' : '★を押すと候補に追加されメモできます'}
-              value={currentCandidate?.memo ?? ''}
-              onChange={e => void updateCurrentMemo(e.target.value)}
-              disabled={!currentCandidate || busy}
-              rows={5}
-            />
+            <p className="memo-inline-hint">メモは 📝 ボタン or M キーで開く(§7.3)</p>
             <div className="pick-candidate-count">候補数: {candidates.length}</div>
           </div>
 
@@ -272,6 +278,15 @@ export function SymbolPickPage({ sessionId, onSelected, onBack }: Props) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {memoOpen && session && (
+        <MemoPanel
+          session={session}
+          initialSymbol={currentSymbol}
+          onClose={() => setMemoOpen(false)}
+          onChange={setSession}
+        />
       )}
     </div>
   )

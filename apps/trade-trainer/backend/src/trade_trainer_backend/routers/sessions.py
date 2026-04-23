@@ -17,6 +17,7 @@ from trade_trainer_backend.schemas.post_review import (
     SkipReview,
     StageEvalResp,
 )
+from shared_schema.models.config import Setting
 from trade_trainer_backend.schemas.session import (
     CandidateResponse,
     CreateCandidateRequest,
@@ -26,10 +27,20 @@ from trade_trainer_backend.schemas.session import (
     SessionResponse,
     SkipSessionRequest,
     UpdateCandidateRequest,
+    UpdateNoteRequest,
 )
 from trade_trainer_backend.services.post_eval import evaluate_symbol
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _memo_templates(db: Session) -> tuple[str | None, str | None]:
+    """仕様書 §7.2.3: 新規メモ作成時に挿入するテンプレート(有効時のみ)を返す。
+    戻り値: (candidate_memo_template, session_note_template)。無効時は (None, None)。"""
+    st = db.get(Setting, 1)
+    if st is None or not st.memo_template_enabled:
+        return None, None
+    return st.candidate_memo_template, st.session_note_template
 
 
 def _build_response(s: TradeSession, db: Session) -> SessionResponse:
@@ -57,6 +68,7 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
         is_suspended=s.is_suspended,
         has_active_trade=active_trade is not None,
         digits=digits,
+        note=s.note,
         candidates=[CandidateResponse.model_validate(c) for c in candidates],
     )
 
@@ -150,6 +162,9 @@ def create_session(
     now = datetime.now(timezone.utc)
     session_id = str(uuid.uuid4())
 
+    # §7.2.3: 新規セッション作成時に横断メモのテンプレートを初期挿入(有効時のみ)
+    _, note_tpl = _memo_templates(db)
+
     ts = TradeSession(
         id=session_id,
         started_at=now,
@@ -157,6 +172,7 @@ def create_session(
         current_position=presented_at,
         mode="training",
         is_suspended=False,
+        note=note_tpl,
     )
     db.add(ts)
     # 銘柄は任意。指定があれば即座に SessionFinalDecision を作成する。
@@ -233,7 +249,10 @@ def add_candidate(
         db.commit()
         db.refresh(existing)
         return CandidateResponse.model_validate(existing)
-    c = SessionCandidate(session_id=session_id, symbol=symbol, memo=body.memo, is_selected=False)
+    # §7.2.3: 新規候補作成時に銘柄別メモのテンプレートを初期挿入(body.memo 未指定かつ有効時のみ)
+    cand_tpl, _ = _memo_templates(db)
+    initial_memo = body.memo if body.memo is not None else cand_tpl
+    c = SessionCandidate(session_id=session_id, symbol=symbol, memo=initial_memo, is_selected=False)
     db.add(c)
     db.commit()
     db.refresh(c)
@@ -374,6 +393,21 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
         skip=skip_review,
         entry=entry_review,
     )
+
+
+@router.patch("/{session_id}/note", response_model=SessionResponse)
+def update_note(
+    session_id: str,
+    body: UpdateNoteRequest,
+    db: Session = Depends(get_db),
+) -> SessionResponse:
+    """§7.2.2 横断メモの更新。空文字 or null は許容(クリア)。"""
+    s = db.get(TradeSession, session_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    s.note = body.note
+    db.commit()
+    return _build_response(s, db)
 
 
 @router.delete("/{session_id}", status_code=204)
