@@ -1,43 +1,129 @@
-"""仕様書 §9.2 / §9.3 セッション単位の事後評価(on-demand 計算)。
+"""仕様書 §9 判断結果の事後確認機能(on-demand 計算)。
 
 方針:
-- principles/no-aggregation.md に従い DB には結果を保存しない。API 呼び出し時に
-  都度 market-data から事後 OHLC を取得して算出する
-- 3 段階(10/50/200 本先)で **最大上昇 pips / 最大下落 pips** を返すのみ
-- 「機会損失 / 正解 / どちらでも」等のラベル判定は採用しない(§9.3 / principles/no-tags)。
-  ラベルは結果バイアスを生み、§11.9 で AI に禁止したのと同じ理由でユーザーにも提示しない
+- principles/no-aggregation.md に従い DB には結果を保存しない
+- R:R 比率(R = エントリー時の SL 幅)を一次指標(§9.3)
+- pips は補助として併記(スプレッド影響の読み取り用)
+- 「機会損失 / 正解 / どちらでも」等のラベル判定は採用しない(§9.3 / principles/no-tags)
+- 見送り時の R 基準は TradingStyle.typical_sl_pips の中央値(§9.3)
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session as OrmSession
 
-# §9.2 の 3 段階(M5 本数)
+from shared_schema.models.trading import Trade, TradingStyle
+
+
+# §9.2 見送り事後評価の 3 段階(M5 本数)
 LOOKAHEAD_STAGES: tuple[int, ...] = (10, 50, 200)
+
+# §9.5 続き観察の既定本数(M5)
+CONTINUATION_BARS: int = 50
 
 
 @dataclass
 class StageEval:
-    bars: int                 # 10 / 50 / 200
-    max_up_pips: float        # 起点価格からの最大上昇 pips
-    max_down_pips: float      # 起点価格からの最大下落 pips
-    max_abs_pips: float       # max(up, down)
+    bars: int                           # 10 / 50 / 200
+    max_up_pips: float                  # 起点からの最大上昇 pips(絶対値)
+    max_down_pips: float                # 起点からの最大下落 pips(絶対値)
+    max_abs_pips: float                 # max(up, down)
+    max_up_r: float | None = None       # R 単位(r_unit_pips が None なら None)
+    max_down_r: float | None = None
+    max_abs_r: float | None = None
 
 
 @dataclass
 class SymbolReview:
     symbol: str
-    ref_price: float | None   # 起点価格(presented_at の close)
-    stages: list[StageEval]   # 3 段階分
+    ref_price: float | None
+    r_unit_pips: float | None           # R 基準(pips)。None なら R 計算なし
+    stages: list[StageEval]
 
+
+@dataclass
+class EntryObservation:
+    """§9.5 エントリー結果の事後確認(決済済み trade 前提)。
+
+    未決済 trade では全フィールド None(保有中は自動要約を出さない — principles/no-future-info.md)。
+    """
+    mfe_r: float | None                 # 最大順行 R(direction 考慮)
+    mae_r: float | None                 # 最大逆行 R(direction 考慮)
+    mfe_pips: float | None              # 補助: 最大順行 pips
+    mae_pips: float | None              # 補助: 最大逆行 pips
+    r_pnl: float | None                 # 実損益 R
+    r_unit_pips: float | None           # この trade の R 基準(pips)
+    continuation_bars: int              # 続き観察予定本数
+    continuation_available: bool        # 実際に OHLC が 1 本以上取得できたか
+
+
+# --------------------------------------------------------------------------- #
+# ヘルパー
+# --------------------------------------------------------------------------- #
 
 def _pip_size(symbol: str) -> float:
     return 0.01 if symbol.upper().endswith("JPY") else 0.0001
 
 
+def parse_typical_sl_pips(s: str | None) -> float | None:
+    """TradingStyle.typical_sl_pips の文字列から中央値を返す。
+
+    例: "10~20" → 15.0 / "30pips" → 30.0 / "15" → 15.0 / "10 〜 20" → 15.0
+    数字を抽出できなければ None。
+    """
+    if not s:
+        return None
+    nums = [float(m) for m in re.findall(r"\d+(?:\.\d+)?", s)]
+    if not nums:
+        return None
+    if len(nums) == 1:
+        return nums[0]
+    return (min(nums) + max(nums)) / 2
+
+
+def resolve_skip_r_unit_pips(
+    considered_styles: list[str] | None,
+    db: OrmSession,
+) -> float | None:
+    """§9.3 見送り時の代理 R 基準(pips)を算出する。
+
+    `considered_styles` で選択された各スタイルの `typical_sl_pips` 中央値の平均。
+    スタイル未選択・解釈不能なら None(呼び出し側で R 計算なしとして扱う)。
+    """
+    if not considered_styles:
+        return None
+    styles = db.scalars(
+        select(TradingStyle).where(TradingStyle.id.in_(considered_styles))
+    ).all()
+    medians = [
+        m for m in (parse_typical_sl_pips(s.typical_sl_pips) for s in styles)
+        if m is not None
+    ]
+    if not medians:
+        return None
+    return sum(medians) / len(medians)
+
+
+def resolve_trade_r_unit_pips(trade: Trade) -> float | None:
+    """§9.3 エントリー時の R 基準 = 実 SL 幅(pips)。SL 未設定なら None。"""
+    if trade.sl is None:
+        return None
+    psize = _pip_size(trade.symbol)
+    return abs(float(trade.entry_price) - float(trade.sl)) / psize
+
+
+def _to_r(pips: float | None, r_unit: float | None) -> float | None:
+    if pips is None or r_unit is None or r_unit <= 0:
+        return None
+    return round(pips / r_unit, 2)
+
+
 def _get_reference_price(symbol: str, ref_dt: datetime) -> float | None:
-    """ref_dt 時点(presented_at 等)の M5 close を取得する。"""
+    """ref_dt 時点の M5 close を取得する。"""
     from market_data.accessor import get_ohlc
     try:
         df = get_ohlc(symbol, "M5", ref_dt - timedelta(minutes=30), ref_dt + timedelta(minutes=5))
@@ -48,30 +134,35 @@ def _get_reference_price(symbol: str, ref_dt: datetime) -> float | None:
     return float(df["close"].iloc[-1])
 
 
-def evaluate_symbol(symbol: str, ref_dt: datetime) -> SymbolReview:
-    """指定銘柄について、ref_dt を起点とした 3 段階の事後 pips を返す。
+# --------------------------------------------------------------------------- #
+# § 9.3 見送り事後評価(銘柄単位で 3 段階 pips/R を返す)
+# --------------------------------------------------------------------------- #
 
-    データが取れない場合は stages が空リスト / ref_price が None のレビューを返す
-    (呼び出し側で「データなし」として扱える)。
+def evaluate_symbol(
+    symbol: str,
+    ref_dt: datetime,
+    r_unit_pips: float | None = None,
+) -> SymbolReview:
+    """指定銘柄・起点から 3 段階の最大上昇/下落 pips と R を返す(§9.3)。
+
+    `r_unit_pips` が None なら R は算出しない(StageEval の R フィールドは None)。
     """
     if ref_dt.tzinfo is None:
         ref_dt = ref_dt.replace(tzinfo=timezone.utc)
 
     ref_price = _get_reference_price(symbol, ref_dt)
     if ref_price is None:
-        return SymbolReview(symbol=symbol, ref_price=None, stages=[])
+        return SymbolReview(symbol=symbol, ref_price=None, r_unit_pips=r_unit_pips, stages=[])
 
-    # 最大 lookahead(200 本)まで一度に取って、段階別に部分集合で評価する。
     from market_data.accessor import get_ohlc
     max_bars = max(LOOKAHEAD_STAGES)
-    # M5 x (max_bars + バッファ) を未来方向に
     to_dt = ref_dt + timedelta(minutes=5 * (max_bars + 20))
     try:
         df = get_ohlc(symbol, "M5", ref_dt, to_dt)
     except Exception:  # noqa: BLE001
-        return SymbolReview(symbol=symbol, ref_price=ref_price, stages=[])
+        return SymbolReview(symbol=symbol, ref_price=ref_price, r_unit_pips=r_unit_pips, stages=[])
     if df is None or len(df) == 0:
-        return SymbolReview(symbol=symbol, ref_price=ref_price, stages=[])
+        return SymbolReview(symbol=symbol, ref_price=ref_price, r_unit_pips=r_unit_pips, stages=[])
 
     psize = _pip_size(symbol)
     stages: list[StageEval] = []
@@ -79,15 +170,97 @@ def evaluate_symbol(symbol: str, ref_dt: datetime) -> SymbolReview:
         window = df.head(bars)
         if len(window) == 0:
             continue
-        max_up_raw = float(window["high"].max()) - ref_price
-        max_down_raw = ref_price - float(window["low"].min())
-        max_up_pips = max(0.0, max_up_raw / psize)
-        max_down_pips = max(0.0, max_down_raw / psize)
+        max_up_pips = round(max(0.0, (float(window["high"].max()) - ref_price) / psize), 1)
+        max_down_pips = round(max(0.0, (ref_price - float(window["low"].min())) / psize), 1)
         max_abs_pips = max(max_up_pips, max_down_pips)
         stages.append(StageEval(
             bars=bars,
-            max_up_pips=round(max_up_pips, 1),
-            max_down_pips=round(max_down_pips, 1),
-            max_abs_pips=round(max_abs_pips, 1),
+            max_up_pips=max_up_pips,
+            max_down_pips=max_down_pips,
+            max_abs_pips=max_abs_pips,
+            max_up_r=_to_r(max_up_pips, r_unit_pips),
+            max_down_r=_to_r(max_down_pips, r_unit_pips),
+            max_abs_r=_to_r(max_abs_pips, r_unit_pips),
         ))
-    return SymbolReview(symbol=symbol, ref_price=ref_price, stages=stages)
+    return SymbolReview(symbol=symbol, ref_price=ref_price, r_unit_pips=r_unit_pips, stages=stages)
+
+
+# --------------------------------------------------------------------------- #
+# § 9.5 エントリー結果の事後確認
+# --------------------------------------------------------------------------- #
+
+def evaluate_entry(trade: Trade) -> EntryObservation:
+    """§9.5 決済済み trade について MFE / MAE / 実損益 R / 続き観察可否を算出。
+
+    保有期間(entry_time〜exit_time)の M5 OHLC から direction に応じた順行/逆行幅を取る。
+    未決済 trade は全フィールド None(principles/no-future-info.md: 保有中は自動要約を出さない)。
+    """
+    empty = EntryObservation(
+        mfe_r=None, mae_r=None, mfe_pips=None, mae_pips=None,
+        r_pnl=None, r_unit_pips=resolve_trade_r_unit_pips(trade),
+        continuation_bars=CONTINUATION_BARS, continuation_available=False,
+    )
+
+    if trade.exit_time is None or trade.exit_price is None:
+        return empty
+
+    entry_time = trade.entry_time
+    if entry_time.tzinfo is None:
+        entry_time = entry_time.replace(tzinfo=timezone.utc)
+    exit_time = trade.exit_time
+    if exit_time.tzinfo is None:
+        exit_time = exit_time.replace(tzinfo=timezone.utc)
+
+    r_unit_pips = empty.r_unit_pips
+    psize = _pip_size(trade.symbol)
+
+    # 保有期間の M5 OHLC から MFE/MAE を算出
+    from market_data.accessor import get_ohlc
+    mfe_pips: float | None = None
+    mae_pips: float | None = None
+    try:
+        df = get_ohlc(trade.symbol, "M5", entry_time, exit_time + timedelta(minutes=5))
+    except Exception:  # noqa: BLE001
+        df = None
+
+    if df is not None and len(df) > 0:
+        entry_px = float(trade.entry_price)
+        if trade.direction == "buy":
+            max_favor_raw = float(df["high"].max()) - entry_px
+            max_adverse_raw = entry_px - float(df["low"].min())
+        else:  # sell
+            max_favor_raw = entry_px - float(df["low"].min())
+            max_adverse_raw = float(df["high"].max()) - entry_px
+        mfe_pips = round(max(0.0, max_favor_raw / psize), 1)
+        mae_pips = round(max(0.0, max_adverse_raw / psize), 1)
+
+    # 実損益 R = (exit - entry) / (entry - sl) × sign(direction) を pip 換算で
+    r_pnl: float | None = None
+    if r_unit_pips is not None and r_unit_pips > 0:
+        exit_diff_pips = (float(trade.exit_price) - float(trade.entry_price)) / psize
+        if trade.direction == "sell":
+            exit_diff_pips = -exit_diff_pips
+        r_pnl = round(exit_diff_pips / r_unit_pips, 2)
+
+    # 続き観察の OHLC 取得可否(チャートはフロントが /chart 経由で別途取得)
+    continuation_available = False
+    try:
+        cont_df = get_ohlc(
+            trade.symbol, "M5",
+            exit_time + timedelta(minutes=5),
+            exit_time + timedelta(minutes=5 * (CONTINUATION_BARS + 5)),
+        )
+        continuation_available = cont_df is not None and len(cont_df) > 0
+    except Exception:  # noqa: BLE001
+        continuation_available = False
+
+    return EntryObservation(
+        mfe_r=_to_r(mfe_pips, r_unit_pips),
+        mae_r=_to_r(mae_pips, r_unit_pips),
+        mfe_pips=mfe_pips,
+        mae_pips=mae_pips,
+        r_pnl=r_pnl,
+        r_unit_pips=r_unit_pips,
+        continuation_bars=CONTINUATION_BARS,
+        continuation_available=continuation_available,
+    )

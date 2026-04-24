@@ -89,12 +89,15 @@ export type EconomicEvent = {
   surprise: number | null
 }
 
-// 仕様書 §9.2 / §9.4 セッション単位の事後振り返り(ラベル判定は採用しない — principles/no-tags)
+// 仕様書 §9 判断結果の事後確認機能(R 主表示 + pips 補助、ラベル判定なし — principles/no-tags)
 export type StageEval = {
   bars: number                // 10 / 50 / 200
   max_up_pips: number
   max_down_pips: number
   max_abs_pips: number
+  max_up_r: number | null     // R 単位(r_unit_pips が null の場合 null)
+  max_down_r: number | null
+  max_abs_r: number | null
 }
 
 export type CandidateReview = {
@@ -102,6 +105,7 @@ export type CandidateReview = {
   memo: string | null
   skip_reason: string | null
   ref_price: number | null
+  r_unit_pips: number | null  // considered_styles 由来の代理 R 基準
   stages: StageEval[]
 }
 
@@ -110,9 +114,11 @@ export type SkipReview = {
   reason: string | null
   considered_styles: string[] | null
   ref_price: number | null
+  r_unit_pips: number | null
   stages: StageEval[]
 }
 
+// §9.5 エントリー結果の事後確認
 export type EntryReview = {
   symbol: string
   direction: string
@@ -121,9 +127,18 @@ export type EntryReview = {
   tp: number | null
   exit_price: number | null
   exit_reason: string | null
-  pips_pnl: number | null
+  pips_pnl: number | null        // 補助指標
   ref_price: number | null
+  r_unit_pips: number | null     // Trade.sl 由来の R 基準
   stages: StageEval[]
+  // §9.5: 保有期間の MFE/MAE、実損益 R、続き観察
+  mfe_r: number | null
+  mae_r: number | null
+  mfe_pips: number | null
+  mae_pips: number | null
+  r_pnl: number | null
+  continuation_bars: number
+  continuation_available: boolean
 }
 
 export type PostReviewResponse = {

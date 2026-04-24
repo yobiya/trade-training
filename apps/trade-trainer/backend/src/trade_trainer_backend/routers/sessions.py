@@ -28,7 +28,12 @@ from trade_trainer_backend.schemas.session import (
     UpdateCandidateRequest,
     UpdateNoteRequest,
 )
-from trade_trainer_backend.services.post_eval import evaluate_symbol
+from trade_trainer_backend.services.post_eval import (
+    evaluate_entry,
+    evaluate_symbol,
+    resolve_skip_r_unit_pips,
+    resolve_trade_r_unit_pips,
+)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -284,9 +289,17 @@ def list_sessions(
 
 @router.get("/{session_id}/post-review", response_model=PostReviewResponse)
 def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostReviewResponse:
-    """仕様書 §9.2 見送り事後検証 + §9.4 1 セッション単位の振り返り表示。
-    層 1 / 層 2 / エントリー済みトレードについて、presented_at 起点の
-    3 段階(10/50/200 本先)事後評価を on-demand で返す(§10 により DB 保存はしない)。"""
+    """仕様書 §9 判断結果の事後確認機能。
+
+    層 1 / 層 2 / エントリー済みトレードについて、presented_at 起点の 3 段階
+    (10/50/200 本先)事後評価 + エントリーの MFE/MAE/実損益 R を on-demand で返す
+    (principles/no-aggregation.md により DB 保存はしない)。
+
+    R 基準:
+    - エントリー: Trade.sl からの実 SL 幅
+    - 見送り(層 1 / 層 2): SessionFinalDecision.considered_styles の
+      TradingStyle.typical_sl_pips 中央値の平均(§9.3)
+    """
     s = db.get(TradeSession, session_id)
     if s is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -298,6 +311,13 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
     def to_stage_resp(stages: list) -> list[StageEvalResp]:
         return [StageEvalResp(**st.__dict__) for st in stages]
 
+    # 見送り時の R 基準(考慮スタイルから)は層 1 / 層 2 で共有する
+    fd = db.get(SessionFinalDecision, session_id)
+    skip_r_unit = resolve_skip_r_unit_pips(
+        fd.considered_styles if fd is not None else None,
+        db,
+    )
+
     # 層 1: 非選定候補
     candidate_reviews: list[CandidateReview] = []
     for c in db.scalars(
@@ -306,27 +326,26 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
             SessionCandidate.is_selected.is_(False),
         ).order_by(SessionCandidate.id)
     ).all():
-        rv = evaluate_symbol(c.symbol, ref_dt)
+        rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=skip_r_unit)
         candidate_reviews.append(CandidateReview(
             symbol=c.symbol,
             memo=c.memo,
             skip_reason=c.skip_reason,
             ref_price=rv.ref_price,
+            r_unit_pips=skip_r_unit,
             stages=to_stage_resp(rv.stages),
         ))
 
     # 統合フロー(§6.1): エントリー銘柄は Trade.symbol から取る。
-    # エントリー済み(Trade あり): entry_review を作る
-    # 見送り確定(Trade 無し + fd.has_entry=False + skip_reason): skip_review を作る
-    # 分析中(Trade 無し + fd 未作成 or has_entry 未設定): どちらも None
-    fd = db.get(SessionFinalDecision, session_id)
     skip_review: SkipReview | None = None
     entry_review: EntryReview | None = None
     trade = db.scalars(
         select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
     ).first()
     if trade is not None:
-        rv = evaluate_symbol(trade.symbol, ref_dt)
+        trade_r_unit = resolve_trade_r_unit_pips(trade)
+        rv = evaluate_symbol(trade.symbol, ref_dt, r_unit_pips=trade_r_unit)
+        obs = evaluate_entry(trade)
         entry_review = EntryReview(
             symbol=trade.symbol,
             direction=trade.direction,
@@ -337,7 +356,15 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
             exit_reason=trade.exit_reason,
             pips_pnl=trade.pips_pnl,
             ref_price=rv.ref_price,
+            r_unit_pips=trade_r_unit,
             stages=to_stage_resp(rv.stages),
+            mfe_r=obs.mfe_r,
+            mae_r=obs.mae_r,
+            mfe_pips=obs.mfe_pips,
+            mae_pips=obs.mae_pips,
+            r_pnl=obs.r_pnl,
+            continuation_bars=obs.continuation_bars,
+            continuation_available=obs.continuation_available,
         )
     elif fd is not None and not fd.has_entry and (fd.skip_reason or fd.considered_styles):
         # セッション全体を skip した記録(特定銘柄に紐付かない)
@@ -346,6 +373,7 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
             reason=fd.skip_reason,
             considered_styles=fd.considered_styles,
             ref_price=None,
+            r_unit_pips=skip_r_unit,
             stages=[],
         )
 

@@ -928,6 +928,7 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   text-align: center;
 }
 .stage-bars { color: var(--text-dim); font-size: 10px; }
+.stage-r,
 .stage-pips {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -936,8 +937,43 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   gap: 6px;
   margin-top: 2px;
 }
+.stage-r { font-weight: 600; }
+.stage-pips-aux {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.stage-pips-unit { color: var(--text-dim); font-size: 9px; }
 .stage-up { color: var(--profit); font-weight: 600; }
 .stage-down { color: var(--loss); font-weight: 600; }
+.entry-result {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+}
+.entry-result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.entry-result-row.aux { color: var(--text-dim); font-size: 10px; }
+.entry-result-label { color: var(--text-dim); }
+.entry-result-value { font-weight: 600; }
+.entry-result-value.profit { color: var(--profit); }
+.entry-result-value.loss { color: var(--loss); }
+.entry-result-value .aux { color: var(--text-dim); font-weight: 400; font-size: 10px; }
+.review-subheader {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+.review-meta.aux { color: var(--text-dim); font-size: 10px; }
 .post-review .hint { color: var(--text-dim); font-size: 11px; margin: 0; }
 .pnl.profit { color: var(--profit); font-weight: 600; }
 .pnl.loss { color: var(--loss); font-weight: 600; }
