@@ -678,6 +678,19 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--text-dim);
   flex-basis: 100%;
 }
+.wave-toolbar {
+  margin-top: 4px;
+}
+.wave-label-header {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 2px;
+}
+.wave-btn {
+  min-width: 28px;
+  font-weight: 600;
+  padding: 4px 6px;
+}
 .drawing-list {
   list-style: none;
   padding: 0;

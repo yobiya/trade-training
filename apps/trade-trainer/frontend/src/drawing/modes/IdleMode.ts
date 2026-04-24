@@ -5,6 +5,7 @@ import { MovingFibonacciHandleMode } from './MovingFibonacciHandleMode'
 import { MovingLineMode } from './MovingLineMode'
 import { MovingTrendlineBodyMode } from './MovingTrendlineBodyMode'
 import { MovingTrendlineHandleMode } from './MovingTrendlineHandleMode'
+import { MovingWaveLabelMode } from './MovingWaveLabelMode'
 
 /**
  * 何も進行していない待機状態。マウスホバーで描画にヒットしたらカーソルを変える、
@@ -57,6 +58,8 @@ function buildMovingMode(hit: HitResult, ctx: ModeContext, e: PointerPayload): D
       }
       if (e.point.time === null) return null
       return new MovingFibonacciBodyMode(drawing, { t: e.point.time, price: e.point.price })
+    case 'wave_label':
+      return new MovingWaveLabelMode(drawing)
     default: return null
   }
 }

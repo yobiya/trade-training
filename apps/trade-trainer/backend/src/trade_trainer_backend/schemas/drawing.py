@@ -2,7 +2,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-DrawingKind = Literal["line", "trendline", "fibonacci"]
+DrawingKind = Literal["line", "trendline", "fibonacci", "wave_label"]
 
 
 class CreateDrawingRequest(BaseModel):
@@ -12,6 +12,7 @@ class CreateDrawingRequest(BaseModel):
       - line(水平線):   { "price": float }
       - trendline:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
       - fibonacci:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
+      - wave_label:     { "t": int, "price": float, "wave": 1-5 }
 
     `symbol` は統合フロー(§6.1)対応: 銘柄別に描画を紐付け、銘柄切替時に該当銘柄のみ表示する。
     """

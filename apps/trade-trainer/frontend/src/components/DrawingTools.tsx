@@ -1,22 +1,26 @@
 import type { Drawing, DrawingKind } from '../api/client'
 import { TOOLS } from '../drawing/tools/registry'
 
+const WAVE_NUMBERS = [1, 2, 3, 4, 5] as const
+
 type Props = {
   activeTool: DrawingKind | null
-  onSelectTool: (tool: DrawingKind | null) => void
+  activeWave: 1 | 2 | 3 | 4 | 5 | null
+  onSelectTool: (tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => void
   drawings: Drawing[]
   onRemove: (id: number) => void
   digits: number
 }
 
-// 現状 UI で扱うツール(TOOLS に登録されているもののみ)
+// 通常描画ツールの順序(wave_label は波動セクションで別途表示)
 const TOOL_ORDER: DrawingKind[] = ['line', 'trendline', 'fibonacci']
 
-function hintFor(tool: DrawingKind): string {
+function hintFor(tool: DrawingKind, wave: 1 | 2 | 3 | 4 | 5 | null): string {
   switch (tool) {
     case 'line': return 'チャートをクリックで追加 / ESC で中止'
     case 'trendline': return '2 点をクリックで引く / ESC で中止'
     case 'fibonacci': return '2 点をクリックで引く / ESC で中止'
+    case 'wave_label': return `波動 ${wave} を配置 / ESC で中止`
     default: return ''
   }
 }
@@ -32,12 +36,13 @@ function describe(d: Drawing, digits: number): string {
       }
       return 'フィボ'
     }
+    case 'wave_label': return `波動 ${d.data.wave}`
     default: return String(d.kind)
   }
 }
 
 export function DrawingTools({
-  activeTool, onSelectTool, drawings, onRemove, digits,
+  activeTool, activeWave, onSelectTool, drawings, onRemove, digits,
 }: Props) {
   return (
     <div className="drawing-tools">
@@ -58,10 +63,29 @@ export function DrawingTools({
             </button>
           )
         })}
-        {activeTool && (
-          <span className="drawing-hint">{hintFor(activeTool)}</span>
-        )}
       </div>
+
+      <div className="drawing-toolbar wave-toolbar">
+        <span className="wave-label-header">波動</span>
+        {WAVE_NUMBERS.map(n => {
+          const active = activeTool === 'wave_label' && activeWave === n
+          return (
+            <button
+              key={n}
+              type="button"
+              className={`tool-btn wave-btn ${active ? 'active' : ''}`}
+              onClick={() => onSelectTool(active ? null : 'wave_label', n)}
+              title={`波動 ${n}`}
+            >
+              {n}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeTool && (
+        <span className="drawing-hint">{hintFor(activeTool, activeWave)}</span>
+      )}
 
       {drawings.length > 0 && (
         <ul className="drawing-list">

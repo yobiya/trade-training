@@ -362,6 +362,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
           <IndicatorPanel active={indicators} onChange={setIndicators} />
           <DrawingTools
             activeTool={interaction.activeTool}
+            activeWave={interaction.activeWave}
             onSelectTool={interaction.selectTool}
             drawings={drawings}
             onRemove={(id) => void removeDrawing(id)}

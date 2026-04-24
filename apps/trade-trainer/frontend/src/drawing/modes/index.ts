@@ -14,6 +14,8 @@ export { MovingTrendlineHandleMode } from './MovingTrendlineHandleMode'
 export { DrawingFibonacciMode } from './DrawingFibonacciMode'
 export { MovingFibonacciBodyMode } from './MovingFibonacciBodyMode'
 export { MovingFibonacciHandleMode } from './MovingFibonacciHandleMode'
+export { DrawingWaveLabelMode } from './DrawingWaveLabelMode'
+export { MovingWaveLabelMode } from './MovingWaveLabelMode'
 
 /**
  * ツール選択に対応する Drawing*Mode を生成する。未対応ツールは IdleMode のまま。

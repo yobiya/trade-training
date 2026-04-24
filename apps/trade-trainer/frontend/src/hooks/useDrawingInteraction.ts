@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Drawing, DrawingKind } from '../api/types'
-import { IdleMode, toolStartMode } from '../drawing/modes'
+import { DrawingWaveLabelMode, IdleMode, toolStartMode } from '../drawing/modes'
 import type {
   ChartApi,
   CreateDrawingBody,
@@ -26,8 +26,10 @@ export type DrawingInteraction = {
   hoveredId: number | null
   /** 現在アクティブな作成ツール(Drawing*Mode 中のみ非 null)。ボタンのハイライトに使う。 */
   activeTool: DrawingKind | null
-  /** ツールボタンから呼ぶ。null で Idle に戻る。 */
-  selectTool: (tool: DrawingKind | null) => void
+  /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。 */
+  activeWave: 1 | 2 | 3 | 4 | 5 | null
+  /** ツールボタンから呼ぶ。null で Idle に戻る。wave_label の場合は wave 番号必須。 */
+  selectTool: (tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => void
   /** Chart に繋ぐイベント中継 */
   handlers: {
     onChartClick: (price: number, time: number | null, px: PointPx) => void
@@ -80,8 +82,12 @@ export function useDrawingInteraction({
     return c
   }, [chartApiRef, onCreate, onUpdate, onDelete])
 
-  const selectTool = useCallback((tool: DrawingKind | null) => {
-    ctx.setMode(toolStartMode(tool))
+  const selectTool = useCallback((tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => {
+    if (tool === 'wave_label' && wave !== undefined) {
+      ctx.setMode(new DrawingWaveLabelMode(wave))
+    } else {
+      ctx.setMode(toolStartMode(tool))
+    }
   }, [ctx])
 
   // ESC でキャンセル(モードに委譲)
@@ -125,6 +131,7 @@ export function useDrawingInteraction({
     preview: mode.getPreview?.() ?? null,
     hoveredId: mode.getHoveredDrawingId?.() ?? null,
     activeTool: getActiveTool(mode),
+    activeWave: getActiveWave(mode),
     selectTool,
     handlers,
   }
@@ -135,8 +142,14 @@ function getActiveTool(mode: DrawingMode): DrawingKind | null {
     case 'drawing-line': return 'line'
     case 'drawing-trendline': return 'trendline'
     case 'drawing-fibonacci': return 'fibonacci'
+    case 'drawing-wave-label': return 'wave_label'
     default: return null
   }
+}
+
+function getActiveWave(mode: DrawingMode): 1 | 2 | 3 | 4 | 5 | null {
+  if (mode instanceof DrawingWaveLabelMode) return mode.wave
+  return null
 }
 
 const noopChartApi: ChartApi = {

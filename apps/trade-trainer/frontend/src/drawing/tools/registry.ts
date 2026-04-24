@@ -3,6 +3,7 @@ import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
 import { fibonacciTool } from './fibonacci'
 import { lineTool } from './line'
 import { trendlineTool } from './trendline'
+import { waveLabelTool } from './wave_label'
 
 /**
  * ツール横断情報のレジストリ(仕様書 §5.3)。
@@ -12,6 +13,7 @@ export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
   trendline: trendlineTool,
   fibonacci: fibonacciTool,
+  wave_label: waveLabelTool,
 }
 
 export function findHit(
