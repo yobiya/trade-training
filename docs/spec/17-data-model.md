@@ -34,12 +34,15 @@ Trade (エントリー時のみ)
 ├─ mode (training | real)
 ├─ エントリー日時, 方向, 価格, SL, TP
 ├─ 決済日時, 決済価格, 決済理由(TP/SL/裁量)
-├─ pips損益
+├─ pips損益 (補助指標、実損益 R は entry/exit/sl から動的算出 — §9.5)
 ├─ 金額損益 (realのみ)
 ├─ ロット (realのみ)
 ├─ MT5_order_id (realのみ)
-├─ style_id (選択したトレードスタイル)
-└─ 後悔指標データ(続き観察期間のOHLC)
+└─ style_id (選択したトレードスタイル)
+
+※ MFE / MAE / 続き観察 OHLC(§9.5)は DB に保存せず、
+  entry_time / exit_time を起点に `market-data` ヘルパーで都度算出する
+  (principles/no-aggregation.md の「蓄積しない」方針と整合)。
 
 ※ シナリオ・スタイル選定理由・エントリー根拠・決済所感・振り返りなどは、
   銘柄横断なら Session.note(横断メモ)、銘柄固有なら

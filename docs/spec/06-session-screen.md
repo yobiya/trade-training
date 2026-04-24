@@ -17,7 +17,7 @@
 |---|---|---|
 | 分析中 | アクティブ Trade なし、skip 未確定 | 銘柄リスト(★付) / IndicatorPanel / DrawingTools / TradePanel(entry 入力) / ▶足送り / 見送り / 閉じる |
 | 保有中 | アクティブ Trade あり | 保有中の情報 / IndicatorPanel / DrawingTools / TradePanel(exit 入力) / ▶足送り / 閉じる |
-| 振り返り | 決済済 Trade あり or skip 済 | Trade 結果 / PostReviewPanel / IndicatorPanel / DrawingTools / ▶続き観察 / 閉じる |
+| 振り返り | 決済済 Trade あり or skip 済 | Trade 結果(実損益 R / pips 補助) / PostReviewPanel(MFE・MAE・事後 R / [§9.5](./09-post-review.md#95-エントリー結果の事後確認)) / IndicatorPanel / DrawingTools / ▶続き観察 / 閉じる |
 
 **「銘柄選定」というステップを独立した状態として持たない**。ユーザーが分析しながら気になる銘柄を切り替え、条件が揃った時点でエントリーアクションを取ることで、そのセッションの対象銘柄が確定する。銘柄を先に決めて後から分析するのではなく、**分析の結果としてエントリー銘柄が決まる**(= 実トレード思考と一致)。
 

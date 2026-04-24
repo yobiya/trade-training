@@ -23,7 +23,7 @@
 | primary_timeframe | 主要時間軸 | M5, H1 |
 | expected_hold_time | 想定保有時間 | 10分〜1時間、数時間〜1日 |
 | expected_rr | 想定リスクリワード | 1:1.5, 1:2 |
-| typical_sl_pips | 典型的なSL幅 | 10〜20pips, 30〜50pips |
+| typical_sl_pips | 典型的なSL幅 | 10〜20pips, 30〜50pips(範囲指定可。見送り時の代理 R 基準にも使用 — [§9.3](./09-post-review.md#93-事後評価の表示方針)) |
 | description | 運用ルール・説明 | 自由記述 |
 | is_active | 有効/無効フラグ | true/false |
 

@@ -32,7 +32,7 @@
 12. 決済(自動 or 裁量)
 
 [Phase 4: 振り返り]
-13. 決済後の続き観察(追加 50 本、後悔指標)
+13. 決済後の続き観察(追加 N 本の OHLC チャート + MFE・MAE・実損益 R を R 単位で確認、[§9.5](./09-post-review.md#95-エントリー結果の事後確認))
 14. 見送り時は事後チャートと §9.3 自動判定指標を PostReviewPanel で確認
 15. 横断メモに振り返り追記(後日追記可、§7.7 / [principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
 16. 完了したら「セッションを閉じる」で DB から破棄([principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
