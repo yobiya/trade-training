@@ -89,13 +89,12 @@ export type EconomicEvent = {
   surprise: number | null
 }
 
-// 仕様書 §9.2 / §9.4 セッション単位の事後振り返り
+// 仕様書 §9.2 / §9.4 セッション単位の事後振り返り(ラベル判定は採用しない — principles/no-tags)
 export type StageEval = {
   bars: number                // 10 / 50 / 200
   max_up_pips: number
   max_down_pips: number
   max_abs_pips: number
-  label: 'opportunity_loss' | 'correct' | 'neutral'
 }
 
 export type CandidateReview = {

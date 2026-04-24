@@ -928,14 +928,16 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   text-align: center;
 }
 .stage-bars { color: var(--text-dim); font-size: 10px; }
-.stage-label { font-weight: 700; margin: 2px 0; }
-.stage-pips { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.stage-cell.stage-opportunity_loss { border-color: var(--loss); background: rgba(239, 83, 80, 0.12); }
-.stage-cell.stage-opportunity_loss .stage-label { color: var(--loss); }
-.stage-cell.stage-correct { border-color: var(--profit); background: rgba(38, 166, 154, 0.12); }
-.stage-cell.stage-correct .stage-label { color: var(--profit); }
-.stage-cell.stage-neutral { border-color: var(--border); }
-.stage-cell.stage-neutral .stage-label { color: var(--text-dim); }
+.stage-pips {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.stage-up { color: var(--profit); font-weight: 600; }
+.stage-down { color: var(--loss); font-weight: 600; }
 .post-review .hint { color: var(--text-dim); font-size: 11px; margin: 0; }
 .pnl.profit { color: var(--profit); font-weight: 600; }
 .pnl.loss { color: var(--loss); font-weight: 600; }

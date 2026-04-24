@@ -3,11 +3,11 @@ from pydantic import BaseModel
 
 
 class StageEvalResp(BaseModel):
+    """§9.3 事後 pips 表示(ラベル判定は採用しない — principles/no-tags)。"""
     bars: int                    # 10 / 50 / 200
     max_up_pips: float
     max_down_pips: float
     max_abs_pips: float
-    label: str                   # opportunity_loss / correct / neutral
 
 
 class CandidateReview(BaseModel):

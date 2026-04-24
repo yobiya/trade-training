@@ -1,10 +1,11 @@
 """仕様書 §9.2 / §9.3 セッション単位の事後評価(on-demand 計算)。
 
 方針:
-- §10 に従い DB には結果を保存しない。API 呼び出し時に都度 market-data から
-  事後 OHLC を取得して判定する
-- 3 段階(10/50/200 本先)で評価し、それぞれの最大上昇・下落・絶対変動 pips と
-  §9.3 ラベル(機会損失 / 正解 / どちらでも)を返す
+- principles/no-aggregation.md に従い DB には結果を保存しない。API 呼び出し時に
+  都度 market-data から事後 OHLC を取得して算出する
+- 3 段階(10/50/200 本先)で **最大上昇 pips / 最大下落 pips** を返すのみ
+- 「機会損失 / 正解 / どちらでも」等のラベル判定は採用しない(§9.3 / principles/no-tags)。
+  ラベルは結果バイアスを生み、§11.9 で AI に禁止したのと同じ理由でユーザーにも提示しない
 """
 from __future__ import annotations
 
@@ -15,17 +16,6 @@ from datetime import datetime, timedelta, timezone
 # §9.2 の 3 段階(M5 本数)
 LOOKAHEAD_STAGES: tuple[int, ...] = (10, 50, 200)
 
-# §9.3 デフォルト閾値(Setting 化せずコード内定数、値は銘柄系ごとに切替え)
-OPPORTUNITY_PIPS_JPY = 20.0
-OPPORTUNITY_PIPS_MAJOR = 20.0
-NOISE_PIPS_JPY = 10.0
-NOISE_PIPS_MAJOR = 10.0
-
-# §9.3 ラベル
-LABEL_OPPORTUNITY_LOSS = "opportunity_loss"
-LABEL_CORRECT = "correct"
-LABEL_NEUTRAL = "neutral"
-
 
 @dataclass
 class StageEval:
@@ -33,7 +23,6 @@ class StageEval:
     max_up_pips: float        # 起点価格からの最大上昇 pips
     max_down_pips: float      # 起点価格からの最大下落 pips
     max_abs_pips: float       # max(up, down)
-    label: str                # §9.3 ラベル
 
 
 @dataclass
@@ -45,21 +34,6 @@ class SymbolReview:
 
 def _pip_size(symbol: str) -> float:
     return 0.01 if symbol.upper().endswith("JPY") else 0.0001
-
-
-def _thresholds(symbol: str) -> tuple[float, float]:
-    if symbol.upper().endswith("JPY"):
-        return OPPORTUNITY_PIPS_JPY, NOISE_PIPS_JPY
-    return OPPORTUNITY_PIPS_MAJOR, NOISE_PIPS_MAJOR
-
-
-def _classify(max_abs_pips: float, symbol: str) -> str:
-    opp, noise = _thresholds(symbol)
-    if max_abs_pips >= opp:
-        return LABEL_OPPORTUNITY_LOSS
-    if max_abs_pips <= noise:
-        return LABEL_CORRECT
-    return LABEL_NEUTRAL
 
 
 def _get_reference_price(symbol: str, ref_dt: datetime) -> float | None:
@@ -75,7 +49,7 @@ def _get_reference_price(symbol: str, ref_dt: datetime) -> float | None:
 
 
 def evaluate_symbol(symbol: str, ref_dt: datetime) -> SymbolReview:
-    """指定銘柄について、ref_dt を起点とした 3 段階の事後評価を返す。
+    """指定銘柄について、ref_dt を起点とした 3 段階の事後 pips を返す。
 
     データが取れない場合は stages が空リスト / ref_price が None のレビューを返す
     (呼び出し側で「データなし」として扱える)。
@@ -115,6 +89,5 @@ def evaluate_symbol(symbol: str, ref_dt: datetime) -> SymbolReview:
             max_up_pips=round(max_up_pips, 1),
             max_down_pips=round(max_down_pips, 1),
             max_abs_pips=round(max_abs_pips, 1),
-            label=_classify(max_abs_pips, symbol),
         ))
     return SymbolReview(symbol=symbol, ref_price=ref_price, stages=stages)

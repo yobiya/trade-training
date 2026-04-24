@@ -6,19 +6,17 @@ type Props = {
   sessionId: string
 }
 
-const LABEL_JA: Record<StageEval['label'], string> = {
-  opportunity_loss: '機会損失',
-  correct: '正解',
-  neutral: 'どちらでも',
-}
-
+/**
+ * 仕様書 §9.3: 事後 pips 数値のみを表示する。
+ * 「機会損失/正解」等のラベル判定は結果バイアスを生むため採用しない(principles/no-tags)。
+ */
 function StageCell({ s }: { s: StageEval }) {
   return (
-    <div className={`stage-cell stage-${s.label}`}>
+    <div className="stage-cell">
       <div className="stage-bars">{s.bars}本後</div>
-      <div className="stage-label">{LABEL_JA[s.label]}</div>
       <div className="stage-pips">
-        ↑{s.max_up_pips} ↓{s.max_down_pips}
+        <span className="stage-up">↑{s.max_up_pips}</span>
+        <span className="stage-down">↓{s.max_down_pips}</span>
       </div>
     </div>
   )
