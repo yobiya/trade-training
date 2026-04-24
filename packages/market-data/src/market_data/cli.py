@@ -1,26 +1,54 @@
 """market-data CLI。Windows タスクスケジューラから呼ぶ日次バッチ等。
 
 使用例:
-    uv run market-data update-events
+    uv run market-data update-events --csv-path path/to/economic_calendar.csv
     uv run market-data check-connection
     uv run market-data verify-range USDJPY
 """
+import os
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 
 def _print_err(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
 
 
-def cmd_update_events(db_path: str = "trading.db") -> None:
-    """経済指標を MT5 から取得して DB に保存する(Phase 2c で本実装)。"""
+def _resolve_csv_path(cli_path: str | None) -> Path | None:
+    """CSV パスを決定する(引数 > 環境変数 > MT5 既定パス推測)。"""
+    if cli_path:
+        return Path(cli_path)
+    env = os.environ.get("ECONOMIC_CALENDAR_CSV")
+    if env:
+        return Path(env)
+    # MT5 既定パス(推測): %APPDATA%/MetaQuotes/Terminal/<instance-id>/MQL5/Files/economic_calendar.csv
+    # instance-id は動的なのでヒントのみ返す
+    return None
+
+
+def cmd_update_events(cli_path: str | None = None) -> None:
+    """CSV(MQL5 EconomicCalendarExport.mq5 の出力)を取り込んで economic_events に upsert する。"""
+    from market_data.events import update_events
+
+    csv_path = _resolve_csv_path(cli_path)
+    if csv_path is None:
+        _print_err(
+            "CSV パスが指定されていません。--csv-path で指定するか、"
+            "環境変数 ECONOMIC_CALENDAR_CSV を設定してください。"
+        )
+        _print_err(
+            "MT5 の書き出し先は通常 "
+            "%APPDATA%/MetaQuotes/Terminal/<instance-id>/MQL5/Files/economic_calendar.csv です。"
+        )
+        sys.exit(1)
+
     try:
-        from market_data.events import update_events
-        n = update_events()
-        print(f"OK: {n} 件を保存しました。")
-    except NotImplementedError:
-        print("SKIP: update-events は Phase 2c で実装予定です。")
+        n = update_events(csv_path)
+        print(f"OK: {n} 件を upsert しました({csv_path})。")
+    except FileNotFoundError as e:
+        _print_err(str(e))
+        sys.exit(1)
 
 
 def cmd_check_connection() -> None:
@@ -88,25 +116,43 @@ def cmd_verify_range(symbol: str, db_path: str = "trading.db") -> None:
         sys.exit(1)
 
 
+def _extract_flag(args: list[str], name: str) -> str | None:
+    """`--name value` または `--name=value` を args から抽出して消費する。"""
+    for i, a in enumerate(args):
+        if a == name:
+            if i + 1 < len(args):
+                value = args[i + 1]
+                del args[i:i + 2]
+                return value
+            return None
+        if a.startswith(f"{name}="):
+            value = a.split("=", 1)[1]
+            del args[i]
+            return value
+    return None
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print("使用方法: market-data <command> [args]")
-        print("  update-events           経済指標を更新する")
-        print("  check-connection        MT5 接続を確認する")
-        print("  verify-range <SYMBOL>   銘柄のデータ取得可能期間を確認する")
+        print("  update-events [--csv-path PATH]  経済指標を CSV から取り込む")
+        print("  check-connection                 MT5 接続を確認する")
+        print("  verify-range <SYMBOL>            銘柄のデータ取得可能期間を確認する")
         sys.exit(1)
 
     command = sys.argv[1]
+    rest = sys.argv[2:]
 
     if command == "update-events":
-        cmd_update_events()
+        csv_path = _extract_flag(rest, "--csv-path")
+        cmd_update_events(csv_path)
     elif command == "check-connection":
         cmd_check_connection()
     elif command == "verify-range":
-        if len(sys.argv) < 3:
+        if not rest:
             _print_err("verify-range には銘柄名が必要です。例: market-data verify-range USDJPY")
             sys.exit(1)
-        cmd_verify_range(sys.argv[2])
+        cmd_verify_range(rest[0])
     else:
         _print_err(f"不明なコマンド: {command}")
         sys.exit(1)

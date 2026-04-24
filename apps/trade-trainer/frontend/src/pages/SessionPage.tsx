@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { Drawing, TradeResponse, TradeSession } from '../api/client'
+import type { Drawing, EconomicEvent, SettingsResponse, TradeResponse, TradeSession } from '../api/client'
 import { Chart } from '../components/Chart'
 import type { PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
+import { EventOverlay } from '../components/EventOverlay'
 import { IndicatorPanel } from '../components/IndicatorPanel'
 import { MemoPanel } from '../components/MemoPanel'
 import { Modal } from '../components/Modal'
@@ -20,6 +21,7 @@ import { useChartRefCache } from '../hooks/useChartRefCache'
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
 import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
+import { useEconomicEvents } from '../hooks/useEconomicEvents'
 import { useTradingStyles } from '../hooks/useTradingStyles'
 import { formatJST } from '../utils/datetime'
 
@@ -99,10 +101,60 @@ export function SessionPage({ sessionId, onBack }: Props) {
   const { handles: chartHandles, setRef: setChartRef } = useChartRefCache()
   const chartApiRef = useRef<ChartApi | null>(null)
 
+  // §5.4 経済指標: 設定読み込み + 表示期間内のイベント取得
+  const [settings, setSettings] = useState<SettingsResponse | null>(null)
+  useEffect(() => {
+    api.settings.get().then(setSettings).catch(() => setSettings(null))
+  }, [])
+
+  // 表示中 bars の時間範囲(全 TF の最小〜最大)。未来の指標も見えるよう右端は current_position 付近まで。
+  const eventsRange = useMemo(() => {
+    let minT: number | null = null
+    let maxT: number | null = null
+    for (const tf of visibleTfs) {
+      const bars = barsByTf[tf]
+      if (!bars || bars.length === 0) continue
+      const first = bars[0].t
+      const last = bars[bars.length - 1].t
+      if (minT === null || first < minT) minT = first
+      if (maxT === null || last > maxT) maxT = last
+    }
+    return { from: minT, to: maxT }
+  }, [visibleTfs, barsByTf])
+
+  const { events } = useEconomicEvents({
+    sessionId,
+    symbol: currentSymbol,
+    fromUnix: eventsRange.from,
+    toUnix: eventsRange.to,
+    importanceMin: settings?.event_importance_threshold ?? 3,
+    enabled: settings !== null,
+  })
+
+  // ツールチップ対象の経済指標(アクティブチャート上のカーソル近接で決まる)
+  const [hoveredEvent, setHoveredEvent] = useState<EconomicEvent | null>(null)
+
   function handleChartMouseEnter(tf: string) {
     setActiveTf(tf)
     chartApiRef.current = chartHandles.get(tf)?.api ?? null
   }
+
+  /** px で 12 以内に最も近いイベントを返す。無ければ null。 */
+  const findNearestEvent = useCallback((pxX: number): EconomicEvent | null => {
+    if (events.length === 0) return null
+    const api = chartApiRef.current
+    if (!api) return null
+    let best: { ev: EconomicEvent; dx: number } | null = null
+    for (const ev of events) {
+      const t = Math.floor(new Date(ev.event_time).getTime() / 1000)
+      const x = api.timeToX(t)
+      if (x === null) continue
+      const dx = Math.abs(x - pxX)
+      if (dx > 12) continue
+      if (best === null || dx < best.dx) best = { ev, dx }
+    }
+    return best?.ev ?? null
+  }, [events])
 
   function toggleTfVisibility(tf: string) {
     setHiddenTfs(prev => {
@@ -314,11 +366,21 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 cursor={activeTf === tf ? interaction.cursor : undefined}
                 onNeedMoreHistory={(earliest) => loadMoreHistory(tf, earliest)}
                 onChartClick={activeTf === tf ? interaction.handlers.onChartClick : undefined}
-                onMouseMove={activeTf === tf ? interaction.handlers.onMouseMove : undefined}
+                onMouseMove={activeTf === tf ? (price, time, px) => {
+                  interaction.handlers.onMouseMove(price, time, px)
+                  setHoveredEvent(findNearestEvent(px.x))
+                } : undefined}
                 onMouseDown={activeTf === tf ? interaction.handlers.onMouseDown : undefined}
                 onMouseUp={activeTf === tf ? interaction.handlers.onMouseUp : undefined}
                 priceLines={priceLinesForTf(drawings, tf, interaction.preview)}
                 indicators={indicators}
+              />
+              <EventOverlay
+                chartHandle={chartHandles.get(tf) ?? null}
+                events={events}
+                shadingBeforeMin={settings?.event_shading_before_min ?? 5}
+                shadingAfterMin={settings?.event_shading_after_min ?? 30}
+                hoveredEvent={activeTf === tf ? hoveredEvent : null}
               />
               <DrawingOverlay
                 chartHandle={chartHandles.get(tf) ?? null}

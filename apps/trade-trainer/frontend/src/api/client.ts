@@ -3,6 +3,7 @@ import type {
   ChartResponse,
   CreateDrawingRequest,
   Drawing,
+  EconomicEvent,
   PostReviewResponse,
   SessionCandidate,
   SessionFilter,
@@ -149,6 +150,25 @@ export const api = {
       }),
     delete: (id: string) =>
       request<void>(`/trading-styles/${id}`, { method: 'DELETE' }),
+  },
+
+  events: {
+    list: (sessionId: string, fromUnix: number, toUnix: number, options?: {
+      currencies?: string[]
+      importanceMin?: number
+    }) => {
+      const params = new URLSearchParams({
+        from: new Date(fromUnix * 1000).toISOString(),
+        to: new Date(toUnix * 1000).toISOString(),
+      })
+      if (options?.currencies && options.currencies.length > 0) {
+        params.set('currencies', options.currencies.join(','))
+      }
+      if (options?.importanceMin !== undefined) {
+        params.set('importance_min', String(options.importanceMin))
+      }
+      return request<EconomicEvent[]>(`/sessions/${sessionId}/events?${params.toString()}`)
+    },
   },
 
   drawings: {

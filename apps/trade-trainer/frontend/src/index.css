@@ -691,6 +691,52 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   font-weight: 600;
   padding: 4px 6px;
 }
+.event-tooltip {
+  background: rgba(13, 17, 23, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  min-width: 180px;
+  max-width: 260px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+}
+.event-tooltip-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.event-tooltip-stars {
+  font-size: 10px;
+}
+.event-tooltip-name {
+  font-weight: 600;
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+.event-tooltip-time {
+  color: var(--text-dim);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.event-tooltip-values {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: monospace;
+}
+.event-tooltip-values td {
+  padding: 1px 0;
+}
+.event-tooltip-values td:first-child {
+  color: var(--text-dim);
+  width: 60px;
+}
+.event-tooltip-values td:last-child {
+  text-align: right;
+}
 .drawing-list {
   list-style: none;
   padding: 0;

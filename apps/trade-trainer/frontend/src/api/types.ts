@@ -65,11 +65,28 @@ export type TradeResponse = {
   style_id: string | null
 }
 
-// 仕様書 §7.2.3 メモテンプレート等の設定
+// 仕様書 §7.2.3 メモテンプレート / §5.4 経済指標表示の設定
 export type SettingsResponse = {
   candidate_memo_template: string | null
   session_note_template: string | null
   memo_template_enabled: boolean
+  event_importance_threshold: number
+  event_currencies: string[] | null
+  event_shading_before_min: number
+  event_shading_after_min: number
+}
+
+// 仕様書 §5.4 経済指標
+export type EconomicEvent = {
+  id: number
+  event_time: string       // ISO 8601 UTC
+  currency: string
+  name: string
+  importance: number       // 1-3
+  actual: number | null
+  forecast: number | null
+  previous: number | null
+  surprise: number | null
 }
 
 // 仕様書 §9.2 / §9.4 セッション単位の事後振り返り
