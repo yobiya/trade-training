@@ -14,10 +14,13 @@ type Props = {
   chartHandles?: Map<string, ChartHandle | null> | null
 }
 
+type ComparePair = { left: string | null; right: string | null }
+
 /**
  * §11 AI 分析パネル(MVP)。
  * - 履歴一覧から過去レポートを開く
  * - 「実行」で API 呼び出し(キャッシュヒットすれば既存を返す)
+ * - 「比較」モードで履歴から 2 エントリを左右枠に割り当てて並列表示(§11.4)
  * - レポートはプレーンテキストの Markdown を等幅表示で出す(リッチレンダリングは後続)
  */
 export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
@@ -29,6 +32,12 @@ export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastRunCached, setLastRunCached] = useState<boolean | null>(null)
+
+  // §11.4 差分比較
+  const [compareMode, setCompareMode] = useState(false)
+  const [comparePair, setComparePair] = useState<ComparePair>({ left: null, right: null })
+  const [reportLeft, setReportLeft] = useState<string>('')
+  const [reportRight, setReportRight] = useState<string>('')
 
   const loadHistory = useCallback(async () => {
     setLoading(true)
@@ -62,6 +71,56 @@ export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
     }
   }
 
+  /**
+   * 比較モード時: 行クリックで「左→右→未割当」のサイクルでアサインする。
+   * 既に左/右に同 id があれば外す。
+   */
+  async function assignToCompare(entryId: string) {
+    let next: ComparePair
+    if (comparePair.left === entryId) {
+      next = { left: null, right: comparePair.right }
+    } else if (comparePair.right === entryId) {
+      next = { left: comparePair.left, right: null }
+    } else if (comparePair.left === null) {
+      next = { left: entryId, right: comparePair.right }
+    } else if (comparePair.right === null) {
+      next = { left: comparePair.left, right: entryId }
+    } else {
+      // 両方埋まっている → 右をシフトして新エントリを右に
+      next = { left: comparePair.right, right: entryId }
+    }
+    setComparePair(next)
+
+    try {
+      const [leftMd, rightMd] = await Promise.all([
+        next.left ? api.ai.report(sessionId, next.left) : Promise.resolve(''),
+        next.right ? api.ai.report(sessionId, next.right) : Promise.resolve(''),
+      ])
+      setReportLeft(leftMd)
+      setReportRight(rightMd)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'レポート取得に失敗しました')
+    }
+  }
+
+  function toggleCompareMode() {
+    if (compareMode) {
+      // 比較モード終了 → クリア
+      setCompareMode(false)
+      setComparePair({ left: null, right: null })
+      setReportLeft('')
+      setReportRight('')
+    } else {
+      setCompareMode(true)
+    }
+  }
+
+  function compareLabel(entryId: string): string | null {
+    if (comparePair.left === entryId) return 'L'
+    if (comparePair.right === entryId) return 'R'
+    return null
+  }
+
   function collectImages(): { timeframe: string; data_url: string }[] {
     if (!chartHandles) return []
     const images: { timeframe: string; data_url: string }[] = []
@@ -92,6 +151,11 @@ export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
     }
   }
 
+  function entryMeta(id: string | null): AIHistoryEntry | null {
+    if (id === null) return null
+    return history.find(h => h.id === id) ?? null
+  }
+
   return (
     <div className="ai-panel">
       <button className="ai-toggle" type="button" onClick={() => setOpen(v => !v)}>
@@ -103,14 +167,28 @@ export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
             <button
               type="button"
               className="ai-run-btn"
-              disabled={running}
+              disabled={running || compareMode}
               onClick={() => void handleRun()}
             >
               {running ? '実行中...' : '実行'}
             </button>
-            {lastRunCached !== null && (
+            <button
+              type="button"
+              className={`ai-compare-btn ${compareMode ? 'active' : ''}`}
+              onClick={toggleCompareMode}
+              disabled={history.length < 2}
+              title={history.length < 2 ? '履歴が 2 件以上で利用可能' : '比較モード切替'}
+            >
+              {compareMode ? '比較を終了' : '比較'}
+            </button>
+            {lastRunCached !== null && !compareMode && (
               <span className="ai-cache-hint">
                 {lastRunCached ? '(同一 payload のキャッシュを表示)' : '(新規実行で保存しました)'}
+              </span>
+            )}
+            {compareMode && (
+              <span className="ai-cache-hint">
+                履歴をクリックして L / R に割当(L: {comparePair.left ? '済' : '未'} / R: {comparePair.right ? '済' : '未'})
               </span>
             )}
           </div>
@@ -121,19 +199,27 @@ export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
             <div className="ai-history">
               <div className="ai-history-label">履歴</div>
               <ul>
-                {history.map(h => (
-                  <li
-                    key={h.id}
-                    className={h.id === activeEntryId ? 'active' : ''}
-                    onClick={() => void selectEntry(h.id)}
-                  >
-                    <span className="ai-history-time">{new Date(h.created_at).toLocaleString('ja-JP')}</span>
-                    <span className="ai-history-model">{h.model}</span>
-                    {h.input_tokens != null && (
-                      <span className="ai-history-tokens">{h.input_tokens}/{h.output_tokens}t</span>
-                    )}
-                  </li>
-                ))}
+                {history.map(h => {
+                  const isActive = !compareMode && h.id === activeEntryId
+                  const cmpLabel = compareMode ? compareLabel(h.id) : null
+                  return (
+                    <li
+                      key={h.id}
+                      className={`${isActive ? 'active' : ''} ${cmpLabel ? `compare-${cmpLabel.toLowerCase()}` : ''}`}
+                      onClick={() => {
+                        if (compareMode) void assignToCompare(h.id)
+                        else void selectEntry(h.id)
+                      }}
+                    >
+                      {cmpLabel && <span className="ai-history-cmp">{cmpLabel}</span>}
+                      <span className="ai-history-time">{new Date(h.created_at).toLocaleString('ja-JP')}</span>
+                      <span className="ai-history-model">{h.model}</span>
+                      {h.input_tokens != null && (
+                        <span className="ai-history-tokens">{h.input_tokens}/{h.output_tokens}t</span>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}
@@ -143,7 +229,31 @@ export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
             {!loading && history.length === 0 && (
               <p className="hint">まだ AI 分析を実行していません。「実行」を押してください。</p>
             )}
-            {report && <pre className="ai-report-body">{report}</pre>}
+            {!compareMode && report && <pre className="ai-report-body">{report}</pre>}
+            {compareMode && (
+              <div className="ai-compare-grid">
+                <div className="ai-compare-col">
+                  <div className="ai-compare-head">
+                    L: {entryMeta(comparePair.left)
+                      ? new Date(entryMeta(comparePair.left)!.created_at).toLocaleString('ja-JP')
+                      : '未割当'}
+                  </div>
+                  {reportLeft
+                    ? <pre className="ai-report-body">{reportLeft}</pre>
+                    : <p className="hint">履歴をクリックして左に割当</p>}
+                </div>
+                <div className="ai-compare-col">
+                  <div className="ai-compare-head">
+                    R: {entryMeta(comparePair.right)
+                      ? new Date(entryMeta(comparePair.right)!.created_at).toLocaleString('ja-JP')
+                      : '未割当'}
+                  </div>
+                  {reportRight
+                    ? <pre className="ai-report-body">{reportRight}</pre>
+                    : <p className="hint">履歴をクリックして右に割当</p>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

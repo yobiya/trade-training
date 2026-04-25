@@ -867,7 +867,52 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   cursor: pointer;
 }
 .ai-run-btn:disabled { opacity: 0.5; cursor: wait; }
+.ai-compare-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ai-compare-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ai-compare-btn.active {
+  background: var(--accent);
+  color: #0d1117;
+  border-color: var(--accent);
+  font-weight: 600;
+}
 .ai-cache-hint { color: var(--text-dim); font-size: 11px; }
+.ai-history li.compare-l { background: rgba(88, 166, 255, 0.18); }
+.ai-history li.compare-r { background: rgba(126, 231, 135, 0.18); }
+.ai-history-cmp {
+  display: inline-block;
+  width: 18px;
+  text-align: center;
+  font-weight: 700;
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--accent);
+}
+.ai-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ai-compare-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-compare-head {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--bg3);
+}
 .ai-error {
   color: var(--loss);
   font-size: 11px;
