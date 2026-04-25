@@ -1,21 +1,21 @@
 """AI 分析エンドポイント(仕様書 §11)。
 
 提供:
-- GET  /sessions/{id}/ai-analysis/preview  送信前 payload プレビュー(§11.6)
 - POST /sessions/{id}/ai-analysis/run      実 API 呼び出し or モック実行
 - GET  /sessions/{id}/ai-analysis/history  履歴一覧(index.json)
 - GET  /sessions/{id}/ai-analysis/report/{entry_id}  レポート Markdown 取得
-"""
-from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+ver 1.49: 送信前プレビュー / 個別要素の除外チェック機能は撤去
+([§11.6](docs/spec/11-ai-analysis.md))。メモには AI に送ってよい内容のみが書かれている前提で、
+非公開情報を扱う場合は AI 分析自体を使わない運用で対応する。
+"""
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from trade_trainer_backend.config import Settings, get_settings
 from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.ai_analysis import (
-    AIAnalysisPayload,
     AIHistoryEntry,
     AIRunRequest,
     AIRunResponse,
@@ -24,22 +24,6 @@ from trade_trainer_backend.services import ai_client, ai_storage
 from trade_trainer_backend.services.ai_input_builder import build_ai_analysis_input
 
 router = APIRouter(tags=["ai-analysis"])
-
-
-@router.get(
-    "/sessions/{session_id}/ai-analysis/preview",
-    response_model=AIAnalysisPayload,
-)
-def get_ai_analysis_preview(
-    session_id: str,
-    mode: Annotated[
-        Literal["decision", "review"] | None,
-        Query(description="analysis_mode を明示指定(未指定なら Trade 状態から自動判定)"),
-    ] = None,
-    db: Session = Depends(get_db),
-) -> AIAnalysisPayload:
-    """§11.6 送信前プレビュー。Claude API には呼び出さない。"""
-    return build_ai_analysis_input(session_id, db, analysis_mode=mode)
 
 
 @router.post(

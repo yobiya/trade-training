@@ -151,11 +151,9 @@ export const api = {
   },
 
   ai: {
-    // §11 AI 分析。preview は GET、run は POST(API キー未設定なら mock 応答)
-    preview: (sessionId: string, mode?: 'decision' | 'review') => {
-      const q = mode ? `?mode=${mode}` : ''
-      return request<unknown>(`/sessions/${sessionId}/ai-analysis/preview${q}`)
-    },
+    // §11 AI 分析(ver 1.49: 送信前プレビュー機能は撤去。
+    // メモには AI に送ってよい内容のみが書かれている前提で、実行ボタンで直接 run。
+    // 非公開情報を扱う場合は AI 分析自体を使わない運用で対応)
     run: (
       sessionId: string,
       mode?: 'decision' | 'review',
