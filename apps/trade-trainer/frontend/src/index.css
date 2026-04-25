@@ -168,6 +168,18 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .session-pnl-r.loss { color: var(--loss); }
 .session-pnl-r.aux { color: var(--text-dim); font-weight: 400; }
 .session-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg3); }
+.status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg3);
+  color: var(--text-dim);
+}
+.status-badge.settled {
+  background: rgba(38, 166, 154, 0.18);
+  color: var(--profit);
+  border: 1px solid var(--profit);
+}
 .empty { text-align: center; color: var(--text-dim); padding: 32px; }
 
 /* Time filter */
@@ -815,18 +827,6 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--text-dim);
   margin-top: 4px;
 }
-.close-session-btn {
-  margin-top: 10px;
-  padding: 8px;
-  background: var(--loss);
-  color: #fff;
-  border: none;
-  border-radius: 3px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.close-session-btn:hover { opacity: 0.9; }
-
 /* §7.3 メモパネル */
 .memo-open-btn {
   padding: 6px 12px;

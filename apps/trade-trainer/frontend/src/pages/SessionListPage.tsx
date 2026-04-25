@@ -140,6 +140,9 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
                 ? '—'
                 : `${s.r_pnl > 0 ? '+' : ''}${s.r_pnl.toFixed(2)}R`}
             </span>
+            <span className={`status-badge ${s.is_settled ? 'settled' : ''}`}>
+              {s.is_settled ? '決着済み' : '進行中'}
+            </span>
           </div>
         ))}
       </div>

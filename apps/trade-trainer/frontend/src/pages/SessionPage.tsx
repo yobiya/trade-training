@@ -274,7 +274,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     const s = await api.sessions.get(sessionId)
     setSession(s)
     setSkipping(false)
-    notify('見送り確定 — 振り返りが終わったら「セッションを閉じる」')
+    notify('見送り確定 — 振り返りメモを書くと決着済みに自動遷移します')
   }
 
   async function handleSkipAllConfirm() {
@@ -283,14 +283,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     setSession(s)
     setConfirmSkipAll(false)
     setSkipAllReasonDraft('')
-    notify('全候補を見送り — 振り返りが終わったら「セッションを閉じる」')
-  }
-
-  async function handleCloseSession() {
-    const ok = window.confirm('このセッションを閉じて破棄します。振り返りメモ・AI 分析結果・描画も削除されます。よろしいですか?')
-    if (!ok) return
-    await api.sessions.close(sessionId)
-    onBack()
+    notify('全候補を見送り — 振り返りメモを書くと決着済みに自動遷移します')
   }
 
   async function toggleCandidate() {
@@ -351,6 +344,11 @@ export function SessionPage({ sessionId, onBack }: Props) {
           <span className="phase-badge">
             {phase === 'analyzing' ? '分析中' : phase === 'holding' ? '保有中' : '振り返り'}
           </span>
+          {session?.is_settled && (
+            <span className="status-badge settled" title="振り返りメモが書かれて決着済み(§4.2.1)">
+              決着済み
+            </span>
+          )}
           <span className="position">{formatJST(session?.current_position, '')}</span>
         </div>
         <TimeframeSelector
@@ -479,13 +477,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 )}
               </>
             )}
-            <button
-              onClick={() => void handleCloseSession()}
-              className="close-session-btn"
-              title="振り返りが終わったらこのボタンでセッションを破棄します(§10.3)"
-            >
-              セッションを閉じる
-            </button>
           </div>
         </div>
       </div>
