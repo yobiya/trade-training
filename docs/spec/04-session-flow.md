@@ -33,9 +33,9 @@
 
 [Phase 4: 振り返り]
 13. 決済後の続き観察(追加 N 本の OHLC チャート + MFE・MAE・実損益 R を R 単位で確認、[§9.5](./09-post-review.md#95-エントリー結果の事後確認))
-14. 見送り時は事後チャートと §9.3 自動判定指標を PostReviewPanel で確認
-15. 横断メモに振り返り追記(後日追記可、§7.7 / [principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
-16. 完了したら「セッションを閉じる」で DB から破棄([principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
+14. 見送り時は事後チャートと [§9.3](./09-post-review.md#93-事後評価の表示方針) の最大上昇 R / 最大下落 R(pips 補助)を PostReviewPanel で確認(機械判定ラベルは採用しない)
+15. 横断メモに振り返り追記。決済済み or 見送り確定後の最初の note 更新で **決着済みに自動遷移**([§4.2.2](#422-決着遷移条件))。後日追記も可([principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
+16. セッションは決着済みのまま `data/sessions/{dir}/` に永続化される。削除は OS / Dropbox 上のディレクトリ操作で行う([§13](./13-data-storage.md))
 ```
 
 ## 4.2 セッション管理
