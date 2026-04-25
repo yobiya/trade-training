@@ -312,6 +312,27 @@ export function SessionPage({ sessionId, onBack }: Props) {
     <div className="training-page session-page">
       <header className="training-header">
         <button onClick={onBack} className="back-btn">← 一覧</button>
+        <input
+          className="session-name-input"
+          type="text"
+          placeholder="セッション名(任意)"
+          defaultValue={session?.name ?? ''}
+          maxLength={100}
+          onBlur={async (e) => {
+            const v = e.currentTarget.value
+            if ((session?.name ?? '') === v) return
+            try {
+              const s = await api.sessions.updateName(sessionId, v || null)
+              setSession(s)
+            } catch {
+              // 失敗時は元の値に戻す(controlled でないので明示リセット)
+              e.currentTarget.value = session?.name ?? ''
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
+          }}
+        />
         <div className="session-info">
           {phase === 'analyzing' ? (
             <select

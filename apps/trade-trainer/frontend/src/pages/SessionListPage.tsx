@@ -129,10 +129,15 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
             className="session-item"
             onClick={() => handleOpenSession(s)}
           >
+            <span className={`session-name ${s.name ? '' : 'session-name-empty'}`}>
+              {s.name || '(未命名)'}
+            </span>
             <span className="session-symbol">{s.symbol || '分析中'}</span>
             <span className="session-date">{formatJST(s.presented_at)}</span>
-            <span className="session-status">
-              {s.symbol ? '進行中' : '分析中'}
+            <span className={`session-pnl-r ${s.r_pnl == null ? 'aux' : (s.r_pnl >= 0 ? 'profit' : 'loss')}`}>
+              {s.r_pnl == null
+                ? '—'
+                : `${s.r_pnl > 0 ? '+' : ''}${s.r_pnl.toFixed(2)}R`}
             </span>
           </div>
         ))}

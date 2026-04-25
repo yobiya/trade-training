@@ -52,6 +52,7 @@ class SessionResponse(BaseModel):
     is_suspended: bool
     has_active_trade: bool
     digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
+    name: str | None = None  # §6.1 任意のセッション名(手法識別用、いつでも編集可)
     note: str | None = None  # §7.2.2 横断メモ
     candidates: list[CandidateResponse] = []  # §6.3 ウォッチリスト
 
@@ -63,6 +64,11 @@ class UpdateNoteRequest(BaseModel):
     note: str | None = None
 
 
+class UpdateSessionNameRequest(BaseModel):
+    """§6.1 セッション名の更新リクエスト。空文字は null として保存。"""
+    name: str | None = None
+
+
 class SessionListItem(BaseModel):
     id: str
     symbol: str
@@ -70,5 +76,8 @@ class SessionListItem(BaseModel):
     presented_at: datetime
     mode: str
     is_suspended: bool
+    name: str | None = None              # §6.1 セッション名(任意)
+    r_pnl: float | None = None           # §9.5 実損益 R(決済済みのみ、§17 で動的算出)
+    pips_pnl: float | None = None        # 補助指標、§17 Trade.pips_pnl
 
     model_config = {"from_attributes": True}

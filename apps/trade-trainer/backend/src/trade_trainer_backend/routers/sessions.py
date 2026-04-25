@@ -27,6 +27,7 @@ from trade_trainer_backend.schemas.session import (
     SkipSessionRequest,
     UpdateCandidateRequest,
     UpdateNoteRequest,
+    UpdateSessionNameRequest,
 )
 from trade_trainer_backend.services.post_eval import (
     evaluate_entry,
@@ -76,6 +77,7 @@ def _build_response(s: TradeSession, db: Session) -> SessionResponse:
         is_suspended=s.is_suspended,
         has_active_trade=active_trade is not None,
         digits=digits,
+        name=s.name,
         note=s.note,
         candidates=[CandidateResponse.model_validate(c) for c in candidates],
     )
@@ -268,12 +270,17 @@ def list_sessions(
         .offset(offset)
     ).all()
 
+    from trade_trainer_backend.services.post_eval import quick_r_pnl
+
     result = []
     for s in sessions:
         # 統合フロー(§6.1): 一覧表示用 symbol は Trade.symbol から取る
         trade = db.scalars(
             select(Trade).where(Trade.session_id == s.id).order_by(Trade.entry_time.desc())
         ).first()
+        # §9.5 実損益 R(決済済みのみ)。OHLC アクセスを伴わない quick 版で軽量に算出。
+        r_pnl = quick_r_pnl(trade) if trade is not None else None
+        pips_pnl = trade.pips_pnl if trade is not None else None
         result.append(
             SessionListItem(
                 id=s.id,
@@ -282,6 +289,9 @@ def list_sessions(
                 presented_at=s.presented_at,
                 mode=s.mode,
                 is_suspended=s.is_suspended,
+                name=s.name,
+                r_pnl=r_pnl,
+                pips_pnl=pips_pnl,
             )
         )
     return result
@@ -395,6 +405,22 @@ def update_note(
     if s is None:
         raise HTTPException(status_code=404, detail="Session not found")
     s.note = body.note
+    db.commit()
+    return _build_response(s, db)
+
+
+@router.patch("/{session_id}/name", response_model=SessionResponse)
+def update_name(
+    session_id: str,
+    body: UpdateSessionNameRequest,
+    db: Session = Depends(get_db),
+) -> SessionResponse:
+    """§6.1 セッション名の更新。空文字は null として保存(クリア相当)。"""
+    s = db.get(TradeSession, session_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    name = (body.name or "").strip()
+    s.name = name if name else None
     db.commit()
     return _build_response(s, db)
 

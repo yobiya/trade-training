@@ -86,6 +86,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ note }),
       }),
+    updateName: (id: string, name: string | null) =>
+      request<TradeSession>(`/sessions/${id}/name`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
   },
 
   chart: {

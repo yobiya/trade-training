@@ -10,6 +10,9 @@ export type SessionListItem = {
   presented_at: string
   mode: string
   is_suspended: boolean
+  name: string | null         // §6.1 任意のセッション名
+  r_pnl: number | null        // §9.5 実損益 R(決済済みのみ)
+  pips_pnl: number | null     // 補助
 }
 
 export type SessionCandidate = {
@@ -30,6 +33,7 @@ export type TradeSession = {
   is_suspended: boolean
   has_active_trade: boolean
   digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
+  name: string | null  // §6.1 任意のセッション名
   note: string | null  // §7.2.2 横断メモ
   candidates: SessionCandidate[]
 }

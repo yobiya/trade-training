@@ -116,6 +116,24 @@ def resolve_trade_r_unit_pips(trade: Trade) -> float | None:
     return abs(float(trade.entry_price) - float(trade.sl)) / psize
 
 
+def quick_r_pnl(trade: Trade) -> float | None:
+    """OHLC を使わず entry/sl/exit/direction だけで実損益 R を算出する軽量版(一覧表示用)。
+
+    決済済み + SL 設定済みのみ算出。それ以外は None。
+    `evaluate_entry()` が市場データアクセスを伴うのに対し、こちらは代数計算のみ。
+    """
+    if trade.exit_price is None or trade.sl is None:
+        return None
+    psize = _pip_size(trade.symbol)
+    r_unit = abs(float(trade.entry_price) - float(trade.sl)) / psize
+    if r_unit <= 0:
+        return None
+    diff_pips = (float(trade.exit_price) - float(trade.entry_price)) / psize
+    if trade.direction == "sell":
+        diff_pips = -diff_pips
+    return round(diff_pips / r_unit, 2)
+
+
 def _to_r(pips: float | None, r_unit: float | None) -> float | None:
     if pips is None or r_unit is None or r_unit <= 0:
         return None

@@ -37,6 +37,7 @@ class TradeSession(Base):
     mode: Mapped[str] = mapped_column(String(10))  # "training" | "real"
     time_filter: Mapped[Any] = mapped_column(JSON, nullable=True)  # {sessions, days, date_range}
     is_suspended: Mapped[bool] = mapped_column(Boolean, default=False)
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # 任意のセッション名(手法識別用、§6.1。いつでも編集可)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)  # §7.2.2 横断メモ(相場観・比較・シナリオ・振り返りなど)
 
     candidates: Mapped[list["SessionCandidate"]] = relationship(
