@@ -2,7 +2,7 @@
 name: スイング
 primary_timeframe: H4
 expected_hold_time: 数日
-expected_rr: 1:3
+expected_rr: "1:3"
 typical_sl_pips: 50〜100
 is_active: true
 ---

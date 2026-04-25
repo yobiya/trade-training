@@ -33,6 +33,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from trade_trainer_backend.services.memo_templates import load_memo_templates
     load_memo_templates()
 
+    # §8 トレードスタイル(Markdown ファイル)を起動時にロード
+    from trade_trainer_backend.services.trading_style_store import load_trading_styles
+    load_trading_styles()
+
     from market_data.accessor import configure
     provider = None
     if settings.use_mt5:

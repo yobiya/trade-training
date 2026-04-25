@@ -13,10 +13,17 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session as OrmSession
+from typing import Any
 
-from shared_schema.models.trading import Trade, TradingStyle
+from trade_trainer_backend.services.trading_style_store import (
+    TradingStyle, get_style, list_styles,
+)
+
+# Trade はファイル管理(ver 1.45)の dataclass を渡される想定。
+# 関数内では .symbol / .entry_price / .sl / .exit_price / .exit_time /
+# .direction / .entry_time のフィールドアクセスのみを使うため
+# 構造的型(duck-typed)として扱う。型注釈は Any。
+Trade = Any  # type: ignore[misc]
 
 
 # §9.2 見送り事後評価の 3 段階(M5 本数)
@@ -87,22 +94,22 @@ def parse_typical_sl_pips(s: str | None) -> float | None:
 
 def resolve_skip_r_unit_pips(
     considered_styles: list[str] | None,
-    db: OrmSession,
 ) -> float | None:
-    """§9.3 見送り時の代理 R 基準(pips)を算出する。
+    """§9.3 見送り時の代理 R 基準(pips)を算出する(ver 1.45 でファイル参照化)。
 
     `considered_styles` で選択された各スタイルの `typical_sl_pips` 中央値の平均。
     スタイル未選択・解釈不能なら None(呼び出し側で R 計算なしとして扱う)。
     """
     if not considered_styles:
         return None
-    styles = db.scalars(
-        select(TradingStyle).where(TradingStyle.id.in_(considered_styles))
-    ).all()
-    medians = [
-        m for m in (parse_typical_sl_pips(s.typical_sl_pips) for s in styles)
-        if m is not None
-    ]
+    medians: list[float] = []
+    for sid in considered_styles:
+        s = get_style(sid)
+        if s is None:
+            continue
+        m = parse_typical_sl_pips(s.typical_sl_pips)
+        if m is not None:
+            medians.append(m)
     if not medians:
         return None
     return sum(medians) / len(medians)

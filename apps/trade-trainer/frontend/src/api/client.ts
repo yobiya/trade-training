@@ -141,20 +141,10 @@ export const api = {
   },
 
   tradingStyles: {
+    // ver 1.45: ファイル管理に移行(data/trading-styles/{id}.md)。
+    // 編集はテキストエディタ + git で行うため、create / update / delete API は提供しない。
     list: (includeInactive = false) =>
       request<TradingStyle[]>(`/trading-styles${includeInactive ? '?include_inactive=true' : ''}`),
-    create: (body: Omit<TradingStyle, 'is_active'>) =>
-      request<TradingStyle>('/trading-styles', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-    update: (id: string, patch: Partial<Omit<TradingStyle, 'id'>>) =>
-      request<TradingStyle>(`/trading-styles/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patch),
-      }),
-    delete: (id: string) =>
-      request<void>(`/trading-styles/${id}`, { method: 'DELETE' }),
   },
 
   events: {
