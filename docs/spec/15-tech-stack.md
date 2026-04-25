@@ -150,9 +150,16 @@ npm run dev --workspace=apps/trade-trainer/frontend
 - MT5が落ちた場合の自動復旧(タスクスケジューラによる監視)
 - 定期的な接続状態チェック
 
-**バックアップ**
-- SQLite DBファイルを定期的に手元PCへダウンロード
-- VPSスナップショット機能(XServer VPSで提供あり)を活用
+**バックアップ・同期(ver 1.45)**
+
+| 対象 | 同期(Dropbox 等) | バックアップ |
+|---|---|---|
+| `data/sessions/`(セッション情報・AI 分析結果) | **同期推奨** | Dropbox 履歴 + 個別フォルダコピー |
+| `data/trading-styles/` | git で管理(リポジトリにコミット) | git 履歴 |
+| `data/memo-templates/` | git で管理 | git 履歴 |
+| `trading.db`(SQLite: ohlc_m5 / economic_events / Setting / 認証セッション) | **同期対象外**(WAL/shm 同期で部分破損リスク。市場データは再取得可能な消耗品) | 定期手元PCダウンロード or VPS スナップショット |
+
+詳細は [§13](./13-data-storage.md) 参照。**Dropbox 同期で複数端末に同じ `data/sessions/` を持ち、ローカル PC ではコピーした分を参照・分析する運用**を想定する(編集は VPS 側に集約)。
 
 **開発環境**
 - 本番: Windows VPS

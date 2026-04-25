@@ -12,23 +12,59 @@
 - スタイル選択もシナリオメモに記録し、1 セッション単位の AI 分析([§11](./11-ai-analysis.md))でスタイル選定と実運用のズレを観察対象にする(横断集計は持たない、[principles/no-aggregation.md](./principles/no-aggregation.md))
 
 ## 8.2 スタイル定義(ユーザー定義可能)
-ユーザーが設定画面から追加・編集・無効化可能。
+スタイル定義は **リポジトリ内の Markdown ファイル**(`data/trading-styles/{id}.md`)で管理する(ver 1.45 で DB から移行)。1 ファイル 1 スタイル。frontmatter にメタ、本文に description を書く。
 
-**スタイル定義項目**
+```
+data/trading-styles/
+├── short.md
+├── mid.md
+├── news.md
+└── swing.md
+```
+
+**ファイル名 = id**(例: `short.md` の id は `short`)。エディタで直接編集し、変更は git でコミットする(個人運用前提、メモテンプレートと同じ思想)。
+
+**フォーマット例**(`data/trading-styles/short.md`):
+
+```markdown
+---
+name: 短期トレード
+primary_timeframe: M5
+expected_hold_time: 10分〜1時間
+expected_rr: 1:1.5
+typical_sl_pips: 10〜20
+is_active: true
+---
+
+M5 基準の短期トレード。スキャルピングに近い判断が必要。
+
+## 入る条件
+- ...
+
+## 入らない条件
+- ...
+```
+
+**frontmatter 項目**
 
 | 項目 | 内容 | 例 |
 |---|---|---|
-| id | 識別子 | `short`, `mid`, `news` |
 | name | 表示名 | 短期トレード、中期トレード、指標トレード |
 | primary_timeframe | 主要時間軸 | M5, H1 |
 | expected_hold_time | 想定保有時間 | 10分〜1時間、数時間〜1日 |
 | expected_rr | 想定リスクリワード | 1:1.5, 1:2 |
 | typical_sl_pips | 典型的なSL幅 | 10〜20pips, 30〜50pips(範囲指定可。見送り時の代理 R 基準にも使用 — [§9.3](./09-post-review.md#93-事後評価の表示方針)) |
-| description | 運用ルール・説明 | 自由記述 |
 | is_active | 有効/無効フラグ | true/false |
 
+**運用**
+
+- ファイル無し / 解析失敗 → そのスタイルは存在しないとして扱う(エラーにせず一覧から除外)
+- バックエンドは起動時に `data/trading-styles/*.md` を読み込んでメモリ保持(編集反映には再起動)
+- 環境変数 `TRADING_STYLES_DIR` で別ディレクトリ指定可能
+- `Trade.style_id` は文字列のまま参照(外部キー制約なし)。該当 id のファイルが消えても Trade レコードは残る(過去の判断履歴を尊重)
+
 ## 8.3 初期プリセット(例)
-新規ユーザー向けに以下をプリセットとして提供。ユーザーが自由に編集・削除可能。
+新規ユーザー向けに以下をプリセットとして `data/trading-styles/` 配下にコミット済み。ユーザーが自由に編集・削除可能。
 
 - **短期トレード** (`short`): M5基準、10分〜1時間保有、RR1:1.5、SL10〜20pips
 - **中期トレード** (`mid`): H1基準、数時間〜1日保有、RR1:2、SL30〜50pips

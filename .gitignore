@@ -235,6 +235,7 @@ Thumbs.db
 *.db-wal
 /data/*
 !/data/memo-templates/
+!/data/trading-styles/
 /cache/
 
 # IDE

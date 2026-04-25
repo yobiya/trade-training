@@ -60,7 +60,9 @@
 
 ---
 
-*仕様書 ver 1.44 - 2026/04/25 (§7.2.3 メモ見出しテンプレートを DB(`Setting.candidate_memo_template` / `session_note_template` / `memo_template_enabled` の 3 カラム)から **リポジトリ内 Markdown ファイル** (`data/memo-templates/{candidate,session-note}.md`)へ移行。テキストエディタ + git で編集・履歴管理できるようにする(個人運用前提)。ファイル無し / 空 → テンプレ無効として扱い、ON/OFF フラグは撤廃。起動時 1 回ロード(編集反映には再起動が必要)。settings の 3 カラムは migration b9d6f5e1a3c8 で drop。SettingsResponse / UpdateSettingsRequest からも該当フィールド削除。設定画面 UI は提供せずファイル直接編集に置き換え。§7.2.3 / §17 Setting / §13 / README 整合更新)*
+*仕様書 ver 1.45 - 2026/04/25 (セッション情報・トレードスタイルを SQLite からファイル管理に移行。「ユーザー入力 = ファイル / 機械生成キャッシュ = SQLite」のハイブリッド構成に再編。Dropbox 等での同期 + ローカル PC コピーで個別振り返り運用に対応する。状態モデルを「進行中(active) / 決着済み(settled)」の 2 状態に整理し `is_suspended` 撤廃。決着遷移は「トレード決済 or 見送り確定 + 横断メモ更新」の両方が満たされた時点で自動。完了 = 編集ロックや破棄ではなく振り返りに着手したマイルストーンと再定義し、決着済みでも編集可能。アプリ自動破棄を撤廃、削除は OS / Dropbox 上のディレクトリ操作で行う(アプリ側は存在チェック + 404 対応 + atomic write + conflict 除外 + id 重複検出)。AI 分析結果ディレクトリをセッション配下(`data/sessions/{dir}/ai_analysis/`)に統合。セッションディレクトリ命名は `{YYYYMMDD-HHMM}-{symbol}-{name}` で可読性最大化、識別子は session.json の id(不変)で分離。`data/trading-styles/{id}.md` 既定 4 ファイルを初期コミット。.gitignore に `!/data/trading-styles/` 追加。§4 / §6 / §7.2.2 / §8 / §10.3 / §11.7 / §13 / §15.6 / §16 / §17 / §18 を整合更新)*
+
+*ver 1.44 - 2026/04/25 (§7.2.3 メモ見出しテンプレートを DB(`Setting.candidate_memo_template` / `session_note_template` / `memo_template_enabled` の 3 カラム)から **リポジトリ内 Markdown ファイル** (`data/memo-templates/{candidate,session-note}.md`)へ移行。テキストエディタ + git で編集・履歴管理できるようにする(個人運用前提)。ファイル無し / 空 → テンプレ無効として扱い、ON/OFF フラグは撤廃。起動時 1 回ロード(編集反映には再起動が必要)。settings の 3 カラムは migration b9d6f5e1a3c8 で drop。SettingsResponse / UpdateSettingsRequest からも該当フィールド削除。設定画面 UI は提供せずファイル直接編集に置き換え。§7.2.3 / §17 Setting / §13 / README 整合更新)*
 
 *ver 1.43 - 2026/04/25 (TradeSession に任意のセッション名 `name` フィールドを追加。複数の手法を試す訓練スタイルで「どのセッションでどの手法を試したか」を一覧で見分けやすくするため、`TradingStyle` 選択とは別に自由記述のラベルを残せるようにする。いつでも編集可、AI 送信対象外(画面識別用)。一覧画面で「名前 + 銘柄 + 日付 + 損益 R」を並べて表示。§17 / §6.1 / §4.2 / §11.3.2 / §16 関連を整合更新)*
 

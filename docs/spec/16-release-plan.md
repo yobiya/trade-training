@@ -35,11 +35,15 @@
 
 ## Phase 3: 運用性(B の完成)
 - 設定画面からの market-data 経済指標手動更新ボタン
-- アプリB: 途中保存・再開(振り返りメモを時間を置いて書くため)
-- セッション完了(=破棄)フローの明示化([principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
+- **セッション情報のファイル化**(ver 1.45、[§13](./13-data-storage.md) / [§17](./17-data-model.md)):
+  - 旧 6 テーブル(sessions / session_candidates / session_final_decisions / trades / holding_memos / drawings)を `data/sessions/{dir}/` ファイル群に移行
+  - トレードスタイルも `data/trading-styles/{id}.md` に移行
+  - 状態モデルを「進行中 / 決着済み」の 2 状態に整理(`is_suspended` 撤廃)
+  - AI 分析結果ディレクトリをセッション配下(`data/sessions/{dir}/ai_analysis/`)に統合
+  - Dropbox 同期前提の運用に対応(atomic write、conflict 除外、id 重複検出)
 - スマホUI最適化
 
-※ セッション履歴一覧・過去セッション詳細再表示・CSV/JSON エクスポートは採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))
+※ 横断集計(勝率・期待値・スタイル別成績等)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。一方、**個別セッションのファイル単位での永続保持と振り返り**は ver 1.45 で許容方針に変更。
 
 ## Phase 4: AI 分析機能 (§11)
 - **§11 AI 分析** のファイル保存 + 送信プレビュー + バジェット管理
