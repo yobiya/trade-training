@@ -4,8 +4,6 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from shared_schema.models.config import (
-    DEFAULT_CANDIDATE_MEMO_TEMPLATE,
-    DEFAULT_SESSION_NOTE_TEMPLATE,
     DEFAULT_SPREADS,
     DEFAULT_SYMBOLS,
     DEFAULT_TIMEFRAME_PRESETS,
@@ -78,9 +76,6 @@ def seed_settings(session: Session) -> None:
             event_shading_after_min=30,
             risk_percent=None,
             risk_amount=None,
-            candidate_memo_template=DEFAULT_CANDIDATE_MEMO_TEMPLATE,
-            session_note_template=DEFAULT_SESSION_NOTE_TEMPLATE,
-            memo_template_enabled=True,
             updated_at=datetime.now(timezone.utc),
         )
     )

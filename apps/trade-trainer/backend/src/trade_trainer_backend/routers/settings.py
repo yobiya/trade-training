@@ -13,9 +13,6 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 def _response(st: Setting) -> SettingsResponse:
     return SettingsResponse(
-        candidate_memo_template=st.candidate_memo_template,
-        session_note_template=st.session_note_template,
-        memo_template_enabled=st.memo_template_enabled,
         event_importance_threshold=st.event_importance_threshold,
         event_currencies=st.event_currencies,
         event_shading_before_min=st.event_shading_before_min,

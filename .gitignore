@@ -233,7 +233,8 @@ Thumbs.db
 *.db
 *.db-shm
 *.db-wal
-/data/
+/data/*
+!/data/memo-templates/
 /cache/
 
 # IDE

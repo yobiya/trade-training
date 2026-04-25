@@ -14,5 +14,11 @@
 - セッション完了で破棄対象([principles/no-aggregation.md#103-セッションのライフサイクル](./principles/no-aggregation.md#103-セッションのライフサイクル))
 - CSV/JSON エクスポートは提供しない([principles/no-aggregation.md](./principles/no-aggregation.md))
 
-## 13.3 同期
+## 13.3 メモ見出しテンプレート(リポジトリ内 Markdown)
+- §7.2.3 の銘柄別メモ / 横断メモの初期テンプレートは **`data/memo-templates/{candidate,session-note}.md`** で管理する
+- DB に保存しない理由: テキストエディタで直接編集できる + git で履歴・差分を管理できる方が、設定 API + 設定画面 UI 経由よりシンプルかつ運用しやすい(個人運用前提)
+- ファイル無し / 空ファイルの場合は「テンプレ無効」として扱う(新規メモ作成時に挿入しない)
+- 起動時に 1 回読み込んでメモリ保持。編集反映にはバックエンド再起動が必要
+
+## 13.4 同期
 - クラウド同期は**実装しない**(シンプル運用)

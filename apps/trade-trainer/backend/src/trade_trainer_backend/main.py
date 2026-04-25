@@ -29,6 +29,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     with next(get_session()) as session:
         run_all_seeds(session)
 
+    # §7.2.3 メモテンプレート(Markdown ファイル)を起動時にロード
+    from trade_trainer_backend.services.memo_templates import load_memo_templates
+    load_memo_templates()
+
     from market_data.accessor import configure
     provider = None
     if settings.use_mt5:

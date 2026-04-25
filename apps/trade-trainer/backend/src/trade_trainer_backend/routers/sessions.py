@@ -17,7 +17,6 @@ from trade_trainer_backend.schemas.post_review import (
     SkipReview,
     StageEvalResp,
 )
-from shared_schema.models.config import Setting
 from trade_trainer_backend.schemas.session import (
     CandidateResponse,
     CreateCandidateRequest,
@@ -39,13 +38,16 @@ from trade_trainer_backend.services.post_eval import (
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-def _memo_templates(db: Session) -> tuple[str | None, str | None]:
-    """仕様書 §7.2.3: 新規メモ作成時に挿入するテンプレート(有効時のみ)を返す。
-    戻り値: (candidate_memo_template, session_note_template)。無効時は (None, None)。"""
-    st = db.get(Setting, 1)
-    if st is None or not st.memo_template_enabled:
-        return None, None
-    return st.candidate_memo_template, st.session_note_template
+def _memo_templates() -> tuple[str | None, str | None]:
+    """仕様書 §7.2.3: 新規メモ作成時に挿入するテンプレート。
+
+    `data/memo-templates/{candidate,session-note}.md` から読み込む(起動時にロード済み)。
+    ファイル無し / 空 → None(挿入しない)。
+    """
+    from trade_trainer_backend.services.memo_templates import (
+        get_candidate_template, get_session_note_template,
+    )
+    return get_candidate_template(), get_session_note_template()
 
 
 def _build_response(s: TradeSession, db: Session) -> SessionResponse:
@@ -173,7 +175,7 @@ def create_session(
     session_id = str(uuid.uuid4())
 
     # §7.2.3: 新規セッション作成時に横断メモのテンプレートを初期挿入(有効時のみ)
-    _, note_tpl = _memo_templates(db)
+    _, note_tpl = _memo_templates()
 
     ts = TradeSession(
         id=session_id,
@@ -215,7 +217,7 @@ def add_candidate(
         db.refresh(existing)
         return CandidateResponse.model_validate(existing)
     # §7.2.3: 新規候補作成時に銘柄別メモのテンプレートを初期挿入(body.memo 未指定かつ有効時のみ)
-    cand_tpl, _ = _memo_templates(db)
+    cand_tpl, _ = _memo_templates()
     initial_memo = body.memo if body.memo is not None else cand_tpl
     c = SessionCandidate(session_id=session_id, symbol=symbol, memo=initial_memo, is_selected=False)
     db.add(c)

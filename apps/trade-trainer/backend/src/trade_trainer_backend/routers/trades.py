@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from shared_schema.models.config import Setting
 from shared_schema.models.trading import SessionCandidate, SessionFinalDecision, Trade, TradeSession
 from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.routers.chart import _calculate_pips
@@ -47,8 +46,8 @@ def _upsert_candidate_on_entry(db: Session, session_id: str, symbol: str) -> Non
         )
     ).first()
     if c is None:
-        st = db.get(Setting, 1)
-        initial_memo = st.candidate_memo_template if (st and st.memo_template_enabled) else None
+        from trade_trainer_backend.services.memo_templates import get_candidate_template
+        initial_memo = get_candidate_template()
         c = SessionCandidate(
             session_id=session_id,
             symbol=symbol,

@@ -69,11 +69,10 @@ export type TradeResponse = {
   style_id: string | null
 }
 
-// 仕様書 §7.2.3 メモテンプレート / §5.4 経済指標表示の設定
+// 仕様書 §5.4 経済指標表示の設定
+// §7.2.3 メモテンプレートはリポジトリ内 Markdown ファイル管理(data/memo-templates/)へ移行したため
+// API レスポンスに含まれない。
 export type SettingsResponse = {
-  candidate_memo_template: string | null
-  session_note_template: string | null
-  memo_template_enabled: boolean
   event_importance_threshold: number
   event_currencies: string[] | null
   event_shading_before_min: number

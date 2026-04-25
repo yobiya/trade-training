@@ -10,28 +10,8 @@ from shared_schema.base import Base
 # 初期対象銘柄(仕様書 2.8)
 DEFAULT_SYMBOLS = ["USDJPY", "EURUSD", "GBPUSD", "AUDUSD", "EURJPY", "GBPJPY", "AUDJPY", "EURGBP"]
 
-# 仕様書 §7.2.3 メモ見出しテンプレート(既定値)
-DEFAULT_CANDIDATE_MEMO_TEMPLATE = """## チャート観察(TF・トレンド・形状)
-
-## サポレジ・水準
-
-## 根拠 / 狙いどころ
-
-## SL / TP の考え
-"""
-
-DEFAULT_SESSION_NOTE_TEMPLATE = """## 相場観・通貨強弱
-
-## 銘柄比較
-
-## シナリオ(メイン / 代替)
-
-## スタイル選定
-
-## 判断
-
-## 決済・振り返り
-"""
+# 仕様書 §7.2.3 メモ見出しテンプレートはリポジトリ内 Markdown ファイル
+# (`data/memo-templates/{candidate,session-note}.md`)で管理する(ver 1.44 で DB から移行)。
 
 # 初期スプレッド暫定値(pips)。MT5 デモ接続後に実測値で上書き(仕様書 3章)。
 DEFAULT_SPREADS = {
@@ -69,10 +49,9 @@ class Setting(Base):
     event_shading_after_min: Mapped[int] = mapped_column(Integer, default=30)
     risk_percent: Mapped[float | None] = mapped_column(Float, nullable=True)  # 1トレード許容損失%
     risk_amount: Mapped[float | None] = mapped_column(Float, nullable=True)  # 1トレード許容損失額
-    # 仕様書 §7.2.3 メモ見出しテンプレート(新規メモ作成時の初期値、ユーザー編集可)
-    candidate_memo_template: Mapped[str | None] = mapped_column(Text, nullable=True)
-    session_note_template: Mapped[str | None] = mapped_column(Text, nullable=True)
-    memo_template_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # §7.2.3 メモ見出しテンプレートはリポジトリ内 Markdown ファイル
+    # (`data/memo-templates/{candidate,session-note}.md`)で管理するため、
+    # ここには保存しない(DB と二重管理を避ける)。
     updated_at: Mapped[datetime] = mapped_column(DateTime)  # UTC
 
 
