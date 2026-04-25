@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { AIHistoryEntry, AIRunResponse } from '../api/types'
+import type { ChartHandle } from './Chart'
 
 type Props = {
   sessionId: string
   /** 'review' / 'decision'。未指定なら backend が Trade 状態から自動判定 */
   mode?: 'decision' | 'review'
+  /**
+   * §11.3.1 各 TF のチャートハンドル。実行時にスクリーンショットを取って送信する。
+   * 表示中の TF のみを Map で渡す想定。null なら画像なしで実行。
+   */
+  chartHandles?: Map<string, ChartHandle | null> | null
 }
 
 /**
@@ -14,7 +20,7 @@ type Props = {
  * - 「実行」で API 呼び出し(キャッシュヒットすれば既存を返す)
  * - レポートはプレーンテキストの Markdown を等幅表示で出す(リッチレンダリングは後続)
  */
-export function AiAnalysisPanel({ sessionId, mode }: Props) {
+export function AiAnalysisPanel({ sessionId, mode, chartHandles }: Props) {
   const [open, setOpen] = useState(false)
   const [history, setHistory] = useState<AIHistoryEntry[]>([])
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null)
@@ -56,12 +62,24 @@ export function AiAnalysisPanel({ sessionId, mode }: Props) {
     }
   }
 
+  function collectImages(): { timeframe: string; data_url: string }[] {
+    if (!chartHandles) return []
+    const images: { timeframe: string; data_url: string }[] = []
+    chartHandles.forEach((handle, tf) => {
+      if (!handle) return
+      const dataUrl = handle.takeScreenshot()
+      if (dataUrl) images.push({ timeframe: tf, data_url: dataUrl })
+    })
+    return images
+  }
+
   async function handleRun() {
     setRunning(true)
     setError(null)
     setLastRunCached(null)
     try {
-      const res: AIRunResponse = await api.ai.run(sessionId, mode)
+      const images = collectImages()
+      const res: AIRunResponse = await api.ai.run(sessionId, mode, images)
       setActiveEntryId(res.entry.id)
       setReport(res.report_md)
       setLastRunCached(res.cached)

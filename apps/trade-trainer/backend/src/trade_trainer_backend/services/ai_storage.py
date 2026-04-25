@@ -111,6 +111,21 @@ def read_report(session_id: str, entry_id: str) -> str | None:
         return None
 
 
+def _decode_data_url(data_url: str) -> bytes | None:
+    """`data:image/png;base64,iVBOR...` 形式の文字列を bytes にデコード。"""
+    import base64
+    try:
+        header, b64 = data_url.split(",", 1)
+    except ValueError:
+        return None
+    if "base64" not in header:
+        return None
+    try:
+        return base64.b64decode(b64)
+    except (ValueError, TypeError):
+        return None
+
+
 def save_run(
     session_id: str,
     payload: dict[str, Any],
@@ -121,8 +136,12 @@ def save_run(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     cost_yen: float | None = None,
+    images: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """1 回の AI 分析実行結果を保存し、index.json に追記する。返り値はインデックスエントリ。"""
+    """1 回の AI 分析実行結果を保存し、index.json に追記する。返り値はインデックスエントリ。
+
+    `images` を渡すと {entry_dir}/images/{timeframe}.png として保存する。
+    """
     ai_dir = _ai_dir(session_id)
     if ai_dir is None:
         raise FileNotFoundError(f"session not found: {session_id}")
@@ -136,6 +155,20 @@ def save_run(
 
     _atomic_write_json(entry_dir / "input.json", payload)
     _atomic_write_text(entry_dir / "report.md", report_md)
+
+    if images:
+        img_dir = entry_dir / "images"
+        img_dir.mkdir(parents=True, exist_ok=True)
+        for img in images:
+            tf = img.get("timeframe")
+            data_url = img.get("data_url")
+            if not tf or not data_url:
+                continue
+            blob = _decode_data_url(data_url)
+            if blob is None:
+                logger.warning("invalid image data_url for tf=%s", tf)
+                continue
+            (img_dir / f"{tf}.png").write_bytes(blob)
 
     meta = {
         "id": entry_id,

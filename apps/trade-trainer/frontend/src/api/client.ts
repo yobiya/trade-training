@@ -156,10 +156,17 @@ export const api = {
       const q = mode ? `?mode=${mode}` : ''
       return request<unknown>(`/sessions/${sessionId}/ai-analysis/preview${q}`)
     },
-    run: (sessionId: string, mode?: 'decision' | 'review') =>
+    run: (
+      sessionId: string,
+      mode?: 'decision' | 'review',
+      images?: { timeframe: string; data_url: string }[],
+    ) =>
       request<AIRunResponse>(`/sessions/${sessionId}/ai-analysis/run`, {
         method: 'POST',
-        body: JSON.stringify({ analysis_mode: mode ?? null }),
+        body: JSON.stringify({
+          analysis_mode: mode ?? null,
+          images: images && images.length > 0 ? images : null,
+        }),
       }),
     history: (sessionId: string) =>
       request<AIHistoryEntry[]>(`/sessions/${sessionId}/ai-analysis/history`),

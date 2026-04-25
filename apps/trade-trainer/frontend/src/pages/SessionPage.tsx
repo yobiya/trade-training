@@ -452,7 +452,9 @@ export function SessionPage({ sessionId, onBack }: Props) {
           />
 
           {phase === 'reviewing' && <PostReviewPanel sessionId={sessionId} />}
-          {phase === 'reviewing' && <AiAnalysisPanel sessionId={sessionId} mode="review" />}
+          {phase === 'reviewing' && (
+            <AiAnalysisPanel sessionId={sessionId} mode="review" chartHandles={chartHandles} />
+          )}
 
           <div className="action-buttons">
             <button

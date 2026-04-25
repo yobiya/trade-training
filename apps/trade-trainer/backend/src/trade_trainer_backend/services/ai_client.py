@@ -92,11 +92,8 @@ class AIRunResult:
     output_tokens: int | None
 
 
-def _payload_to_user_message(payload: dict[str, Any]) -> str:
-    """送信 payload を Claude 向けメッセージ本文に整形。
-
-    画像は MVP では含めない(後続 PR で multipart 画像対応)。
-    """
+def _payload_text(payload: dict[str, Any], has_images: bool) -> str:
+    """送信 payload を Claude 向けテキスト部分として整形。"""
     parts: list[str] = []
     parts.append("以下は 1 セッション分のトレード判断データです。")
     parts.append("")
@@ -104,11 +101,32 @@ def _payload_to_user_message(payload: dict[str, Any]) -> str:
     parts.append(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
     parts.append("```")
     parts.append("")
-    parts.append(
-        "上記データに対し、システムプロンプトに従って観察を行い、"
-        "Markdown レポートを返してください(画像は本 MVP では送信されていない前提で、メタデータ・メモ本文のみから観察してください)。"
-    )
+    if has_images:
+        parts.append(
+            "添付画像は判断時刻周辺の各時間足チャートのスクリーンショットです("
+            "MVP のため描画オーバーレイ・エントリー/決済マーカーは焼き込まれていません;"
+            "描画情報は payload の `drawings`、判断時点の数値は `decision`・`entry_result` を参照してください)。"
+        )
+    else:
+        parts.append("画像は本 MVP では送信されていない前提で、メタデータ・メモ本文のみから観察してください。")
+    parts.append("")
+    parts.append("上記データに対し、システムプロンプトに従って観察を行い、Markdown レポートを返してください。")
     return "\n".join(parts)
+
+
+def _data_url_to_image_block(data_url: str) -> dict[str, Any] | None:
+    """data URL 形式の文字列を Claude messages の image block に変換。"""
+    try:
+        header, b64 = data_url.split(",", 1)
+    except ValueError:
+        return None
+    media_type = "image/png"
+    if header.startswith("data:") and ";" in header:
+        media_type = header[5:].split(";", 1)[0] or "image/png"
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": media_type, "data": b64},
+    }
 
 
 def run_analysis(
@@ -118,13 +136,21 @@ def run_analysis(
     model: str,
     max_tokens: int,
     mock: bool = False,
+    images: list[dict[str, str]] | None = None,
 ) -> AIRunResult:
     """Claude API を呼び出して Markdown レポートを返す。
 
     `mock=True` または `api_key=""` の場合はモック応答を返す。
+    `images` は data URL 形式の各 TF スクリーンショット(MVP は描画なし)。
     """
+    images = images or []
+    has_images = len(images) > 0
+
     if mock or not api_key:
-        logger.info("AI analysis: mock mode (api_key=%s, mock=%s)", bool(api_key), mock)
+        logger.info(
+            "AI analysis: mock mode (api_key=%s, mock=%s, images=%d)",
+            bool(api_key), mock, len(images),
+        )
         return AIRunResult(
             report_md=_MOCK_REPORT,
             model=f"mock:{model}",
@@ -139,13 +165,24 @@ def run_analysis(
         raise
 
     client = Anthropic(api_key=api_key)
-    user_message = _payload_to_user_message(payload)
+
+    content_blocks: list[dict[str, Any]] = []
+    for img in images:
+        block = _data_url_to_image_block(img.get("data_url", ""))
+        if block is None:
+            logger.warning("skipping invalid image for tf=%s", img.get("timeframe"))
+            continue
+        # Claude には timeframe ラベルをテキストで添える(画像内に時間足が分かる視覚情報がない場合の補助)
+        content_blocks.append({"type": "text", "text": f"[{img.get('timeframe', '?')} チャート]"})
+        content_blocks.append(block)
+
+    content_blocks.append({"type": "text", "text": _payload_text(payload, has_images)})
 
     response = client.messages.create(
         model=model,
         max_tokens=max_tokens,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
+        messages=[{"role": "user", "content": content_blocks}],
     )
 
     # Claude SDK の Message.content は list[ContentBlock]

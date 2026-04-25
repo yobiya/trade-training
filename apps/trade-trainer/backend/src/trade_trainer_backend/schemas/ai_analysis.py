@@ -145,14 +145,21 @@ class AIAnalysisPayload(BaseModel):
 # 実行 / 履歴
 # --------------------------------------------------------------------------- #
 
+class ChartImage(BaseModel):
+    """§11.3.1 チャート画像。data URL 形式(例: `data:image/png;base64,iVBOR...`)。"""
+    timeframe: str
+    data_url: str
+
+
 class AIRunRequest(BaseModel):
     """§11.5 オンデマンド実行リクエスト。
 
     `analysis_mode` を明示的に指定できる(未指定なら Trade 状態から自動判定)。
-    `excluded_paragraphs` はプレビュー画面で「振り返り段落」を除外したい時に
-    横断メモから除外する段落インデックスのリスト(MVP では未対応、将来拡張)。
+    `images` は frontend が lightweight-charts から取った各 TF のスクリーンショット
+    (data URL 形式)。MVP では描画オーバーレイ・マーカー焼き込みは含めない。
     """
     analysis_mode: Literal["decision", "review"] | None = None
+    images: list[ChartImage] | None = None
 
 
 class AIHistoryEntry(BaseModel):

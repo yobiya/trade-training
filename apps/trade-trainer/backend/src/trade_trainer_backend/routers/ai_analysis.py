@@ -60,7 +60,15 @@ def run_ai_analysis(
     payload_obj = build_ai_analysis_input(session_id, db, analysis_mode=body.analysis_mode)
     payload = payload_obj.model_dump(mode="json")
 
-    payload_hash = ai_storage.compute_payload_hash(payload)
+    images_dicts: list[dict[str, str]] = []
+    if body.images:
+        for img in body.images:
+            images_dicts.append({"timeframe": img.timeframe, "data_url": img.data_url})
+
+    # キャッシュ判定: 画像の data URL も含める(画像が違えばキャッシュミス)
+    payload_hash = ai_storage.compute_payload_hash({**payload, "_images": [
+        {"timeframe": i["timeframe"], "data_url_head": i["data_url"][:64]} for i in images_dicts
+    ]})
 
     cached = ai_storage.find_cached_entry(session_id, payload_hash)
     if cached is not None:
@@ -78,6 +86,7 @@ def run_ai_analysis(
         model=settings.anthropic_model,
         max_tokens=settings.ai_max_tokens,
         mock=settings.ai_mock,
+        images=images_dicts,
     )
 
     entry = ai_storage.save_run(
@@ -89,6 +98,7 @@ def run_ai_analysis(
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
         cost_yen=None,  # MVP: コスト換算は未実装
+        images=images_dicts,
     )
 
     return AIRunResponse(

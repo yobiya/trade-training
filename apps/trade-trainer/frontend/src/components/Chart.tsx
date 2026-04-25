@@ -26,6 +26,12 @@ export type ChartHandle = {
   containerEl: HTMLDivElement | null
   /** チャートの再描画が必要なタイミング(時間軸変化・リサイズ等)でコールバックを呼ぶ。 */
   subscribeRedraw: (cb: () => void) => () => void
+  /**
+   * §11.3.1 AI 分析向けにチャートのスクリーンショットを PNG dataURL で返す。
+   * lightweight-charts の `takeScreenshot()` で得られる Canvas を toDataURL する。
+   * 描画オーバーレイ(SVG)・マーカー焼き込みは MVP では含めない(描画情報は payload メタに入る)。
+   */
+  takeScreenshot: () => string | null
 }
 
 type Props = {
@@ -119,6 +125,16 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       return () => {
         chart.timeScale().unsubscribeVisibleLogicalRangeChange(handler)
         ro.disconnect()
+      }
+    },
+    takeScreenshot() {
+      const chart = chartRef.current
+      if (!chart) return null
+      try {
+        const canvas = chart.takeScreenshot()
+        return canvas.toDataURL('image/png')
+      } catch {
+        return null
       }
     },
   }), [])
