@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # MT5 プロバイダを有効化するか。false の場合はキャッシュ参照モードで起動する
     # (Windows + MetaTrader5 ターミナル起動済みの環境でのみ true にする)
     use_mt5: bool = False
+    # §11 AI 分析機能
+    anthropic_api_key: str = ""              # 空なら Claude 呼び出しはエラー(モック実行のみ可)
+    anthropic_model: str = "claude-opus-4-7"
+    ai_max_tokens: int = 4096
+    ai_mock: bool = False                    # true なら API 呼び出しせずモック応答を返す(テスト用)
 
 
 @lru_cache

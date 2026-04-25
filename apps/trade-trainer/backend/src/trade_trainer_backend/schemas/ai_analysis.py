@@ -139,3 +139,35 @@ class AIAnalysisPayload(BaseModel):
 
     # 送信時の参照用メタ(ユーザーがプレビューで確認できるもの)
     generated_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# 実行 / 履歴
+# --------------------------------------------------------------------------- #
+
+class AIRunRequest(BaseModel):
+    """§11.5 オンデマンド実行リクエスト。
+
+    `analysis_mode` を明示的に指定できる(未指定なら Trade 状態から自動判定)。
+    `excluded_paragraphs` はプレビュー画面で「振り返り段落」を除外したい時に
+    横断メモから除外する段落インデックスのリスト(MVP では未対応、将来拡張)。
+    """
+    analysis_mode: Literal["decision", "review"] | None = None
+
+
+class AIHistoryEntry(BaseModel):
+    """index.json の 1 エントリ。"""
+    id: str                    # ディレクトリ名(例 "20260425T154321_a1b2c3d4e5f6g7h8")
+    hash: str
+    model: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cost_yen: float | None = None
+    created_at: datetime
+
+
+class AIRunResponse(BaseModel):
+    """実行直後 / キャッシュヒット時に返すレスポンス。"""
+    entry: AIHistoryEntry
+    report_md: str
+    cached: bool                # 同 hash の既存エントリを返した場合 True

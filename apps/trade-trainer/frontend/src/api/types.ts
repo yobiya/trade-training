@@ -81,6 +81,23 @@ export type SettingsResponse = {
   event_shading_after_min: number
 }
 
+// §11 AI 分析
+export type AIHistoryEntry = {
+  id: string
+  hash: string
+  model: string
+  input_tokens: number | null
+  output_tokens: number | null
+  cost_yen: number | null
+  created_at: string
+}
+
+export type AIRunResponse = {
+  entry: AIHistoryEntry
+  report_md: string
+  cached: boolean
+}
+
 // 仕様書 §5.4 経済指標
 export type EconomicEvent = {
   id: number

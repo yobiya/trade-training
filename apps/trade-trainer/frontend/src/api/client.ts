@@ -1,5 +1,7 @@
 import type {
   AdvanceResponse,
+  AIHistoryEntry,
+  AIRunResponse,
   ChartResponse,
   CreateDrawingRequest,
   Drawing,
@@ -146,6 +148,24 @@ export const api = {
     // 編集はテキストエディタ + git で行うため、create / update / delete API は提供しない。
     list: (includeInactive = false) =>
       request<TradingStyle[]>(`/trading-styles${includeInactive ? '?include_inactive=true' : ''}`),
+  },
+
+  ai: {
+    // §11 AI 分析。preview は GET、run は POST(API キー未設定なら mock 応答)
+    preview: (sessionId: string, mode?: 'decision' | 'review') => {
+      const q = mode ? `?mode=${mode}` : ''
+      return request<unknown>(`/sessions/${sessionId}/ai-analysis/preview${q}`)
+    },
+    run: (sessionId: string, mode?: 'decision' | 'review') =>
+      request<AIRunResponse>(`/sessions/${sessionId}/ai-analysis/run`, {
+        method: 'POST',
+        body: JSON.stringify({ analysis_mode: mode ?? null }),
+      }),
+    history: (sessionId: string) =>
+      request<AIHistoryEntry[]>(`/sessions/${sessionId}/ai-analysis/history`),
+    report: (sessionId: string, entryId: string) =>
+      fetch(`/api/sessions/${sessionId}/ai-analysis/report/${entryId}`, { credentials: 'include' })
+        .then(r => r.text()),
   },
 
   events: {

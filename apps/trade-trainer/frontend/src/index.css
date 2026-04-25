@@ -827,6 +827,88 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--text-dim);
   margin-top: 4px;
 }
+/* §11 AI 分析パネル */
+.ai-panel {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg2);
+}
+.ai-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ai-body {
+  padding: 6px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ai-run-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--accent);
+  color: #0d1117;
+  border: none;
+  border-radius: 3px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ai-run-btn:disabled { opacity: 0.5; cursor: wait; }
+.ai-cache-hint { color: var(--text-dim); font-size: 11px; }
+.ai-error {
+  color: var(--loss);
+  font-size: 11px;
+  padding: 4px 6px;
+  background: rgba(239, 83, 80, 0.1);
+  border-radius: 3px;
+}
+.ai-history {
+  font-size: 11px;
+  border-top: 1px solid var(--bg3);
+  padding-top: 6px;
+}
+.ai-history-label { color: var(--text-dim); margin-bottom: 4px; }
+.ai-history ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.ai-history li {
+  display: flex;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.ai-history li:hover { background: var(--bg3); }
+.ai-history li.active { background: rgba(88, 166, 255, 0.18); }
+.ai-history-time { flex: 1; }
+.ai-history-model { color: var(--text-dim); }
+.ai-history-tokens { color: var(--text-dim); }
+.ai-report-body {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 500px;
+  overflow-y: auto;
+  font-family: inherit;
+  margin: 0;
+}
+
 /* §7.3 メモパネル */
 .memo-open-btn {
   padding: 6px 12px;
