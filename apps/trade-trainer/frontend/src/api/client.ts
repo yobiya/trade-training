@@ -70,13 +70,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ symbol, memo }),
       }),
-    updateCandidate: (id: string, candidateId: number, memo: string | null) =>
-      request<SessionCandidate>(`/sessions/${id}/candidates/${candidateId}`, {
+    // ver 1.45: candidate id は symbol そのもの(string)
+    updateCandidate: (id: string, candidateSymbol: string, memo: string | null) =>
+      request<SessionCandidate>(`/sessions/${id}/candidates/${encodeURIComponent(candidateSymbol)}`, {
         method: 'PATCH',
         body: JSON.stringify({ memo }),
       }),
-    deleteCandidate: (id: string, candidateId: number) =>
-      request<void>(`/sessions/${id}/candidates/${candidateId}`, { method: 'DELETE' }),
+    deleteCandidate: (id: string, candidateSymbol: string) =>
+      request<void>(`/sessions/${id}/candidates/${encodeURIComponent(candidateSymbol)}`, { method: 'DELETE' }),
     close: (id: string) =>
       request<void>(`/sessions/${id}`, { method: 'DELETE' }),
     postReview: (id: string) =>
@@ -176,16 +177,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    update: (drawingId: number, body: {
+    // ver 1.45: drawing は session 配下管理のため URL に session_id を含む
+    update: (sessionId: string, drawingId: number, body: {
       data?: Record<string, unknown>
       label?: string | null
       visible_on_timeframes?: string[] | null
     }) =>
-      request<Drawing>(`/drawings/${drawingId}`, {
+      request<Drawing>(`/sessions/${sessionId}/drawings/${drawingId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-    delete: (drawingId: number) =>
-      request<void>(`/drawings/${drawingId}`, { method: 'DELETE' }),
+    delete: (sessionId: string, drawingId: number) =>
+      request<void>(`/sessions/${sessionId}/drawings/${drawingId}`, { method: 'DELETE' }),
   },
 }

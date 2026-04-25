@@ -40,14 +40,14 @@ export function useDrawings(sessionId: string, symbol?: string | null): Drawings
     patch: { data?: Record<string, unknown>; label?: string | null; visible_on_timeframes?: string[] | null },
   ) => {
     setDrawings(prev => prev.map(d => d.id === id ? { ...d, ...patch, data: patch.data ? { ...d.data, ...patch.data } : d.data } : d))
-    const updated = await api.drawings.update(id, patch)
+    const updated = await api.drawings.update(sessionId, id, patch)
     setDrawings(prev => prev.map(d => d.id === id ? updated : d))
-  }, [])
+  }, [sessionId])
 
   const remove = useCallback(async (id: number) => {
-    await api.drawings.delete(id)
+    await api.drawings.delete(sessionId, id)
     setDrawings(prev => prev.filter(d => d.id !== id))
-  }, [])
+  }, [sessionId])
 
   return { drawings, reload, add, update, remove }
 }

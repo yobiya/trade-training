@@ -1,17 +1,13 @@
-"""共有 DB スキーマ定義パッケージ。"""
+"""共有 DB スキーマ定義パッケージ(ver 1.45 以降:市場データ・経済指標・設定のみ)。
+
+セッション関連(TradeSession / SessionCandidate / SessionFinalDecision /
+Trade / HoldingMemo / Drawing)とトレードスタイル(TradingStyle)は
+ファイル管理に移行したため、SQLAlchemy モデルは保持しない。
+"""
 from shared_schema.base import Base
 from shared_schema.database import get_engine, get_session, init_db
 from shared_schema.models.config import Account, Setting
 from shared_schema.models.market import EconomicEvent, OhlcM5
-from shared_schema.models.trading import (
-    Drawing,
-    HoldingMemo,
-    SessionCandidate,
-    SessionFinalDecision,
-    Trade,
-    TradingStyle,
-    TradeSession,
-)
 from shared_schema.seeds import run_all_seeds
 
 __all__ = [
@@ -23,14 +19,6 @@ __all__ = [
     # market
     "OhlcM5",
     "EconomicEvent",
-    # trading
-    "TradeSession",
-    "SessionCandidate",
-    "SessionFinalDecision",
-    "Trade",
-    "TradingStyle",
-    "HoldingMemo",
-    "Drawing",
     # config
     "Setting",
     "Account",

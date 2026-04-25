@@ -33,13 +33,15 @@ class UpdateCandidateRequest(BaseModel):
 
 
 class CandidateResponse(BaseModel):
-    id: int
+    """ver 1.45 でファイル管理に移行(`candidates/{symbol}.md`)。
+    `id` は symbol そのもの(後方互換のため文字列として返す)。
+    `skip_reason` は仕様上 memo 本文に統合されたため常に None。
+    """
+    id: str
     symbol: str
     memo: str | None
     is_selected: bool
-    skip_reason: str | None
-
-    model_config = {"from_attributes": True}
+    skip_reason: str | None = None
 
 
 class SessionResponse(BaseModel):
@@ -49,14 +51,13 @@ class SessionResponse(BaseModel):
     presented_at: datetime
     current_position: datetime
     mode: str
-    is_suspended: bool
+    is_settled: bool                   # ver 1.45: §4.2.1 状態モデル(settled_at != null)
     has_active_trade: bool
     digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
     name: str | None = None  # §6.1 任意のセッション名(手法識別用、いつでも編集可)
     note: str | None = None  # §7.2.2 横断メモ
     candidates: list[CandidateResponse] = []  # §6.3 ウォッチリスト
-
-    model_config = {"from_attributes": True}
+    settled_at: datetime | None = None  # §4.2.1 決着時刻(進行中なら null)
 
 
 class UpdateNoteRequest(BaseModel):
@@ -75,9 +76,8 @@ class SessionListItem(BaseModel):
     started_at: datetime
     presented_at: datetime
     mode: str
-    is_suspended: bool
+    is_settled: bool                     # ver 1.45: §4.2.1 状態モデル
     name: str | None = None              # §6.1 セッション名(任意)
     r_pnl: float | None = None           # §9.5 実損益 R(決済済みのみ、§17 で動的算出)
     pips_pnl: float | None = None        # 補助指標、§17 Trade.pips_pnl
-
-    model_config = {"from_attributes": True}
+    settled_at: datetime | None = None

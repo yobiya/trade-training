@@ -11,8 +11,9 @@ type Props = {
 }
 
 /**
- * 仕様書 §10.3: 完了セッションは閉じると破棄されるため、一覧には進行中 / 保留中のみが並ぶ。
- * 集計機能(勝率・期待値・スタイル別成績等)は §10 により採用しない。
+ * 仕様書 ver 1.45: セッションはファイル管理で進行中 / 決着済みの 2 状態。
+ * 削除はアプリ側で行わず OS / Dropbox 上のディレクトリ操作のみ(§13)。
+ * 集計機能(勝率・期待値・スタイル別成績等)は principles/no-aggregation により採用しない。
  */
 export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) {
   const [sessions, setSessions] = useState<SessionListItem[]>([])

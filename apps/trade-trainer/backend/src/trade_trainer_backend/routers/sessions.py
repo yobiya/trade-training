@@ -1,15 +1,14 @@
-"""セッション管理エンドポイント。"""
+"""セッション管理エンドポイント(ver 1.45 でファイル管理化)。
+
+セッションは `data/sessions/{dir}/` 単位で永続化。
+DB は使わず、SessionStore (`services/session_store.py`) 経由で読み書きする。
+"""
 import random
-import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from shared_schema.models.trading import SessionCandidate, SessionFinalDecision, Trade, TradeSession
 from trade_trainer_backend.config import Settings, get_settings
-from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.post_review import (
     CandidateReview,
     EntryReview,
@@ -28,9 +27,19 @@ from trade_trainer_backend.schemas.session import (
     UpdateNoteRequest,
     UpdateSessionNameRequest,
 )
+from trade_trainer_backend.services import session_store
+from trade_trainer_backend.services.session_models import (
+    Candidate,
+    FinalDecision,
+    SessionAggregate,
+    SessionMeta,
+    is_settle_eligible,
+    is_settled,
+)
 from trade_trainer_backend.services.post_eval import (
     evaluate_entry,
     evaluate_symbol,
+    quick_r_pnl,
     resolve_skip_r_unit_pips,
     resolve_trade_r_unit_pips,
 )
@@ -38,59 +47,85 @@ from trade_trainer_backend.services.post_eval import (
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-def _memo_templates() -> tuple[str | None, str | None]:
-    """仕様書 §7.2.3: 新規メモ作成時に挿入するテンプレート。
+# ============================================================================
+# テンプレート / レスポンス組み立てヘルパ
+# ============================================================================
 
-    `data/memo-templates/{candidate,session-note}.md` から読み込む(起動時にロード済み)。
-    ファイル無し / 空 → None(挿入しない)。
-    """
+def _memo_templates() -> tuple[str | None, str | None]:
+    """§7.2.3 メモテンプレ(候補メモ, 横断メモ)。ファイル無し→None。"""
     from trade_trainer_backend.services.memo_templates import (
         get_candidate_template, get_session_note_template,
     )
     return get_candidate_template(), get_session_note_template()
 
 
-def _build_response(s: TradeSession, db: Session) -> SessionResponse:
-    """統合フロー(§6.1): エントリー銘柄は `Trade.symbol` から取得する。
-    アクティブ Trade → 最新 Trade の順で参照。どちらも無ければ分析中ステータス(symbol="")。"""
-    from shared_schema.models.trading import Trade
-    active_trade = db.scalars(
-        select(Trade).where(Trade.session_id == s.id, Trade.exit_time.is_(None))
-    ).first()
-    latest_trade = db.scalars(
-        select(Trade).where(Trade.session_id == s.id).order_by(Trade.entry_time.desc())
-    ).first()
-    symbol = (active_trade or latest_trade).symbol if (active_trade or latest_trade) else ""
+def _ensure_session(session_id: str) -> SessionAggregate:
+    agg = session_store.load(session_id)
+    if agg is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return agg
+
+
+def _candidate_response(
+    c: Candidate,
+    selected_symbol: str | None,
+) -> CandidateResponse:
+    return CandidateResponse(
+        id=c.symbol,
+        symbol=c.symbol,
+        memo=c.memo,
+        is_selected=(selected_symbol is not None and c.symbol == selected_symbol),
+        skip_reason=None,
+    )
+
+
+def _build_response(agg: SessionAggregate) -> SessionResponse:
+    """統合フロー(§6.1): エントリー銘柄は trade.symbol から取得。"""
+    selected_symbol = agg.trade.symbol if agg.trade is not None else None
+    symbol = selected_symbol or ""
+    has_active = agg.trade is not None and agg.trade.exit_time is None
 
     from market_data.accessor import get_symbol_digits
     digits = get_symbol_digits(symbol) if symbol else 5
 
-    candidates = db.scalars(
-        select(SessionCandidate).where(SessionCandidate.session_id == s.id).order_by(SessionCandidate.id)
-    ).all()
-
     return SessionResponse(
-        id=s.id,
-        symbol=symbol or "",
-        started_at=s.started_at,
-        presented_at=s.presented_at,
-        current_position=s.current_position,
-        mode=s.mode,
-        is_suspended=s.is_suspended,
-        has_active_trade=active_trade is not None,
+        id=agg.meta.id,
+        symbol=symbol,
+        started_at=agg.meta.started_at,
+        presented_at=agg.meta.presented_at,
+        current_position=agg.meta.current_position,
+        mode=agg.meta.mode,
+        is_settled=is_settled(agg),
+        has_active_trade=has_active,
         digits=digits,
-        name=s.name,
-        note=s.note,
-        candidates=[CandidateResponse.model_validate(c) for c in candidates],
+        name=agg.meta.name,
+        note=agg.note,
+        candidates=[_candidate_response(c, selected_symbol) for c in agg.candidates],
+        settled_at=agg.meta.settled_at,
     )
 
+
+def _maybe_settle(session_id: str) -> SessionAggregate:
+    """§4.2.2 決着遷移: 「決着可能 + 横断メモ非空」なら settled_at を自動セット。"""
+    agg = _ensure_session(session_id)
+    if agg.meta.settled_at is not None:
+        return agg
+    if not is_settle_eligible(agg):
+        return agg
+    if not agg.note or not agg.note.strip():
+        return agg
+    agg.meta.settled_at = datetime.now(timezone.utc)
+    session_store.save_meta(agg.meta)
+    return agg
+
+
+# ============================================================================
+# 時間フィルタによるランダム抽選(§4.1)
+# ============================================================================
 
 _JST_OFFSET = timedelta(hours=9)
 
 # 仕様書 §2.11: セッション時間帯プリセット (JST 基準、夏時間固定なし)
-# tokyo: 09-15 JST = 00-06 UTC
-# london: 16-25 JST (翌01JST まで) = 07-16 UTC
-# ny: 22-06 JST (翌) = 13-21 UTC
 _SESSION_UTC_HOUR_RANGES: dict[str, tuple[int, int]] = {
     "tokyo": (0, 6),
     "london": (7, 16),
@@ -103,10 +138,8 @@ def _matches_filters(
     days: list[int] | None,
     sessions: list[str] | None,
 ) -> bool:
-    """曜日・セッション時間帯フィルタに合致するか判定する。"""
-    jst = dt_utc + _JST_OFFSET  # naive JST
+    jst = dt_utc + _JST_OFFSET
     if days:
-        # 曜日判定は JST 基準(ユーザーの感覚に合わせる)
         if jst.weekday() not in days:
             return False
     if sessions:
@@ -134,7 +167,6 @@ def _random_presented_at(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> datetime:
-    """フィルタに合致するランダムな M5 日時を返す (rejection sampling)。"""
     now = datetime.now(timezone.utc)
     if date_from and date_to:
         from_ts = int(date_from.timestamp())
@@ -146,7 +178,6 @@ def _random_presented_at(
     if to_ts <= from_ts:
         raise HTTPException(status_code=400, detail="date_to must be after date_from")
 
-    # フィルタなしなら 1 回で終わる
     for _ in range(200):
         dt = _random_datetime_in_range(from_ts, to_ts)
         if _matches_filters(dt, days, sessions):
@@ -157,10 +188,13 @@ def _random_presented_at(
     )
 
 
+# ============================================================================
+# セッション CRUD
+# ============================================================================
+
 @router.post("", response_model=SessionResponse, status_code=201)
 def create_session(
     body: CreateSessionRequest,
-    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SessionResponse:
     presented_at = _random_presented_at(
@@ -171,202 +205,217 @@ def create_session(
         date_to=body.date_to,
     )
 
-    now = datetime.now(timezone.utc)
-    session_id = str(uuid.uuid4())
+    time_filter: dict | None = None
+    if body.days or body.sessions or body.date_from or body.date_to:
+        time_filter = {
+            "days": body.days,
+            "sessions": body.sessions,
+            "date_from": body.date_from.isoformat() if body.date_from else None,
+            "date_to": body.date_to.isoformat() if body.date_to else None,
+        }
 
-    # §7.2.3: 新規セッション作成時に横断メモのテンプレートを初期挿入(有効時のみ)
-    _, note_tpl = _memo_templates()
-
-    ts = TradeSession(
-        id=session_id,
-        started_at=now,
+    agg = session_store.create_session(
         presented_at=presented_at,
-        current_position=presented_at,
         mode="training",
-        is_suspended=False,
-        note=note_tpl,
+        time_filter=time_filter,
     )
-    db.add(ts)
-    # 統合フロー(§6.1): 銘柄はエントリー時に Trade.symbol として確定するため、ここでは記録しない
-    db.commit()
-    db.refresh(ts)
-    return _build_response(ts, db)
 
+    # §7.2.3 横断メモテンプレを初期挿入(有効時のみ)
+    _, note_tpl = _memo_templates()
+    if note_tpl:
+        session_store.save_note(agg.meta.id, note_tpl)
+        agg.note = note_tpl
 
-# 仕様書 §6.3 ウォッチリスト(候補)CRUD
-@router.post("/{session_id}/candidates", response_model=CandidateResponse, status_code=201)
-def add_candidate(
-    session_id: str,
-    body: CreateCandidateRequest,
-    db: Session = Depends(get_db),
-) -> CandidateResponse:
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    symbol = body.symbol.upper()
-    existing = db.scalars(
-        select(SessionCandidate).where(
-            SessionCandidate.session_id == session_id,
-            SessionCandidate.symbol == symbol,
-        )
-    ).first()
-    if existing:
-        if body.memo is not None:
-            existing.memo = body.memo
-        db.commit()
-        db.refresh(existing)
-        return CandidateResponse.model_validate(existing)
-    # §7.2.3: 新規候補作成時に銘柄別メモのテンプレートを初期挿入(body.memo 未指定かつ有効時のみ)
-    cand_tpl, _ = _memo_templates()
-    initial_memo = body.memo if body.memo is not None else cand_tpl
-    c = SessionCandidate(session_id=session_id, symbol=symbol, memo=initial_memo, is_selected=False)
-    db.add(c)
-    db.commit()
-    db.refresh(c)
-    return CandidateResponse.model_validate(c)
-
-
-@router.patch("/{session_id}/candidates/{candidate_id}", response_model=CandidateResponse)
-def update_candidate(
-    session_id: str,
-    candidate_id: int,
-    body: UpdateCandidateRequest,
-    db: Session = Depends(get_db),
-) -> CandidateResponse:
-    c = db.get(SessionCandidate, candidate_id)
-    if c is None or c.session_id != session_id:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    if body.memo is not None:
-        c.memo = body.memo
-    db.commit()
-    db.refresh(c)
-    return CandidateResponse.model_validate(c)
-
-
-@router.delete("/{session_id}/candidates/{candidate_id}", status_code=204)
-def delete_candidate(
-    session_id: str,
-    candidate_id: int,
-    db: Session = Depends(get_db),
-) -> None:
-    c = db.get(SessionCandidate, candidate_id)
-    if c is None or c.session_id != session_id:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    db.delete(c)
-    db.commit()
+    return _build_response(agg)
 
 
 @router.get("", response_model=list[SessionListItem])
-def list_sessions(
-    limit: int = 20,
-    offset: int = 0,
-    db: Session = Depends(get_db),
-) -> list[SessionListItem]:
-    """仕様書 §10.3: 完了セッションは UI から参照できない(閉じると DB からも削除)。
-    DB に残っているセッションはすべて進行中 or 保留中。"""
-    sessions = db.scalars(
-        select(TradeSession)
-        .where(TradeSession.mode == "training")
-        .order_by(TradeSession.started_at.desc())
-        .limit(limit)
-        .offset(offset)
-    ).all()
+def list_sessions(limit: int = 100, offset: int = 0) -> list[SessionListItem]:
+    """全セッションを返す(進行中 + 決着済み)。
+    自動破棄は行わず、削除は OS / Dropbox 上のディレクトリ操作のみ([§13](./13-data-storage.md))。"""
+    aggs = session_store.list_sessions()
+    aggs = [a for a in aggs if a.meta.mode == "training"]
+    aggs = aggs[offset : offset + limit]
 
-    from trade_trainer_backend.services.post_eval import quick_r_pnl
-
-    result = []
-    for s in sessions:
-        # 統合フロー(§6.1): 一覧表示用 symbol は Trade.symbol から取る
-        trade = db.scalars(
-            select(Trade).where(Trade.session_id == s.id).order_by(Trade.entry_time.desc())
-        ).first()
-        # §9.5 実損益 R(決済済みのみ)。OHLC アクセスを伴わない quick 版で軽量に算出。
+    result: list[SessionListItem] = []
+    for agg in aggs:
+        trade = agg.trade
+        symbol = trade.symbol if trade is not None else ""
         r_pnl = quick_r_pnl(trade) if trade is not None else None
         pips_pnl = trade.pips_pnl if trade is not None else None
         result.append(
             SessionListItem(
-                id=s.id,
-                symbol=trade.symbol if trade else "",
-                started_at=s.started_at,
-                presented_at=s.presented_at,
-                mode=s.mode,
-                is_suspended=s.is_suspended,
-                name=s.name,
+                id=agg.meta.id,
+                symbol=symbol,
+                started_at=agg.meta.started_at,
+                presented_at=agg.meta.presented_at,
+                mode=agg.meta.mode,
+                is_settled=is_settled(agg),
+                name=agg.meta.name,
                 r_pnl=r_pnl,
                 pips_pnl=pips_pnl,
+                settled_at=agg.meta.settled_at,
             )
         )
     return result
 
 
+@router.get("/{session_id}", response_model=SessionResponse)
+def get_session(session_id: str) -> SessionResponse:
+    return _build_response(_ensure_session(session_id))
+
+
+@router.delete("/{session_id}", status_code=204)
+def close_session(session_id: str) -> None:
+    """ver 1.45: アプリ側に自動破棄を持たない。本エンドポイントは互換性のため残すが
+    フロントから 通常呼ばれない(削除は OS / Dropbox での手動操作)。"""
+    # 何もしない(セッションは決着済みのままファイルとして残る)
+    _ensure_session(session_id)
+
+
+# ============================================================================
+# 候補(銘柄別メモ)
+# ============================================================================
+
+@router.post("/{session_id}/candidates", response_model=CandidateResponse, status_code=201)
+def add_candidate(session_id: str, body: CreateCandidateRequest) -> CandidateResponse:
+    agg = _ensure_session(session_id)
+    symbol = body.symbol.upper()
+
+    existing = session_store.get_candidate(session_id, symbol)
+    if existing is not None:
+        if body.memo is not None:
+            session_store.save_candidate(session_id, symbol, body.memo)
+            existing = session_store.get_candidate(session_id, symbol) or existing
+        return _candidate_response(existing, agg.trade.symbol if agg.trade else None)
+
+    cand_tpl, _ = _memo_templates()
+    initial_memo = body.memo if body.memo is not None else cand_tpl
+    session_store.save_candidate(session_id, symbol, initial_memo)
+    new = session_store.get_candidate(session_id, symbol)
+    if new is None:
+        new = Candidate(symbol=symbol, memo=initial_memo)
+    return _candidate_response(new, agg.trade.symbol if agg.trade else None)
+
+
+@router.patch("/{session_id}/candidates/{symbol}", response_model=CandidateResponse)
+def update_candidate(
+    session_id: str,
+    symbol: str,
+    body: UpdateCandidateRequest,
+) -> CandidateResponse:
+    agg = _ensure_session(session_id)
+    sym = symbol.upper()
+    if session_store.get_candidate(session_id, sym) is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    if body.memo is not None:
+        session_store.save_candidate(session_id, sym, body.memo)
+    new = session_store.get_candidate(session_id, sym)
+    if new is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return _candidate_response(new, agg.trade.symbol if agg.trade else None)
+
+
+@router.delete("/{session_id}/candidates/{symbol}", status_code=204)
+def delete_candidate(session_id: str, symbol: str) -> None:
+    _ensure_session(session_id)
+    session_store.delete_candidate(session_id, symbol.upper())
+
+
+# ============================================================================
+# 横断メモ・名前
+# ============================================================================
+
+@router.patch("/{session_id}/note", response_model=SessionResponse)
+def update_note(session_id: str, body: UpdateNoteRequest) -> SessionResponse:
+    agg = _ensure_session(session_id)
+    new_note = body.note if body.note is not None else ""
+    session_store.save_note(session_id, new_note)
+    agg.note = new_note or None
+    # §4.2.2 決着判定
+    return _build_response(_maybe_settle(session_id))
+
+
+@router.patch("/{session_id}/name", response_model=SessionResponse)
+def update_name(session_id: str, body: UpdateSessionNameRequest) -> SessionResponse:
+    agg = _ensure_session(session_id)
+    name = (body.name or "").strip()
+    agg.meta.name = name if name else None
+    session_store.save_meta(agg.meta)
+    session_store.rename_dir(session_id)
+    return _build_response(_ensure_session(session_id))
+
+
+# ============================================================================
+# 見送り(層 2)
+# ============================================================================
+
+@router.post("/{session_id}/skip", response_model=SessionResponse)
+def skip_session(session_id: str, body: SkipSessionRequest) -> SessionResponse:
+    _ensure_session(session_id)
+    fd = FinalDecision(
+        has_entry=False,
+        skip_reason=body.reason,
+        considered_styles=body.considered_styles,
+    )
+    session_store.save_final_decision(session_id, fd)
+    session_store.rename_dir(session_id)
+    return _build_response(_maybe_settle(session_id))
+
+
+# ============================================================================
+# 事後振り返り(§9)
+# ============================================================================
+
 @router.get("/{session_id}/post-review", response_model=PostReviewResponse)
-def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostReviewResponse:
-    """仕様書 §9 判断結果の事後確認機能。
+def get_post_review(session_id: str) -> PostReviewResponse:
+    """§9 判断結果の事後確認。3 段階(10/50/200 本)事後 R + MFE/MAE/実損益 R。"""
+    agg = _ensure_session(session_id)
 
-    層 1 / 層 2 / エントリー済みトレードについて、presented_at 起点の 3 段階
-    (10/50/200 本先)事後評価 + エントリーの MFE/MAE/実損益 R を on-demand で返す
-    (principles/no-aggregation.md により DB 保存はしない)。
-
-    R 基準:
-    - エントリー: Trade.sl からの実 SL 幅
-    - 見送り(層 1 / 層 2): SessionFinalDecision.considered_styles の
-      TradingStyle.typical_sl_pips 中央値の平均(§9.3)
-    """
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    ref_dt = s.presented_at
+    ref_dt = agg.meta.presented_at
     if ref_dt.tzinfo is None:
         ref_dt = ref_dt.replace(tzinfo=timezone.utc)
 
     def to_stage_resp(stages: list) -> list[StageEvalResp]:
         return [StageEvalResp(**st.__dict__) for st in stages]
 
-    # 見送り時の R 基準(考慮スタイルから)は層 1 / 層 2 で共有する
-    fd = db.get(SessionFinalDecision, session_id)
-    skip_r_unit = resolve_skip_r_unit_pips(
-        fd.considered_styles if fd is not None else None,
-        db,
+    # 見送り R 基準
+    considered_styles = (
+        agg.final_decision.considered_styles if agg.final_decision is not None else None
     )
+    skip_r_unit = resolve_skip_r_unit_pips(considered_styles)
 
-    # 層 1: 非選定候補
+    # 層 1: エントリーしなかった候補
+    selected_symbol = agg.trade.symbol if agg.trade is not None else None
     candidate_reviews: list[CandidateReview] = []
-    for c in db.scalars(
-        select(SessionCandidate).where(
-            SessionCandidate.session_id == session_id,
-            SessionCandidate.is_selected.is_(False),
-        ).order_by(SessionCandidate.id)
-    ).all():
+    for c in agg.candidates:
+        if selected_symbol is not None and c.symbol == selected_symbol:
+            continue
         rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=skip_r_unit)
         candidate_reviews.append(CandidateReview(
             symbol=c.symbol,
             memo=c.memo,
-            skip_reason=c.skip_reason,
+            skip_reason=None,
             ref_price=rv.ref_price,
             r_unit_pips=skip_r_unit,
             stages=to_stage_resp(rv.stages),
         ))
 
-    # 統合フロー(§6.1): エントリー銘柄は Trade.symbol から取る。
     skip_review: SkipReview | None = None
     entry_review: EntryReview | None = None
-    trade = db.scalars(
-        select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
-    ).first()
-    if trade is not None:
-        trade_r_unit = resolve_trade_r_unit_pips(trade)
-        rv = evaluate_symbol(trade.symbol, ref_dt, r_unit_pips=trade_r_unit)
-        obs = evaluate_entry(trade)
+    if agg.trade is not None:
+        trade_r_unit = resolve_trade_r_unit_pips(agg.trade)
+        rv = evaluate_symbol(agg.trade.symbol, ref_dt, r_unit_pips=trade_r_unit)
+        obs = evaluate_entry(agg.trade)
         entry_review = EntryReview(
-            symbol=trade.symbol,
-            direction=trade.direction,
-            entry_price=trade.entry_price,
-            sl=trade.sl,
-            tp=trade.tp,
-            exit_price=trade.exit_price,
-            exit_reason=trade.exit_reason,
-            pips_pnl=trade.pips_pnl,
+            symbol=agg.trade.symbol,
+            direction=agg.trade.direction,
+            entry_price=agg.trade.entry_price,
+            sl=agg.trade.sl,
+            tp=agg.trade.tp,
+            exit_price=agg.trade.exit_price,
+            exit_reason=agg.trade.exit_reason,
+            pips_pnl=agg.trade.pips_pnl,
             ref_price=rv.ref_price,
             r_unit_pips=trade_r_unit,
             stages=to_stage_resp(rv.stages),
@@ -378,12 +427,13 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
             continuation_bars=obs.continuation_bars,
             continuation_available=obs.continuation_available,
         )
-    elif fd is not None and not fd.has_entry and (fd.skip_reason or fd.considered_styles):
-        # セッション全体を skip した記録(特定銘柄に紐付かない)
+    elif agg.final_decision is not None and not agg.final_decision.has_entry and (
+        agg.final_decision.skip_reason or agg.final_decision.considered_styles
+    ):
         skip_review = SkipReview(
             symbol="",
-            reason=fd.skip_reason,
-            considered_styles=fd.considered_styles,
+            reason=agg.final_decision.skip_reason,
+            considered_styles=agg.final_decision.considered_styles,
             ref_price=None,
             r_unit_pips=skip_r_unit,
             stages=[],
@@ -394,95 +444,3 @@ def get_post_review(session_id: str, db: Session = Depends(get_db)) -> PostRevie
         skip=skip_review,
         entry=entry_review,
     )
-
-
-@router.patch("/{session_id}/note", response_model=SessionResponse)
-def update_note(
-    session_id: str,
-    body: UpdateNoteRequest,
-    db: Session = Depends(get_db),
-) -> SessionResponse:
-    """§7.2.2 横断メモの更新。空文字 or null は許容(クリア)。"""
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    s.note = body.note
-    db.commit()
-    return _build_response(s, db)
-
-
-@router.patch("/{session_id}/name", response_model=SessionResponse)
-def update_name(
-    session_id: str,
-    body: UpdateSessionNameRequest,
-    db: Session = Depends(get_db),
-) -> SessionResponse:
-    """§6.1 セッション名の更新。空文字は null として保存(クリア相当)。"""
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    name = (body.name or "").strip()
-    s.name = name if name else None
-    db.commit()
-    return _build_response(s, db)
-
-
-@router.delete("/{session_id}", status_code=204)
-def close_session(session_id: str, db: Session = Depends(get_db)) -> None:
-    """セッションを閉じる(=破棄)。仕様書 §10.3 セッションライフサイクルの終端。
-    関連する候補・最終判断・トレード・シナリオ・描画・保有中メモは cascade で削除される。"""
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    db.delete(s)
-    db.commit()
-
-
-@router.get("/{session_id}", response_model=SessionResponse)
-def get_session(session_id: str, db: Session = Depends(get_db)) -> SessionResponse:
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return _build_response(s, db)
-
-
-@router.post("/{session_id}/skip", response_model=SessionResponse)
-def skip_session(
-    session_id: str,
-    body: SkipSessionRequest,
-    db: Session = Depends(get_db),
-) -> SessionResponse:
-    """見送り: エントリーせずにセッションを完了する(§7.3 層 2 / §9.1 全候補見送り)。"""
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    fd = db.get(SessionFinalDecision, session_id)
-    if fd is None:
-        fd = SessionFinalDecision(session_id=session_id, has_entry=False)
-        db.add(fd)
-    fd.has_entry = False
-    fd.skip_reason = body.reason
-    if body.considered_styles is not None:
-        fd.considered_styles = body.considered_styles
-    db.commit()
-    return _build_response(s, db)
-
-
-@router.patch("/{session_id}/suspend", response_model=SessionResponse)
-def suspend_session(session_id: str, db: Session = Depends(get_db)) -> SessionResponse:
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    s.is_suspended = True
-    db.commit()
-    return _build_response(s, db)
-
-
-@router.patch("/{session_id}/resume", response_model=SessionResponse)
-def resume_session(session_id: str, db: Session = Depends(get_db)) -> SessionResponse:
-    s = db.get(TradeSession, session_id)
-    if s is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    s.is_suspended = False
-    db.commit()
-    return _build_response(s, db)

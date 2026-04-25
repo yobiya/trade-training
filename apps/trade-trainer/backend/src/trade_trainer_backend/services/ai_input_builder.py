@@ -1,4 +1,4 @@
-"""仕様書 §11.3 AI 送信データを組み立てるビルダー。
+"""仕様書 §11.3 AI 送信データを組み立てるビルダー(ver 1.45 でファイル参照化)。
 
 画像(§11.3.1)はフロント側で lightweight-charts から書き出すため本モジュールには含めない。
 ここでは判断時点メタ・事後結果(R 単位)・メモ・経済指標・インジ設定・描画サマリを
@@ -14,14 +14,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
 from shared_schema.models.market import EconomicEvent
-from shared_schema.models.trading import (
-    Drawing,
-    SessionCandidate,
-    SessionFinalDecision,
-    Trade,
-    TradeSession,
-    TradingStyle,
-)
 from trade_trainer_backend.schemas.ai_analysis import (
     AIAnalysisPayload,
     DecisionMeta,
@@ -34,11 +26,21 @@ from trade_trainer_backend.schemas.ai_analysis import (
     StageEvalOut,
     StyleMeta,
 )
+from trade_trainer_backend.services import session_store
+from trade_trainer_backend.services.session_models import (
+    Candidate,
+    SessionAggregate,
+    Trade,
+)
 from trade_trainer_backend.services.post_eval import (
     evaluate_entry,
     evaluate_symbol,
     resolve_skip_r_unit_pips,
     resolve_trade_r_unit_pips,
+)
+from trade_trainer_backend.services.trading_style_store import (
+    TradingStyle as StoreStyle,
+    get_style,
 )
 
 
@@ -63,7 +65,7 @@ def _pip_size(symbol: str) -> float:
     return 0.01 if symbol.upper().endswith("JPY") else 0.0001
 
 
-def _style_meta(style: TradingStyle | None) -> StyleMeta | None:
+def _style_meta(style: StoreStyle | None) -> StyleMeta | None:
     if style is None:
         return None
     return StyleMeta(
@@ -76,10 +78,10 @@ def _style_meta(style: TradingStyle | None) -> StyleMeta | None:
     )
 
 
-def _fetch_styles(db: OrmSession, style_ids: list[str] | None) -> list[TradingStyle]:
+def _fetch_styles(style_ids: list[str] | None) -> list[StoreStyle]:
     if not style_ids:
         return []
-    return list(db.scalars(select(TradingStyle).where(TradingStyle.id.in_(style_ids))).all())
+    return [s for s in (get_style(sid) for sid in style_ids) if s is not None]
 
 
 def _determine_mode(trade: Trade | None) -> AnalysisMode:
@@ -95,24 +97,19 @@ def _determine_mode(trade: Trade | None) -> AnalysisMode:
     return "decision"
 
 
-def _build_decision_meta(
-    session: TradeSession,
-    trade: Trade | None,
-    fd: SessionFinalDecision | None,
-    db: OrmSession,
-) -> DecisionMeta:
-    if trade is not None:
-        trade_r = resolve_trade_r_unit_pips(trade)
-        style = db.get(TradingStyle, trade.style_id) if trade.style_id else None
+def _build_decision_meta(agg: SessionAggregate) -> DecisionMeta:
+    if agg.trade is not None:
+        trade_r = resolve_trade_r_unit_pips(agg.trade)
+        style = get_style(agg.trade.style_id) if agg.trade.style_id else None
         return DecisionMeta(
             decision_type="entry",
-            session_mode=session.mode,
-            symbol=trade.symbol,
-            decision_time=_utc(trade.entry_time),
-            decision_price=trade.entry_price,
-            direction=trade.direction,  # type: ignore[arg-type]
-            sl_price=trade.sl,
-            tp_price=trade.tp,
+            session_mode=agg.meta.mode,
+            symbol=agg.trade.symbol,
+            decision_time=_utc(agg.trade.entry_time),
+            decision_price=agg.trade.entry_price,
+            direction=agg.trade.direction,  # type: ignore[arg-type]
+            sl_price=agg.trade.sl,
+            tp_price=agg.trade.tp,
             r_unit_pips=trade_r,
             r_unit_source="trade_sl" if trade_r is not None else "unresolved",
             selected_style=_style_meta(style),
@@ -120,23 +117,20 @@ def _build_decision_meta(
         )
 
     # 見送り(またはまだ判断前)
-    considered = fd.considered_styles if fd is not None else None
-    skip_r = resolve_skip_r_unit_pips(considered, db)
-    considered_objs = _fetch_styles(db, considered)
+    considered = agg.final_decision.considered_styles if agg.final_decision is not None else None
+    skip_r = resolve_skip_r_unit_pips(considered)
+    considered_objs = _fetch_styles(considered)
     return DecisionMeta(
         decision_type="skip",
-        session_mode=session.mode,
+        session_mode=agg.meta.mode,
         symbol=None,
-        decision_time=_utc(session.presented_at),
+        decision_time=_utc(agg.meta.presented_at),
         decision_price=None,
         direction=None,
         sl_price=None,
         tp_price=None,
         r_unit_pips=skip_r,
-        r_unit_source=(
-            "style_median" if skip_r is not None
-            else "unresolved"
-        ),
+        r_unit_source=("style_median" if skip_r is not None else "unresolved"),
         selected_style=None,
         considered_styles=[
             s for s in (_style_meta(o) for o in considered_objs) if s is not None
@@ -180,44 +174,37 @@ def _build_entry_result(trade: Trade) -> EntryResult | None:
 
 
 def _build_memos(
-    session: TradeSession,
-    trade: Trade | None,
+    agg: SessionAggregate,
     layer1: list[Layer1Candidate],
-    candidates: list[SessionCandidate],
 ) -> MemoBlock:
     # エントリー銘柄の銘柄別メモ
     symbol_memo: str | None = None
-    if trade is not None:
-        for c in candidates:
-            if c.symbol == trade.symbol:
+    if agg.trade is not None:
+        for c in agg.candidates:
+            if c.symbol == agg.trade.symbol:
                 symbol_memo = c.memo
                 break
 
     return MemoBlock(
-        session_note=session.note,
+        session_note=agg.note,
         symbol_memo=symbol_memo,
         layer1_memos=layer1,
     )
 
 
 def _build_layer1(
-    session: TradeSession,
-    trade: Trade | None,
-    candidates: list[SessionCandidate],
+    agg: SessionAggregate,
     skip_r_unit: float | None,
     analysis_mode: AnalysisMode,
 ) -> list[Layer1Candidate]:
-    """層 1 非エントリー候補に対して事後 pips/R を計算して返す。
+    """層 1 非エントリー候補に対して事後 pips/R を計算して返す。"""
+    pa = agg.meta.presented_at
+    ref_dt = pa if pa.tzinfo else pa.replace(tzinfo=timezone.utc)
+    selected_symbol = agg.trade.symbol if agg.trade is not None else None
 
-    analysis_mode='decision' では事後データを含めない(principles/no-future-info)。
-    """
-    ref_dt = _utc(session.presented_at)
     result: list[Layer1Candidate] = []
-    for c in candidates:
-        if c.is_selected:
-            continue
-        # エントリー済みの場合、エントリー銘柄そのものは副次対象外
-        if trade is not None and c.symbol == trade.symbol:
+    for c in agg.candidates:
+        if selected_symbol is not None and c.symbol == selected_symbol:
             continue
 
         if analysis_mode == "review":
@@ -246,12 +233,9 @@ def _build_layer1(
     return result
 
 
-def _build_drawings(session_id: str, db: OrmSession) -> list[DrawingSummary]:
-    rows = db.scalars(
-        select(Drawing).where(Drawing.session_id == session_id)
-    ).all()
+def _build_drawings(agg: SessionAggregate) -> list[DrawingSummary]:
     result: list[DrawingSummary] = []
-    for d in rows:
+    for d in agg.drawings:
         note: str | None = None
         if d.kind == "wave_label":
             wave = (d.data or {}).get("wave") if isinstance(d.data, dict) else None
@@ -272,10 +256,9 @@ def _build_economic_events(
     symbol: str | None,
     db: OrmSession,
 ) -> list[EconomicEventSummary]:
-    """判断時刻 ±N 時間の経済指標を取得。symbol が指定されていればその通貨 + USD で絞る。"""
+    """判断時刻 ±N 時間の経済指標を取得。"""
     from_dt = decision_time - timedelta(hours=ECONOMIC_EVENT_WINDOW_HOURS)
     to_dt = decision_time + timedelta(hours=ECONOMIC_EVENT_WINDOW_HOURS)
-    # SQLite は naive で保存するため比較時も naive に揃える
     from_naive = from_dt.replace(tzinfo=None)
     to_naive = to_dt.replace(tzinfo=None)
 
@@ -325,49 +308,32 @@ def build_ai_analysis_input(
     """指定セッションから §11.3 の AI 送信 payload を組み立てる。
 
     analysis_mode=None なら Trade 状態から自動判定(決済済み→review、それ以外→decision)。
+    db は経済指標(SQLite 維持)取得のため引き続き必要。
     """
-    session = db.get(TradeSession, session_id)
-    if session is None:
+    agg = session_store.load(session_id)
+    if agg is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    trade = db.scalars(
-        select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
-    ).first()
-    fd = db.get(SessionFinalDecision, session_id)
-    candidates = list(db.scalars(
-        select(SessionCandidate).where(SessionCandidate.session_id == session_id)
-        .order_by(SessionCandidate.id)
-    ).all())
+    mode: AnalysisMode = analysis_mode or _determine_mode(agg.trade)
 
-    mode: AnalysisMode = analysis_mode or _determine_mode(trade)
-
-    decision = _build_decision_meta(session, trade, fd, db)
+    decision = _build_decision_meta(agg)
 
     entry_result: EntryResult | None = None
-    if mode == "review" and trade is not None:
-        entry_result = _build_entry_result(trade)
+    if mode == "review" and agg.trade is not None:
+        entry_result = _build_entry_result(agg.trade)
 
-    # 層 1 用の R 基準: エントリー時は Trade の SL 幅(entry と candidates で同じ R を使う)
-    # 見送り時は considered_styles の代理 R
-    if trade is not None:
-        layer1_r_unit = decision.r_unit_pips
-    else:
-        layer1_r_unit = decision.r_unit_pips  # skip の場合も decision.r_unit_pips が代理値
+    layer1 = _build_layer1(agg, decision.r_unit_pips, mode)
+    memos = _build_memos(agg, layer1)
 
-    layer1 = _build_layer1(session, trade, candidates, layer1_r_unit, mode)
+    indicators: list[IndicatorSnapshot] = []  # §11.8 未実装
 
-    memos = _build_memos(session, trade, layer1, candidates)
-
-    # インジ設定のスナップショット: §11.8 は未実装(後続)。空で返す。
-    indicators: list[IndicatorSnapshot] = []
-
-    drawings = _build_drawings(session_id, db)
+    drawings = _build_drawings(agg)
     events = _build_economic_events(decision.decision_time, decision.symbol, db)
 
     return AIAnalysisPayload(
         analysis_mode=mode,
         session_id=session_id,
-        session_mode=session.mode,
+        session_mode=agg.meta.mode,
         decision=decision,
         entry_result=entry_result,
         memos=memos,

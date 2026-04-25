@@ -3,13 +3,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException
 
-from shared_schema.models.trading import Trade, TradeSession
-from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.chart import AdvanceResponse, ChartResponse, OhlcBar
+from trade_trainer_backend.services import session_store
 
 router = APIRouter(tags=["chart"])
 
@@ -43,7 +40,7 @@ def _calculate_pips(symbol: str, direction: str, entry: float, exit_price: float
     return round(diff / pip_size, 1)
 
 
-def _check_sl_tp(trade: Trade, bars: pd.DataFrame) -> tuple[str, float] | None:
+def _check_sl_tp(trade, bars: pd.DataFrame) -> tuple[str, float] | None:  # type: ignore[no-untyped-def]
     """各バーで SL/TP がヒットしたか順番にチェックする。"""
     for _, bar in bars.iterrows():
         if trade.direction == "buy":
@@ -66,13 +63,13 @@ def get_chart(
     bars: int = _DEFAULT_BARS,
     before: datetime | None = None,  # 指定時は before より前の bars 本を返す(遅延ロード用)
     symbol: str | None = None,  # 銘柄選定中は任意銘柄のチャートを取得するために指定(§6.1)
-    db: Session = Depends(get_db),
 ) -> ChartResponse:
-    s = db.get(TradeSession, session_id)
-    if s is None:
+    agg = session_store.load(session_id)
+    if agg is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    current_pos = s.current_position.replace(tzinfo=timezone.utc)
+    cp = agg.meta.current_position
+    current_pos = cp if cp.tzinfo is not None else cp.replace(tzinfo=timezone.utc)
     from market_data.timeframes import TIMEFRAME_MINUTES
 
     if timeframe not in TIMEFRAME_MINUTES:
@@ -96,12 +93,9 @@ def get_chart(
     if symbol:
         symbol = symbol.upper()
     else:
-        trade = db.scalars(
-            select(Trade).where(Trade.session_id == session_id).order_by(Trade.entry_time.desc())
-        ).first()
-        if trade is None:
+        if agg.trade is None:
             raise HTTPException(status_code=400, detail="symbol query required in analyzing phase")
-        symbol = trade.symbol
+        symbol = agg.trade.symbol
 
     from market_data.accessor import get_ohlc
 
@@ -152,30 +146,24 @@ def get_chart(
 
 
 @router.post("/sessions/{session_id}/advance", response_model=AdvanceResponse)
-def advance_session(
-    session_id: str,
-    bars: int = 1,
-    db: Session = Depends(get_db),
-) -> AdvanceResponse:
+def advance_session(session_id: str, bars: int = 1) -> AdvanceResponse:
     """足を N 本進める。SL/TP ヒット時は自動決済する。"""
-    s = db.get(TradeSession, session_id)
-    if s is None:
+    agg = session_store.load(session_id)
+    if agg is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    current_pos = s.current_position.replace(tzinfo=timezone.utc)
+    cp = agg.meta.current_position
+    current_pos = cp if cp.tzinfo is not None else cp.replace(tzinfo=timezone.utc)
     new_pos = current_pos + timedelta(minutes=5 * bars)
-
-    # 統合フロー(§6.1): アクティブ Trade が無い分析フェーズでは銘柄が確定していないため、
-    # SL/TP 自動決済チェックは行わず、単に時間だけ進める。
-    trade = db.scalars(
-        select(Trade).where(Trade.session_id == session_id, Trade.exit_time.is_(None))
-    ).first()
 
     auto_closed = False
     exit_reason = None
     exit_price = None
     pips_pnl = None
     new_m5_bars: list[OhlcBar] = []
+
+    # 統合フロー(§6.1): 保有中(エントリー済 + 未決済)のみ自動決済チェック
+    trade = agg.trade if agg.trade is not None and agg.trade.exit_time is None else None
 
     if trade is not None:
         from market_data.accessor import get_ohlc
@@ -187,15 +175,16 @@ def advance_session(
             if hit:
                 exit_reason, exit_price = hit
                 pips_pnl = _calculate_pips(symbol, trade.direction, trade.entry_price, exit_price)
-                trade.exit_time = new_pos.replace(tzinfo=None)
+                trade.exit_time = new_pos
                 trade.exit_price = exit_price
                 trade.exit_reason = exit_reason
                 trade.pips_pnl = pips_pnl
+                session_store.save_trade(session_id, trade)
                 auto_closed = True
             new_m5_bars = _df_to_bars(new_m5)
 
-    s.current_position = new_pos.replace(tzinfo=None)
-    db.commit()
+    agg.meta.current_position = new_pos
+    session_store.save_meta(agg.meta)
 
     return AdvanceResponse(
         new_bars=new_m5_bars,

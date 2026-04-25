@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from shared_schema.models.market import EconomicEvent
-from shared_schema.models.trading import TradeSession
+from trade_trainer_backend.services import session_store
 from trade_trainer_backend.deps import get_db
 from trade_trainer_backend.schemas.event import EconomicEventResponse
 
@@ -35,13 +35,14 @@ def list_events(
     importance_min: int = 3,
     db: Session = Depends(get_db),
 ) -> list[EconomicEventResponse]:
-    s = db.get(TradeSession, session_id)
-    if s is None:
+    agg = session_store.load(session_id)
+    if agg is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
     from_utc = from_.astimezone(timezone.utc).replace(tzinfo=None) if from_.tzinfo else from_
     to_utc = to.astimezone(timezone.utc).replace(tzinfo=None) if to.tzinfo else to
-    current_pos = s.current_position  # naive UTC
+    cp = agg.meta.current_position
+    current_pos = cp.replace(tzinfo=None) if cp.tzinfo else cp  # naive UTC で比較
 
     stmt = (
         select(EconomicEvent)
