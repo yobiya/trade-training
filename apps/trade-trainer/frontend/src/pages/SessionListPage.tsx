@@ -26,8 +26,14 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const list = await api.sessions.list()
-    setSessions(list)
+    try {
+      const list = await api.sessions.list()
+      setSessions(list)
+    } catch (err) {
+      // I-11.6: mount 時取得失敗はデフォルト fallback(空一覧)+ ログのみ
+      console.warn('[SessionListPage] sessions.list failed', err)
+      setSessions([])
+    }
   }, [])
 
   useEffect(() => { void load() }, [load])

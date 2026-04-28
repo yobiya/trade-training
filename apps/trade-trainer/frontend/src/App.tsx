@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NotifyProvider } from './contexts/NotifyContext'
 import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
 import { SessionListPage } from './pages/SessionListPage'
@@ -9,7 +10,7 @@ type View =
   | { page: 'list' }
   | { page: 'session'; sessionId: string }
 
-function App() {
+function AppInner() {
   const { authenticated, login, logout } = useAuth()
   const [view, setView] = useState<View>({ page: 'list' })
 
@@ -36,6 +37,14 @@ function App() {
       onOpenSession={id => setView({ page: 'session', sessionId: id })}
       onLogout={logout}
     />
+  )
+}
+
+function App() {
+  return (
+    <NotifyProvider>
+      <AppInner />
+    </NotifyProvider>
   )
 }
 

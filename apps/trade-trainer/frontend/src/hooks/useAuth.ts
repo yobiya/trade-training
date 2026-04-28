@@ -8,8 +8,7 @@ export function useAuth() {
     api.auth.me()
       .then(r => setAuthenticated(r.authenticated))
       .catch(err => {
-        // FIXME (I-11.1): ログ追加済。I-11.4 については「未認証」状態は LoginPage への自動誘導で
-        // ユーザーに自然に伝わるため、追加 notify は不要と判断(セッション切れの一般的挙動)。
+        // I-11.6 mount 時取得失敗 = ログのみ(LoginPage 自動誘導でユーザーに自然に伝わるため notify 不要)
         console.warn('[useAuth] me() failed, treating as unauthenticated', err)
         setAuthenticated(false)
       })

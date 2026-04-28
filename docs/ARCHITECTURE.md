@@ -335,11 +335,22 @@ ver 1.45 / 1.53 で確立した役割分担:
 例:
 - 銘柄切替で全 TF が `bars=[]` になった場合 → 「(銘柄)のデータを取得できませんでした。MT5 マーケットウォッチに追加されているか確認してください」
 - advance で `new_bars=0` の場合 → 「進めましたが新しい M5 データが取得できませんでした」
-- AI 分析でエラー → 既存の `setError` パターン継続(モーダル / ページ単位の致命的エラー用)
+- AI 分析でエラー → モーダル内の致命的エラーは `setError` パターン継続、ネットワーク fail は `notify`
 
 通知文言は **「次に何を確認すべきか」** を含めること(原因解決の手がかり)。
 
-通知機構: 既存 `SessionPage.notify` を `hooks/useNotify.ts` に切り出して全コンポーネントから使えるようにする(別タスクで実装予定)。
+#### 通知機構(2026-04-29 確定)
+
+`apps/trade-trainer/frontend/src/contexts/NotifyContext.tsx` + `hooks/useNotify.ts` で実装。
+
+- **Provider 配置**: `App.tsx` の最上位(認証前 LoginPage でも利用可能)
+- **toast UI**: Provider 内で `<NotifyToasts />` として組み込み(画面右上に縦積み)
+- **API**: `const { notify, dismiss, messages } = useNotify()` / `notify(text, level?: 'info'|'warn'|'error')`
+- **寿命**: 既定 5 秒で自動消滅 + クリックで即時消去
+- **stack**: 多重通知は積み上げ表示
+- **境界外利用**: Provider 外で `useNotify()` を呼ぶと throw(開発時のバグ検知)
+
+致命的(モーダル単位の操作不能)なエラーは引き続きコンポーネント local の `setError` でモーダル内表示する。`notify` は **非ブロッキング toast** 専用。
 
 ### I-11.5 trust boundary でのサニティチェック
 
@@ -360,6 +371,16 @@ ver 1.45 / 1.53 で確立した役割分担:
 - 設定取得失敗 → デフォルト設定で動く
 
 ただし I-11.1 のログは必ず出す。「ユーザーが選択した銘柄のチャートが出ない」のようにユーザー入力に直接対応する失敗は I-11.4 に従い必ず通知する(デフォルト値返却で誤魔化さない)。
+
+#### notify 要否の判断基準(I-11.4 / I-11.6 をまたぐ運用ガイド)
+
+各 catch ブロックは以下のフローで判断する:
+
+| シナリオ | 通知 | 備考 |
+|---|---|---|
+| ユーザー入力に直接対応する失敗(銘柄切替で全 TF 空 / advance / エントリー / 見送り送信失敗) | **必ず notify** | I-11.4 |
+| バックグラウンド fetch / 自動再試行 / mount 時取得失敗(`useAuth.me` / `settings.get` / 経済指標 fetch 等) | **ログのみ** | I-11.6 デフォルト fallback の範囲。UI が壊れない限り notify しない |
+| 致命的エラー(モーダル単位の操作不能) | **コンポーネント local `setError`** | モーダル内表示(toast でなくフォーム上に永続表示) |
 
 ---
 
@@ -832,23 +853,74 @@ phase 別の表示要素:
 
 `session.is_settled`(横断メモが書かれた)は phase と独立。決着済みでもメモ・描画は編集可。
 
-## E.4 状態の所有(SessionPage)
-
-`SessionPage` が現状ほぼすべての状態を所有([Phase C で分解予定])。
+## E.4 状態の所有(2026-04-29 で hook 分解済)
 
 | state | 由来 | 更新タイミング |
 |---|---|---|
-| `session: TradeSession \| null` | `api.sessions.get` | mount / advance / enter / exit / skip / メモ・名前変更時 |
-| `activeTrade` | `api.trades.getActive` | mount / enter / exit / advance(auto-close) |
-| `latestTrade` | `api.trades.getLatest` | mount / enter / exit / advance(auto-close) |
-| `analyzingSymbol` | local | 銘柄ドロップダウン操作 |
-| `entryTf, activeTf, hiddenTfs` | local | TimeframeSelector 操作 |
-| `entryDraft: { sl, tp }` | local | チャートクリック / TradePanel ボタン経由(双方向) |
-| `entryPlacing: 'sl' \| 'tp' \| null` | local | TradePanel「📍 配置」ボタン |
-| クロスヘア同期 | `useCrosshairSync` hook | hook 内に閉じている。`SessionPage` は state を持たない(ver 1.55 で一元化) |
-| `notification, advancing, loading, skipping, memoOpen, ...` | local | UI 操作 |
+| `session, activeTrade, latestTrade, phase` | **`useSessionFetch(sessionId)`** | mount / advance / enter / exit / skip / メモ・名前変更時 |
+| `entryDraft, entryPlacing, advancing, loading` | **`useTradeFlow(...)`** | エントリー draft 編集 / 操作中フラグ |
+| 通知メッセージ(toast) | **`NotifyContext`** + `useNotify()` | 各種失敗 / 成功通知 |
+| `barsByTf, loadingByTf, currentPrice` | `useCharts` | 銘柄/TF 切替・advance |
+| クロスヘア同期 | `useCrosshairSync` hook | hook 内に閉じる(ver 1.55 で一元化) |
+| `analyzingSymbol, entryTf, activeTf, hiddenTfs, memoOpen, skipping, confirmSkipAll, skipAllReasonDraft, hoveredEvent` | SessionPage local | UI 配置に直結する分のみ |
 
-`barsByTf, currentPrice` は `useCharts` 内で管理(§E.5)。
+### 新 hook の契約(2026-04-29 確定)
+
+#### `useSessionFetch(sessionId)`
+
+```ts
+function useSessionFetch(sessionId: string): {
+  session: TradeSession | null
+  setSession: (s: TradeSession | null) => void
+  activeTrade: TradeResponse | null
+  setActiveTrade: (t: TradeResponse | null) => void
+  latestTrade: TradeResponse | null
+  setLatestTrade: (t: TradeResponse | null) => void
+  refresh: () => Promise<void>          // 3 つを並列再取得
+  phase: 'analyzing' | 'holding' | 'reviewing'  // 派生
+}
+```
+
+責務: session / activeTrade / latestTrade の取得 + refresh + phase 導出。mount 時に `refresh()` 実行。
+
+#### `useTradeFlow(params)`
+
+```ts
+function useTradeFlow(params: {
+  sessionId: string
+  currentSymbol: string
+  entryTf: string
+  reloadStack: () => Promise<void>
+  refreshSession: () => Promise<void>
+  setActiveTrade: (t: TradeResponse | null) => void
+  setLatestTrade: (t: TradeResponse | null) => void
+}): {
+  entryDraft: { sl: number | null; tp: number | null }
+  setEntryDraft: ...
+  entryPlacing: 'sl' | 'tp' | null
+  setEntryPlacing: ...
+  advancing: boolean
+  loading: boolean
+  handleEnter: (args: { direction; price; sl; tp }) => Promise<void>
+  handleExit: (price: number, reason: string) => Promise<void>
+  handleAdvance: (n?: number) => Promise<void>
+  handleSkip: (reason: string) => Promise<void>
+}
+```
+
+責務: トレード操作系 state + handler 4 つ。内部で `useNotify()` を呼んで成功/失敗を通知。`useSessionFetch` の setter / refresh は **props 注入** で受ける(双方向依存を避ける)。
+
+#### `useNotify()`
+
+```ts
+function useNotify(): {
+  messages: NotifyMessage[]
+  notify: (text: string, level?: 'info' | 'warn' | 'error') => void
+  dismiss: (id: number) => void
+}
+```
+
+詳細は [§B I-11.4](#i-114-ユーザー入力起因の失敗は-ui-に通知) 参照。
 
 ## E.5 `useCharts` の契約
 
@@ -1007,9 +1079,16 @@ ChartHandle = {
 
 ## E.10 既知の複雑さ
 
-- **`SessionPage` 600+ LOC**: 18 useState、13 子コンポーネント、5 つの hook を消費する god component。Phase C で `useTradeLifecycle` / `useEntryDraft` / `<ChartStack>` に分解予定([WORKFLOW.md §後続](./WORKFLOW.md))
-- **`entryDraft` 双方向**: チャートクリック / TradePanel ボタンの両経路で更新。Phase C で hook に集約予定
-- ~~**クロスヘア二重追跡**~~ → ver 1.55 で `useCrosshairSync` に集約済(SessionPage は state を持たない、Chart は ChartHandle 経由で命令的制御)
+- ~~**`SessionPage` 600+ LOC god component**~~ → 2026-04-29 で `useSessionFetch` / `useTradeFlow` / `useNotify` に分解。SessionPage は orchestration のみを担う 250 行程度に圧縮
+- ~~**`entryDraft` 双方向**~~ → `useTradeFlow` に集約済(2026-04-29)
+- ~~**クロスヘア二重追跡**~~ → ver 1.55 で `useCrosshairSync` に集約済
+
+### 残課題(将来の別タスク)
+
+- **R3: `Chart.tsx` 責務分割** — 444 行 / useEffect 8 個。座標変換 / series 管理 / イベント中継 / クロスヘア / スクリーンショットを内部 private hook に分解する余地あり
+- **R4: `drawing/state.ts` 515 行を tool 別 reducer に分割** — 設計自体は良好(state machine)、ファイルサイズだけが課題。次の描画機能追加時に着手
+- **R6: `index.css` 1,274 行のモジュール化** — CSS Modules / Tailwind 移行は別タスク
+- **テスト導入(Vitest / Pytest)** — Phase D として別タスク
 
 ## E.11 既知の落とし穴
 

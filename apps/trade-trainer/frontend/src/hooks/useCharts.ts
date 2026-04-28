@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { OhlcBar } from '../api/client'
+import { useNotify } from './useNotify'
 
 export type ChartsApi = {
   /** TF 別バー配列(ver 1.59: chart-stack で一括取得) */
@@ -28,6 +29,7 @@ export function useCharts(
   timeframes: string[],
   entryTf: string,
 ): ChartsApi {
+  const { notify } = useNotify()
   const [barsByTf, setBarsByTf] = useState<Record<string, OhlcBar[]>>({})
   const [loadingByTf, setLoadingByTf] = useState<Record<string, boolean>>({})
   const requestIdRef = useRef(0)
@@ -56,10 +58,12 @@ export function useCharts(
     } catch (err) {
       console.warn('[useCharts] chart-stack fetch failed', { sessionId, symbol: effectiveSymbol, err })
       if (reqId !== requestIdRef.current) return
+      // I-11.4: ユーザー入力起因(銘柄切替 / 初期表示)の失敗 → notify
+      notify(`チャート取得に失敗しました(${effectiveSymbol})。バックエンド接続を確認してください`, 'error')
       const tfs = tfsKey.split(',').filter(Boolean)
       setLoadingByTf(Object.fromEntries(tfs.map(tf => [tf, false])))
     }
-  }, [sessionId, effectiveSymbol, tfsKey])
+  }, [sessionId, effectiveSymbol, tfsKey, notify])
 
   // 銘柄切替 / TF 集合切替: 一旦空にしてから chart-stack を再取得
   useEffect(() => {
@@ -110,10 +114,11 @@ export function useCharts(
       })
     } catch (err) {
       console.warn('[useCharts] loadMoreHistory failed', { tf, sessionId, symbol: effectiveSymbol, err })
+      notify(`過去バーの取得に失敗しました(${tf})`, 'warn')
     } finally {
       historyLoadingRef.current[tf] = false
     }
-  }, [sessionId, effectiveSymbol])
+  }, [sessionId, effectiveSymbol, notify])
 
   return { barsByTf, loadingByTf, currentPrice, reloadStack, loadMoreHistory }
 }

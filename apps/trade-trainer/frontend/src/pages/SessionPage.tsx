@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { Drawing, EconomicEvent, SettingsResponse, TradeResponse, TradeSession } from '../api/client'
+import type { Drawing, EconomicEvent, SettingsResponse } from '../api/client'
 import { Chart } from '../components/Chart'
 import type { PriceLine } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
@@ -15,7 +15,7 @@ import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { SYMBOLS, TIMEFRAMES, TIMEFRAME_MINUTES, getTimeframeColor } from '../constants'
+import { SYMBOLS, TIMEFRAMES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { isDrawingVisibleOnTf } from '../drawing/visibility'
 import { useChartRefCache } from '../hooks/useChartRefCache'
@@ -24,14 +24,15 @@ import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
 import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
 import { useEconomicEvents } from '../hooks/useEconomicEvents'
+import { useNotify } from '../hooks/useNotify'
+import { useSessionFetch } from '../hooks/useSessionFetch'
+import { useTradeFlow } from '../hooks/useTradeFlow'
 import { formatJST } from '../utils/datetime'
 
 type Props = {
   sessionId: string
   onBack: () => void
 }
-
-type Phase = 'analyzing' | 'holding' | 'reviewing'
 
 function priceLinesForTf(
   drawings: Drawing[],
@@ -62,42 +63,36 @@ function priceLinesForTf(
 
 /**
  * 仕様書 §6.1 統合フロー: 1 画面で分析 → エントリー → 保有 → 振り返り を通す。
- * - 分析中: 銘柄切替・描画・インジ・時間進行・メモ・★ 候補・エントリー・見送り
- * - 保有中: 銘柄は Trade.symbol に固定、時間進行 / 決済
- * - 振り返り: Trade 結果 + PostReviewPanel、続き観察のために時間進行継続可能
+ *
+ * ver 1.59 + 2026-04-29 で hook 分解:
+ * - `useSessionFetch`: session / activeTrade / latestTrade / phase
+ * - `useTradeFlow`: エントリー draft / advance / 決済 / 見送り
+ * - `useNotify`: toast 通知(設計 §B I-11.4)
+ *
+ * SessionPage 自身は orchestration + UI 配置に直結する local state のみ保持する。
  */
 export function SessionPage({ sessionId, onBack }: Props) {
-  const [session, setSession] = useState<TradeSession | null>(null)
-  const [activeTrade, setActiveTrade] = useState<TradeResponse | null>(null)
-  const [latestTrade, setLatestTrade] = useState<TradeResponse | null>(null)
+  const { notify } = useNotify()
+  const {
+    session, setSession,
+    activeTrade, setActiveTrade,
+    latestTrade, setLatestTrade,
+    refresh: refreshSession,
+    phase,
+  } = useSessionFetch(sessionId)
 
-  // 分析フェーズで表示中の銘柄。エントリー後は Trade.symbol に固定される。
+  // UI 配置に直結する local state
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string>(SYMBOLS[0])
-
   const [entryTf, setEntryTf] = useState('M5')
   const [activeTf, setActiveTf] = useState('M5')
   const [hiddenTfs, setHiddenTfs] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(false)
-  const [notification, setNotification] = useState<string | null>(null)
-  const [advancing, setAdvancing] = useState(false)
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
   const [skipping, setSkipping] = useState(false)
   const [memoOpen, setMemoOpen] = useState(false)
   const [confirmSkipAll, setConfirmSkipAll] = useState(false)
   const [skipAllReasonDraft, setSkipAllReasonDraft] = useState('')
 
-  // §7.4 ver 1.50: チャート上で SL/TP を配置するエントリー組み立て状態
-  const [entryDraft, setEntryDraft] = useState<{ sl: number | null; tp: number | null }>({ sl: null, tp: null })
-  const [entryPlacing, setEntryPlacing] = useState<'sl' | 'tp' | null>(null)
-
-  // フェーズ判定
-  const phase: Phase = activeTrade
-    ? 'holding'
-    : (latestTrade && latestTrade.exit_time)
-      ? 'reviewing'
-      : 'analyzing'
-
-  // 現在の対象銘柄
+  // 現在の対象銘柄(phase + analyzingSymbol + 各 trade.symbol から導出)
   const currentSymbol = phase === 'analyzing'
     ? analyzingSymbol
     : (activeTrade?.symbol ?? latestTrade?.symbol ?? analyzingSymbol)
@@ -117,21 +112,27 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   const { handles: chartHandles, setRef: setChartRef } = useChartRefCache()
 
-  // §5.1.2 マルチ TF クロスヘア同期(ver 1.55: SessionPage の state を撤去し hook に集約)
+  // §5.1.2 マルチ TF クロスヘア同期
   useCrosshairSync(chartHandles)
   const chartApiRef = useRef<ChartApi | null>(null)
+
+  // トレード操作系を hook に集約(2026-04-29 で SessionPage から分離)
+  const trade = useTradeFlow({
+    sessionId, currentSymbol, entryTf,
+    reloadStack,
+    setSession, setActiveTrade, setLatestTrade,
+  })
 
   // §5.4 経済指標: 設定読み込み + 表示期間内のイベント取得
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
   useEffect(() => {
-    // I-11.6: 設定取得失敗はデフォルト値(null)で graceful 動作。I-11.1 のログ要件は満たす。
+    // I-11.6: 設定取得失敗はデフォルト fallback、ログのみ
     api.settings.get().then(setSettings).catch(err => {
       console.warn('[SessionPage] settings.get failed, falling back to null defaults', err)
       setSettings(null)
     })
   }, [])
 
-  // 表示中 bars の時間範囲(全 TF の最小〜最大)。未来の指標も見えるよう右端は current_position 付近まで。
   const eventsRange = useMemo(() => {
     let minT: number | null = null
     let maxT: number | null = null
@@ -155,7 +156,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
     enabled: settings !== null,
   })
 
-  // ツールチップ対象の経済指標(アクティブチャート上のカーソル近接で決まる)
   const [hoveredEvent, setHoveredEvent] = useState<EconomicEvent | null>(null)
 
   function handleChartMouseEnter(tf: string) {
@@ -163,15 +163,15 @@ export function SessionPage({ sessionId, onBack }: Props) {
     chartApiRef.current = chartHandles.get(tf)?.api ?? null
   }
 
-  /** px で 12 以内に最も近いイベントを返す。無ければ null。 */
+  /** px で 12 以内に最も近いイベントを返す。 */
   const findNearestEvent = useCallback((pxX: number): EconomicEvent | null => {
     if (events.length === 0) return null
-    const api = chartApiRef.current
-    if (!api) return null
+    const apiCoord = chartApiRef.current
+    if (!apiCoord) return null
     let best: { ev: EconomicEvent; dx: number } | null = null
     for (const ev of events) {
       const t = Math.floor(new Date(ev.event_time).getTime() / 1000)
-      const x = api.timeToX(t)
+      const x = apiCoord.timeToX(t)
       if (x === null) continue
       const dx = Math.abs(x - pxX)
       if (dx > 12) continue
@@ -220,42 +220,31 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   const handleChartClick = useCallback(
     (price: number, time: number | null, px: { x: number; y: number }) => {
-      if (entryPlacing) {
+      if (trade.entryPlacing) {
         const rounded = roundToDigits(price)
-        setEntryDraft(prev => ({ ...prev, [entryPlacing]: rounded }))
-        setEntryPlacing(null)
+        trade.setEntryDraft(prev => ({ ...prev, [trade.entryPlacing!]: rounded }))
+        trade.setEntryPlacing(null)
         return
       }
       interaction.handlers.onChartClick(price, time, px)
     },
-    [entryPlacing, interaction.handlers, roundToDigits],
+    [trade, interaction.handlers, roundToDigits],
   )
 
   // 配置モードに入ったら描画ツールを Idle に戻す(衝突回避)
   useEffect(() => {
-    if (entryPlacing && interaction.activeTool) {
+    if (trade.entryPlacing && interaction.activeTool) {
       interaction.selectTool(null)
     }
-  }, [entryPlacing, interaction])
+  }, [trade.entryPlacing, interaction])
 
-  // 銘柄切り替え / フェーズ移行で draft をクリア
+  // 銘柄切替 / フェーズ移行で draft をクリア
   useEffect(() => {
     if (phase !== 'analyzing') {
-      setEntryDraft({ sl: null, tp: null })
-      setEntryPlacing(null)
+      trade.setEntryDraft({ sl: null, tp: null })
+      trade.setEntryPlacing(null)
     }
-  }, [phase, currentSymbol])
-
-  function notify(msg: string) {
-    setNotification(msg)
-    setTimeout(() => setNotification(null), 3000)
-  }
-
-  useEffect(() => {
-    void api.sessions.get(sessionId).then(setSession)
-    void api.trades.getActive(sessionId).then(setActiveTrade)
-    void api.trades.getLatest(sessionId).then(setLatestTrade)
-  }, [sessionId])
+  }, [phase, currentSymbol, trade])
 
   // 仕様書 §7.3: M キーでメモパネルをトグル
   useEffect(() => {
@@ -270,95 +259,31 @@ export function SessionPage({ sessionId, onBack }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  async function handleAdvance(n: number = 1) {
-    setAdvancing(true)
-    try {
-      // 仕様 §5.1.1: 「+N 本」は entry TF の N バー。backend は M5 換算本数を受ける。
-      const m5Bars = Math.max(1, n * Math.round((TIMEFRAME_MINUTES[entryTf] ?? 5) / 5))
-      const res = await api.chart.advance(sessionId, m5Bars, currentSymbol)
-      // ver 1.59: chart-stack を再呼び出して全 TF をまとめて取得し直す。
-      await reloadStack()
-      if (res.trade_auto_closed) {
-        const pips = res.trade_pips_pnl ?? 0
-        notify(`自動決済: ${res.trade_exit_reason?.toUpperCase()} @ ${res.trade_exit_price} (${pips > 0 ? '+' : ''}${pips} pips)`)
-        const closed = await api.trades.getLatest(sessionId)
-        setLatestTrade(closed)
-        setActiveTrade(null)
-      }
-      const s = await api.sessions.get(sessionId)
-      setSession(s)
-    } finally {
-      setAdvancing(false)
-    }
-  }
-
-  async function handleEnter(args: {
-    direction: 'buy' | 'sell'
-    price: number
-    sl: number
-    tp: number | undefined
-  }) {
-    setLoading(true)
-    try {
-      const trade = await api.trades.enter(sessionId, {
-        symbol: currentSymbol,
-        direction: args.direction,
-        price: args.price,
-        sl: args.sl,
-        tp: args.tp,
-      })
-      setActiveTrade(trade)
-      setLatestTrade(trade)
-      setEntryDraft({ sl: null, tp: null })
-      setEntryPlacing(null)
-      const s = await api.sessions.get(sessionId)
-      setSession(s)
-      notify(`エントリー: ${args.direction.toUpperCase()} ${currentSymbol} @ ${args.price}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleExit(price: number, reason: string) {
-    setLoading(true)
-    try {
-      const trade = await api.trades.exit(sessionId, { price, reason })
-      setActiveTrade(null)
-      setLatestTrade(trade)
-      const pips = trade.pips_pnl ?? 0
-      notify(`決済: ${price} (${pips > 0 ? '+' : ''}${pips} pips)`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function handleSkipConfirm(reason: string) {
-    await api.sessions.skip(sessionId, reason)
-    const s = await api.sessions.get(sessionId)
-    setSession(s)
+    await trade.handleSkip(reason)
     setSkipping(false)
-    notify('見送り確定 — 振り返りメモを書くと決着済みに自動遷移します')
   }
 
   async function handleSkipAllConfirm() {
-    await api.sessions.skip(sessionId, skipAllReasonDraft || undefined)
-    const s = await api.sessions.get(sessionId)
-    setSession(s)
+    await trade.handleSkip(skipAllReasonDraft || undefined)
     setConfirmSkipAll(false)
     setSkipAllReasonDraft('')
-    notify('全候補を見送り — 振り返りメモを書くと決着済みに自動遷移します')
   }
 
   async function toggleCandidate() {
     if (!session) return
     const existing = session.candidates.find(c => c.symbol === currentSymbol)
-    if (existing) {
-      await api.sessions.deleteCandidate(sessionId, existing.id)
-    } else {
-      await api.sessions.addCandidate(sessionId, currentSymbol)
+    try {
+      if (existing) {
+        await api.sessions.deleteCandidate(sessionId, existing.id)
+      } else {
+        await api.sessions.addCandidate(sessionId, currentSymbol)
+      }
+      await refreshSession()
+    } catch (err) {
+      console.warn('[SessionPage] toggleCandidate failed', err)
+      notify('候補の更新に失敗しました', 'error')
     }
-    const s = await api.sessions.get(sessionId)
-    setSession(s)
   }
 
   const candidates = session?.candidates ?? []
@@ -381,8 +306,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
               const s = await api.sessions.updateName(sessionId, v || null)
               setSession(s)
             } catch {
-              // 失敗時は元の値に戻す(controlled でないので明示リセット)
               e.currentTarget.value = session?.name ?? ''
+              notify('セッション名の更新に失敗しました', 'error')
             }
           }}
           onKeyDown={(e) => {
@@ -429,8 +354,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
         </button>
       </header>
 
-      {notification && <div className="notification">{notification}</div>}
-
       <div className="training-body">
         <div className="chart-area chart-stack">
           {visibleTfs.map(tf => (
@@ -452,7 +375,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 bars={barsByTf[tf] ?? []}
                 timeframe={tf}
                 digits={session?.digits}
-                cursor={activeTf === tf ? (entryPlacing ? 'crosshair' : interaction.cursor) : undefined}
+                cursor={activeTf === tf ? (trade.entryPlacing ? 'crosshair' : interaction.cursor) : undefined}
                 onNeedMoreHistory={(earliest) => void loadMoreHistory(tf, earliest)}
                 onChartClick={activeTf === tf ? handleChartClick : undefined}
                 onMouseMove={activeTf === tf ? (price, time, px) => {
@@ -461,7 +384,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 } : undefined}
                 onMouseDown={activeTf === tf ? interaction.handlers.onMouseDown : undefined}
                 onMouseUp={activeTf === tf ? interaction.handlers.onMouseUp : undefined}
-                priceLines={priceLinesForTf(drawings, tf, interaction.preview, entryDraft)}
+                priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft)}
                 indicators={indicators}
               />
               <EventOverlay
@@ -502,17 +425,17 @@ export function SessionPage({ sessionId, onBack }: Props) {
             <TradePanel
               activeTrade={activeTrade}
               currentPrice={currentPrice}
-              onEnter={handleEnter}
-              onExit={handleExit}
-              loading={loading}
+              onEnter={trade.handleEnter}
+              onExit={trade.handleExit}
+              loading={trade.loading}
               digits={session?.digits ?? 5}
-              entryDraft={entryDraft}
-              entryPlacing={entryPlacing}
+              entryDraft={trade.entryDraft}
+              entryPlacing={trade.entryPlacing}
               pipSize={pipSize}
-              onPlaceSL={() => setEntryPlacing(p => p === 'sl' ? null : 'sl')}
-              onPlaceTP={() => setEntryPlacing(p => p === 'tp' ? null : 'tp')}
-              onClearSL={() => setEntryDraft(d => ({ ...d, sl: null }))}
-              onClearTP={() => setEntryDraft(d => ({ ...d, tp: null }))}
+              onPlaceSL={() => trade.setEntryPlacing(trade.entryPlacing === 'sl' ? null : 'sl')}
+              onPlaceTP={() => trade.setEntryPlacing(trade.entryPlacing === 'tp' ? null : 'tp')}
+              onClearSL={() => trade.setEntryDraft(d => ({ ...d, sl: null }))}
+              onClearTP={() => trade.setEntryDraft(d => ({ ...d, tp: null }))}
             />
           )}
 
@@ -535,15 +458,15 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
           <div className="action-buttons">
             <button
-              onClick={() => void handleAdvance()}
-              disabled={advancing}
+              onClick={() => void trade.handleAdvance()}
+              disabled={trade.advancing}
               className="advance-btn"
             >
-              {advancing ? '...' : '▶ +1本'}
+              {trade.advancing ? '...' : '▶ +1本'}
             </button>
             <button
-              onClick={() => void handleAdvance(5)}
-              disabled={advancing}
+              onClick={() => void trade.handleAdvance(5)}
+              disabled={trade.advancing}
               className="advance-btn"
             >
               ▶▶ +5本
