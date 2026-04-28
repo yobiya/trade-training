@@ -190,6 +190,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' },
       grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
       timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      // ローソク足の上下余白(lightweight-charts 既定の半分: top 0.2→0.1, bottom 0.1→0.05)
+      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.05 } },
       // 仕様書 §5.1.3: 素のホイール = ページスクロール、Ctrl+ホイール = ズーム
       // ライブラリ標準のホイールズームを無効化し、自前の wheel ハンドラで分岐する
       handleScale: { mouseWheel: false },
@@ -430,7 +432,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.05, bottom: 0.25 } })
       rsiPaneConfiguredRef.current = true
     } else if (rsiPaneConfiguredRef.current) {
-      chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.05, bottom: 0.05 } })
+      // RSI 解除時は createChart 既定値に戻す
+      chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.05 } })
       rsiPaneConfiguredRef.current = false
     }
   }, [indicators, bars])
