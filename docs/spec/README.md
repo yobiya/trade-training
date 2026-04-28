@@ -13,7 +13,7 @@
 | §5 | チャート機能 | [05-chart.md](./05-chart.md) |
 | §6 | セッション画面(統合フロー) | [06-session-screen.md](./06-session-screen.md) |
 | §7 | メモ機能 | [07-memo.md](./07-memo.md) |
-| §8 | トレードスタイル管理 | [08-trading-style.md](./08-trading-style.md) |
+| §8 | *(トレードスタイル機能は ver 1.50 で全廃)* | — |
 | §9 | 判断結果の事後確認機能 | [09-post-review.md](./09-post-review.md) |
 | §10 | *(集計・情報蓄積を採用しない方針 → principles/ へ移管)* | [principles/no-aggregation.md](./principles/no-aggregation.md) |
 | §11 | AI 分析機能 | [11-ai-analysis.md](./11-ai-analysis.md) |
@@ -46,21 +46,42 @@
 | 描画(銘柄別に紐付け) | §5.3 / §5.5 | §6.1 セッション画面 / §17 Drawing.symbol |
 | インジケーター | §5.2 | §11.8 設定スナップショット / §17 IndicatorConfig |
 | 経済指標表示 | §5.4 | §2.10 データ取得 / §11.3.2 AI 送信 |
-| AI 分析 | §11 | §7 メモ送信 / §8 スタイル送信 / §9.6 事後情報の送信範囲 / §17 データモデル |
-| 判断結果の事後確認(R ベース) | §9 | §4.1 Phase 4 / §6.1 振り返りサイドバー / §8 typical_sl_pips / §11.3 AI 送信 / §17 Trade / §12 step 14 / principles/no-future-info |
-| トレードスタイル | §8 | §7.4 エントリー必須 / §11.3.2 AI 送信 / §17 TradingStyle |
+| AI 分析 | §11 | §7 メモ送信 / §9.6 事後情報の送信範囲 / §17 データモデル |
+| 判断結果の事後確認(R ベース) | §9 | §4.1 Phase 4 / §6.1 振り返りサイドバー / §11.3 AI 送信 / §17 Trade / §12 step 14 / principles/no-future-info |
 | リアルトレード特有機能 | §12 | §7 メモ差分 / §11 AI 分析 / §15.4 trade-live / §17 `mode` フラグ |
-| データモデル全体 | §17 | 各章のデータ変更(§7 / §8 / §11.8 / §12) |
+| データモデル全体 | §17 | 各章のデータ変更(§7 / §11.8 / §12) |
 | タグ・構造化入力を採用しない | principles/no-tags | §6.4 / §7.1 / §9.1 / §11 |
 | 集計・蓄積を採用しない | principles/no-aggregation | §9.4 / §11.1 / §13 / §16 |
 
 ## 関連ドキュメント
 
 - セットアップ・起動手順: [../Setup.md](../Setup.md)
+- **作業手順(必読)**: [../WORKFLOW.md](../WORKFLOW.md)
+- **設計ドキュメント**: [../ARCHITECTURE.md](../ARCHITECTURE.md) — モジュール責務・状態所有・データフロー・横断不変条件
 
 ---
 
-*仕様書 ver 1.49 - 2026/04/25 (§11.6 任意プレビュー / 個別要素の除外チェック機能を撤去。価格などを R:R 比率で扱うため、横断メモ・銘柄別メモに非公開情報が入ることが基本的にない運用方針。万一非公開情報が混じる場合は AI 分析自体を使わないことで対応する。これにより「個別要素を選んで除外する」機能の存在意義が消え、仕様・実装ともに撤去する。§11.6 ブロック名「データ送信の調整・キャッシュ・時刻整形」→「キャッシュ・使用量メタ・時刻整形」に変更。§11.3.3「送らない(手動除外)」記述を「メモは AI に送ってよい内容のみで書く前提」に書き換え。§11.9.5 の「任意プレビュー」参照を「プロンプト規範でガード」表現に置換。§16 Phase 4 から「+ 任意の送信前プレビュー」削除。実装側も連動で backend `GET /preview` エンドポイントと frontend `api.ai.preview` を撤去。`build_ai_analysis_input` は run ハンドラ内で引き続き使用)*
+*仕様書 ver 1.59 - 2026/04/28 (チャート取得層を白紙再構築。前回 ver 1.58 の TF 別個別取得 + 再帰集約方式は cold load で MT5 がシリアライズして 20 秒以上かかる問題が解消できなかったため、**キャッシュ層撤去 + 単一 chart-stack エンドポイント + 直列フェッチ** に切替。仕様面: §5.1.1 を「最新バーは一つ下の TF を集約して算出」に明記(未来漏れ防止)。実装面: backend に `GET /sessions/{id}/chart-stack` を新設し、M5 → M15 → … → MN1 の順で provider.fetch_ohlc を直列実行、各 TF の最新バーは直前 TF の DataFrame から集約。frontend は `useCharts` から per-TF 並列 fetch / `refreshTails` / `mergeM5Bars` / `loadMoreHistory` を撤去し、chart-stack を単一呼び出しに統一。Chart.tsx の `latestTimeRef` / `isRightExtension` / `update()` 経路は全削除して `setData` + `fitContent` のシンプル版に戻す。`ohlc` テーブルは未使用化、データは残置)*
+
+*ver 1.58 - 2026/04/28 (§5.1.1 上位足のライブバー計算規則を **「一つ下の TF を集約」** に変更(設計書 §B I-2 改訂)。これまで「上位足は M5 から resample」だったため、新規銘柄の cold load で W1 = 5.7 年分の M5(約 60 万本)/ MN1 = 約 100 万本を MT5 から取得して 10 秒以上かかっていた問題への根本対応。新規則: 各 TF を MT5 から個別取得・個別キャッシュし、進行中の最新バーのみ「一つ下の TF」を集約して動的計算する(M15←M5 / H1←M15 / H4←H1 / D1←H4 / W1←D1 / MN1←W1)。確定済みバーは broker のネイティブ集約値を信頼。advance 時のライブバー追従は再帰チェーンで自動的に機能する。実装は backend `market-data` のみ(provider に `fetch_ohlc(tf, ...)` 追加、`_ensure_m5_cache` を `_ensure_tf_cache` に汎用化、進行中バーは cache に store しない)。frontend / DB スキーマ変更なし)*
+
+*ver 1.57 - 2026/04/26 (§5.2 インジケーターを差し替え。`EMA(period=50)` の単一プリセットを撤去し、`EMA20`(短期トレンド)と `EMA200`(長期トレンド)の 2 プリセットに分割。SMA / RSI は据え置き。frontend `indicators/types.ts` の `IndicatorType` Union を `'SMA' | 'EMA20' | 'EMA200' | 'RSI'` に変更し、registry に EMA20 / EMA200 を別エントリとして登録(両者とも `calcEMA` を使用、period のみ異なる)。frontend `indicators` state は local 限定で persistence なしのためマイグレーション不要)*
+
+*ver 1.56 - 2026/04/26 (§4.1 Phase 1 step 2: ランダム提示日時を **JST 08:00〜翌 02:00** の 18 時間枠に限定。JST 02:00〜08:00 は流動性が極端に低く訓練価値が低いため除外。実装は backend `_matches_filters` に JST 時間帯チェックを追加(曜日 / セッションフィルタと AND 条件で評価))*
+
+*仕様書 ver 1.55 - 2026/04/26 (§5.1.1 「+1本 / +5本」ボタンの「本」単位を **エントリー TF の 1 バー** と定義。これまでは backend が常に M5 ベースで進めていたため、エントリー TF が M15 だと +1 本を 3 回押すまで M15 の新バーが出ず「進まない」と感じる UX 問題があった。frontend の `handleAdvance(n)` で entry TF / M5 比率(M15=3、H1=12、H4=48、D1=288、W1=2016、MN1=月毎可変→近似値)を掛けて backend `bars` パラメータを渡す方式に変更。backend `advance_session` は変更せず、引き続き `bars` を「M5 換算本数」として受け取る。MN1 は月毎日数が異なるため一定値で近似(30 日 ≒ 8640 M5)。実装は frontend のみ、API 互換性あり)*
+
+*ver 1.54 - 2026/04/26 (セッションファイル構造を統合。これまで `session.json` / `trade.json` / `final_decision.json` / `drawings.json` / `holding_memos.jsonl` の 5 ファイルに分かれていたユーザー入力情報を、**session.json 1 つに統合**(自由記述系の `note.md` / `candidates/*.md` は分割を維持)。session.json に `trade` / `final_decision` / `drawings` / `holding_memos` をフィールドとして持つ。読み書きパスが煩雑だった `session_store.py` を簡素化し、同時に `tmp + os.replace` の atomic write を `Path.write_text` の単純書き込みに撤去(個人用シングルプロセスで Dropbox 競合は実用上稀のため)。後方互換: ver 1.54 以前の旧形式は読み出し時にフォールバックで対応、次回 save 時に自動的に統合形式に移行(旧個別ファイルは削除)。§13.2 / §17.1 の構造図と JSON 例を更新)*
+
+*ver 1.53 - 2026/04/25 (上位足キャッシュを TF 別に拡張。これまでは M5 のみキャッシュし、上位足(M15 / H1 / H4 / D1 / W1 / MN1)は読み出し時に都度 resample していたが、特に D1 以上で M5 を数十万行 SELECT + pandas resample が大きな遅延要因だったため、TF 別にキャッシュする方式へ切替。`ohlc_m5` テーブルを `ohlc` に置き換え、PK を `(symbol, timestamp, source)` から `(symbol, timeframe, timestamp, source)` に拡張(Alembic 移行 c8e3f2a4b6d9)。`market-data` 内の挙動は: M5 は provider から直接取得・キャッシュ、上位足は M5 cache を resample してその結果も `ohlc(timeframe=...)` に upsert、2 回目以降は cache 読み出しのみで完了。末尾バーは未確定の可能性があるため毎回末尾 2 本を再 resample → upsert で確定値に追従。`fetch_ohlc(session, symbol, tf, ...)` を新公開 API として追加、旧 `fetch_ohlc_m5` は M5 ショートカットとして後方互換維持。仕様書側は §2.2 の「上位足は動的集約」記述を「TF 別キャッシュ」に書換、§2.5 のスキーマ図を `ohlc` テーブルに更新、§17 データモデルで `OhlcM5` → `Ohlc`、§11.3 / §15.6 / principles/no-aggregation の `ohlc_m5` 参照を `ohlc` に更新)*
+
+*ver 1.52 - 2026/04/25 (時間足ラインアップを変更: M30 を撤去、W1(週足)と MN1(月足)を追加。新ラインアップは `M5 / M15 / H1 / H4 / D1 / W1 / MN1` の 7 本立て。M30 はユーザーの判断軸として使用しないことが運用上明確になったため撤去。W1 / MN1 は週次・月次の長期トレンド把握に必要なため追加。§5.1.1 の TF 列挙、§5.3 描画 TF 識別色テーブル、§2.2 上位足列挙を新ラインアップに更新。色割当は M30 の緑(#26a69a)を H1 へシフト、H1 黄→H4 黄、H4 オレンジ→D1 オレンジ、D1 紫→W1 紫、新規 MN1 にマゼンタ(#ff79c6)を割当。実装側は frontend `constants.ts` の `TIMEFRAMES` 配列と `getTimeframeColor`、backend の TF 動的集約マップを連動更新)*
+
+*ver 1.51 - 2026/04/25 (エントリー UI をチャート配置型に刷新 + クロスヘアを Normal モード化 + 仕様書整合スイープ。エントリー価格は **現在値で自動固定**(成り行きエントリー想定、手入力欄なし)、方向は SL の位置から自動判定(SL < 現在値 → BUY / SL > 現在値 → SELL)、SL / TP は **チャート上をクリックして配置**、確定は単一の「エントリー」ボタン(BUY / SELL の二択ボタンを廃止)。TP は SL と反対側に置く必要があり、同側配置はエラー。チャートのクロスヘアは既定の Magnet モード(直近バーの close にスナップ)から `CrosshairMode.Normal`(自由追従)に変更し、カーソルの実 Y 座標で価格を読めるようにした。仕様書整合スイープ: §4.1 Phase 2 step 9 のエントリー記述を新仕様に更新、§6.1 ヘッダー説明から `TradingStyle` 比較言及を撤去、§6.1 サイドバー表の TradePanel 行を新仕様に、§7.4 エントリー必須項目テーブルを「自動 / クリック配置」表現に再構築、§7.6 判断アクションを新フローに書換、§7.2.3 横断メモ既定テンプレートから「## スタイル選定」を削除、§9.2 事後観察データの「見送り後」行を「最大上昇 pips / 最大下落 pips」に修正(SL 未確定で R 計算不可、ver 1.50 連動)、§9.3 / §9.4 / §9.6 の表現も R 単位の対象がエントリー時のみであることを明記、§14.1 サイドバー説明から「スタイル選択」を撤去し「エントリー組み立て」記述を追加。実装側は frontend `components/TradePanel.tsx` 全面刷新、`pages/SessionPage.tsx` に `entryDraft` / `entryPlacing` 状態と `handleChartClick`、`priceLinesForTf` に SL/TP 注入、`components/Chart.tsx` に `crosshair: { mode: CrosshairMode.Normal }` を追加。バックエンドは無変更)*
+
+*ver 1.50 - 2026/04/25 (§8 トレードスタイル機能を全廃。運用ではスタイル選択を意識せず UI 入力としても余計、見送り時の代理 R(typical_sl_pips 中央値)も SL 未確定下では参考値で価値が薄いため。§9.3「見送り時 R 基準」記述を撤去し、見送り・候補振り返りは pips のみで評価する方針を明文化。エントリー済みトレードは Trade.sl ベースで R 表示維持。§7.4 エントリー必須項目から「スタイル」削除、§7.5 見送り時の検討スタイル UI 削除、§17 から TradingStyle セクション・Trade.style_id・FinalDecision.considered_styles を削除。実装側も連動で backend の `GET /trading-styles` / `services/trading_style_store.py` / `schemas/trading_style.py` / `Trade.style_id` / `FinalDecision.considered_styles` / `resolve_skip_r_unit_pips` / `parse_typical_sl_pips` を削除、frontend の `StyleSelect.tsx` / `useTradingStyles.ts` / `api.tradingStyles` / `TradingStyle` 型を削除。data/trading-styles/ の 4 ファイル削除)*
+
+*ver 1.49 - 2026/04/25 (§11.6 任意プレビュー / 個別要素の除外チェック機能を撤去。価格などを R:R 比率で扱うため、横断メモ・銘柄別メモに非公開情報が入ることが基本的にない運用方針。万一非公開情報が混じる場合は AI 分析自体を使わないことで対応する。これにより「個別要素を選んで除外する」機能の存在意義が消え、仕様・実装ともに撤去する。§11.6 ブロック名「データ送信の調整・キャッシュ・時刻整形」→「キャッシュ・使用量メタ・時刻整形」に変更。§11.3.3「送らない(手動除外)」記述を「メモは AI に送ってよい内容のみで書く前提」に書き換え。§11.9.5 の「任意プレビュー」参照を「プロンプト規範でガード」表現に置換。§16 Phase 4 から「+ 任意の送信前プレビュー」削除。実装側も連動で backend `GET /preview` エンドポイントと frontend `api.ai.preview` を撤去。`build_ai_analysis_input` は run ハンドラ内で引き続き使用)*
 
 *ver 1.48 - 2026/04/25 (整合性スイープ。直近の改訂(ver 1.41 機械判定ラベル全廃・1.45 ファイル管理化・1.46 必須ゲート削除・1.47 バジェット管理削除)で取り残されていた古い表現・参照を一括修正。§4.1 Phase 4 step 14 を「§9.3 自動判定指標」→「最大上昇 R / 最大下落 R(pips 補助)」、step 15-16 を「セッションを閉じる」→「決着済み自動遷移 + ファイル永続化、削除は OS 操作」に書き換え。§7.7 の「保留状態で置く」→「決着済みでも編集可」に。§16 Phase 4 から「バジェット管理」削除、「セッション完了時に結果も破棄」→「ディレクトリ削除で同時消滅」に修正、コスト管理不採用を明示。§18 の「セッション完了で破棄」を ver 1.45 ファイル管理化方針に整合。§11.5 の「コスト抑制」→「不要な API コール抑制」に微調整、§11.6 への接続を明記。§11.3.3 / §11.9.5 の §11.6 アンカーを新タイトル(`#116-データ送信の調整キャッシュ時刻整形`)に統一)*
 

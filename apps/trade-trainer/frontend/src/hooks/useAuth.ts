@@ -7,7 +7,12 @@ export function useAuth() {
   useEffect(() => {
     api.auth.me()
       .then(r => setAuthenticated(r.authenticated))
-      .catch(() => setAuthenticated(false))
+      .catch(err => {
+        // FIXME (I-11.1): ログ追加済。I-11.4 については「未認証」状態は LoginPage への自動誘導で
+        // ユーザーに自然に伝わるため、追加 notify は不要と判断(セッション切れの一般的挙動)。
+        console.warn('[useAuth] me() failed, treating as unauthenticated', err)
+        setAuthenticated(false)
+      })
   }, [])
 
   const login = useCallback(async (password: string) => {

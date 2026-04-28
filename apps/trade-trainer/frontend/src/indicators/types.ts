@@ -1,6 +1,6 @@
 import type { OhlcBar } from '../api/client'
 
-export type IndicatorType = 'SMA' | 'EMA' | 'RSI'
+export type IndicatorType = 'SMA' | 'EMA20' | 'EMA200' | 'RSI'
 // 拡張時: | 'MACD' | 'BB' | ...
 
 export type IndicatorParams = { period: number }
@@ -11,6 +11,8 @@ export type IndicatorConfig = {
   type: IndicatorType
   params: IndicatorParams
   color: string
+  /** 線の太さ(lightweight-charts の LineWidth: 1-4)。未指定時は 1 */
+  width?: 1 | 2 | 3 | 4
 }
 
 export type IndicatorPlacement = 'overlay' | 'subpanel'
@@ -25,6 +27,8 @@ export type IndicatorSpec = {
   /** overlay: ローソク足と同じ価格軸に重ねる / subpanel: サブペインに別スケールで表示 */
   placement: IndicatorPlacement
   defaultColor: string
+  /** 既定の線の太さ(未指定時は 1) */
+  defaultWidth?: 1 | 2 | 3 | 4
   /** OHLC から描画用の系列を計算する */
   compute(bars: OhlcBar[], params: IndicatorParams): IndicatorPoint[]
 }

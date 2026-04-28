@@ -6,7 +6,7 @@ type Props = {
   onChange: (next: IndicatorConfig[]) => void
 }
 
-const ORDER: IndicatorType[] = ['SMA', 'EMA', 'RSI']
+const ORDER: IndicatorType[] = ['SMA', 'EMA20', 'EMA200', 'RSI']
 
 export function IndicatorPanel({ active, onChange }: Props) {
   const isActive = (type: IndicatorType) => active.some(a => a.type === type)
@@ -25,6 +25,8 @@ export function IndicatorPanel({ active, onChange }: Props) {
       <div className="indicator-chips">
         {ORDER.map(type => {
           const spec = INDICATORS[type]
+          // HMR でレジストリと ORDER の整合が一時的に崩れる/古い state が残るケースに備えた安全ネット
+          if (!spec) return null
           const on = isActive(type)
           return (
             <button

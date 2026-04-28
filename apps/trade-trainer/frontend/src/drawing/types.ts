@@ -15,7 +15,7 @@ export interface ChartApi {
   yToPrice(y: number): number | null
   timeToX(time: number): number | null
   xToTime(x: number): number | null
-  /** チャートのドラッグパンを有効/無効にする。Moving モード中は false にして描画操作と干渉させない。 */
+  /** チャートのドラッグパンを有効/無効にする。Moving 状態中は false にして描画操作と干渉させない。 */
   setScrollEnabled(enabled: boolean): void
 }
 
@@ -51,37 +51,4 @@ export type CreateDrawingBody = {
   label?: string | null
   timeframe?: string | null
   visible_on_timeframes?: string[] | null
-}
-
-/**
- * モードが使って良い外界 API。遷移・永続化・座標変換をここに集める。
- */
-export interface ModeContext {
-  chartApi: ChartApi
-  drawings: Drawing[]
-  activeTimeframe: string
-  setMode(next: DrawingMode): void
-  createDrawing(body: CreateDrawingBody): Promise<Drawing>
-  updateDrawing(id: number, patch: UpdateDrawingPatch): Promise<void>
-  deleteDrawing(id: number): Promise<void>
-}
-
-/**
- * 目的ごとに 1 つのモード(DrawingLineMode / MovingLineMode / DrawingTrendlineMode …)を実装する。
- * 各モードは自身の責務のみ知り、必要に応じて setMode で別モードへ遷移する。
- */
-export interface DrawingMode {
-  readonly id: string
-  readonly cursor?: string
-  onEnter?(ctx: ModeContext): void
-  onExit?(ctx: ModeContext): void
-  onChartClick?(e: PointerPayload, ctx: ModeContext): void
-  onMouseMove?(e: PointerPayload, ctx: ModeContext): void
-  onMouseDown?(e: PointerPayload, ctx: ModeContext): void
-  onMouseUp?(e: PointerPayload, ctx: ModeContext): void
-  onEscape?(ctx: ModeContext): void
-  /** 作成中・編集中の仮描画 */
-  getPreview?(): Drawing | null
-  /** ホバー中の描画 ID(Idle モードのみで有効。§5.3 TF バッジ表示用) */
-  getHoveredDrawingId?(): number | null
 }

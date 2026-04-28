@@ -24,7 +24,6 @@ from trade_trainer_backend.schemas.ai_analysis import (
     Layer1Candidate,
     MemoBlock,
     StageEvalOut,
-    StyleMeta,
 )
 from trade_trainer_backend.services import session_store
 from trade_trainer_backend.services.session_models import (
@@ -35,12 +34,7 @@ from trade_trainer_backend.services.session_models import (
 from trade_trainer_backend.services.post_eval import (
     evaluate_entry,
     evaluate_symbol,
-    resolve_skip_r_unit_pips,
     resolve_trade_r_unit_pips,
-)
-from trade_trainer_backend.services.trading_style_store import (
-    TradingStyle as StoreStyle,
-    get_style,
 )
 
 
@@ -65,25 +59,6 @@ def _pip_size(symbol: str) -> float:
     return 0.01 if symbol.upper().endswith("JPY") else 0.0001
 
 
-def _style_meta(style: StoreStyle | None) -> StyleMeta | None:
-    if style is None:
-        return None
-    return StyleMeta(
-        id=style.id,
-        name=style.name,
-        primary_timeframe=style.primary_timeframe,
-        expected_hold_time=style.expected_hold_time,
-        expected_rr=style.expected_rr,
-        typical_sl_pips=style.typical_sl_pips,
-    )
-
-
-def _fetch_styles(style_ids: list[str] | None) -> list[StoreStyle]:
-    if not style_ids:
-        return []
-    return [s for s in (get_style(sid) for sid in style_ids) if s is not None]
-
-
 def _determine_mode(trade: Trade | None) -> AnalysisMode:
     """Trade の状態から analysis_mode を導出する。
 
@@ -100,7 +75,6 @@ def _determine_mode(trade: Trade | None) -> AnalysisMode:
 def _build_decision_meta(agg: SessionAggregate) -> DecisionMeta:
     if agg.trade is not None:
         trade_r = resolve_trade_r_unit_pips(agg.trade)
-        style = get_style(agg.trade.style_id) if agg.trade.style_id else None
         return DecisionMeta(
             decision_type="entry",
             session_mode=agg.meta.mode,
@@ -112,14 +86,9 @@ def _build_decision_meta(agg: SessionAggregate) -> DecisionMeta:
             tp_price=agg.trade.tp,
             r_unit_pips=trade_r,
             r_unit_source="trade_sl" if trade_r is not None else "unresolved",
-            selected_style=_style_meta(style),
-            considered_styles=[],
         )
 
-    # 見送り(またはまだ判断前)
-    considered = agg.final_decision.considered_styles if agg.final_decision is not None else None
-    skip_r = resolve_skip_r_unit_pips(considered)
-    considered_objs = _fetch_styles(considered)
+    # 見送り(またはまだ判断前)。SL 未確定のため R 基準は持たない。
     return DecisionMeta(
         decision_type="skip",
         session_mode=agg.meta.mode,
@@ -129,12 +98,8 @@ def _build_decision_meta(agg: SessionAggregate) -> DecisionMeta:
         direction=None,
         sl_price=None,
         tp_price=None,
-        r_unit_pips=skip_r,
-        r_unit_source=("style_median" if skip_r is not None else "unresolved"),
-        selected_style=None,
-        considered_styles=[
-            s for s in (_style_meta(o) for o in considered_objs) if s is not None
-        ],
+        r_unit_pips=None,
+        r_unit_source="unresolved",
     )
 
 

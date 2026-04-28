@@ -1,31 +1,36 @@
-"""SQLite キャッシュ層 - OhlcM5 テーブルの読み書き。"""
+"""SQLite キャッシュ層 - Ohlc テーブル(TF 別)の読み書き(ver 1.53)。"""
+import logging
 from datetime import datetime, timezone
 
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
-from shared_schema.models.market import OhlcM5
+from shared_schema.models.market import Ohlc
+
+log = logging.getLogger(__name__)
 
 
 def get_cached_ohlc(
     session: Session,
     symbol: str,
+    timeframe: str,
     from_dt: datetime,
     to_dt: datetime,
     source: str = "mt5",
 ) -> pd.DataFrame:
-    """キャッシュから M5 OHLC を取得して UTC インデックスの DataFrame で返す。"""
+    """キャッシュから指定 TF の OHLC を取得して UTC インデックスの DataFrame で返す。"""
     stmt = (
-        select(OhlcM5)
+        select(Ohlc)
         .where(
-            OhlcM5.symbol == symbol,
-            OhlcM5.source == source,
-            OhlcM5.timestamp >= from_dt,
-            OhlcM5.timestamp <= to_dt,
+            Ohlc.symbol == symbol,
+            Ohlc.timeframe == timeframe,
+            Ohlc.source == source,
+            Ohlc.timestamp >= from_dt,
+            Ohlc.timestamp <= to_dt,
         )
-        .order_by(OhlcM5.timestamp)
+        .order_by(Ohlc.timestamp)
     )
     rows = session.scalars(stmt).all()
 
@@ -45,11 +50,26 @@ def get_cached_ohlc(
         }
         for r in rows
     ]
-    return pd.DataFrame(data).set_index("timestamp")
+    df = pd.DataFrame(data).set_index("timestamp")
+
+    # サニティチェック: 返却 timestamp が要求範囲 [from_dt, to_dt] 内に収まっているか。
+    # SQL フィルタが効いていれば必ず満たすはずだが、TZ 事故・naive↔aware 混在で違反した時に検知する。
+    if len(df) > 0:
+        from_aware = from_dt if from_dt.tzinfo else from_dt.replace(tzinfo=timezone.utc)
+        to_aware = to_dt if to_dt.tzinfo else to_dt.replace(tzinfo=timezone.utc)
+        first_ts = df.index[0]
+        last_ts = df.index[-1]
+        if first_ts < from_aware or last_ts > to_aware:
+            log.error(
+                "[cache] returned bars out of range sym=%s tf=%s req=[%s, %s] got=[%s, %s] rows=%d",
+                symbol, timeframe, from_aware, to_aware, first_ts, last_ts, len(df),
+            )
+            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+
+    return df
 
 
-# SQLite は 1 ステートメントあたりのバインド変数を制限(古いビルドで 999、新ビルドで 32766)。
-# 1 レコード 9 カラムを掛けても安全な範囲にチャンクする。
+# SQLite のバインド変数制限(古いビルドで 999、新ビルドで 32766)を回避するチャンクサイズ。
 _INSERT_CHUNK_SIZE = 500
 
 
@@ -57,9 +77,13 @@ def store_ohlc(
     session: Session,
     df: pd.DataFrame,
     symbol: str,
+    timeframe: str,
     source: str = "mt5",
 ) -> int:
-    """DataFrame を OhlcM5 テーブルに upsert する。挿入行数を返す。"""
+    """DataFrame を `ohlc` テーブルに upsert する。挿入行数を返す。
+
+    PK 衝突時は OHLC 値と `fetched_at` を更新(リサンプリング結果の上書きにも対応)。
+    """
     if df.empty:
         return 0
 
@@ -67,6 +91,7 @@ def store_ohlc(
     records = [
         {
             "symbol": symbol,
+            "timeframe": timeframe,
             "timestamp": ts.to_pydatetime().replace(tzinfo=None),  # SQLite は naive で保存
             "source": source,
             "open": float(row["open"]),
@@ -81,9 +106,9 @@ def store_ohlc(
 
     for i in range(0, len(records), _INSERT_CHUNK_SIZE):
         chunk = records[i : i + _INSERT_CHUNK_SIZE]
-        stmt = insert(OhlcM5).values(chunk)
+        stmt = insert(Ohlc).values(chunk)
         stmt = stmt.on_conflict_do_update(
-            index_elements=["symbol", "timestamp", "source"],
+            index_elements=["symbol", "timeframe", "timestamp", "source"],
             set_={
                 "open": stmt.excluded.open,
                 "high": stmt.excluded.high,
@@ -101,21 +126,26 @@ def store_ohlc(
 def get_cached_extremes(
     session: Session,
     symbol: str,
+    timeframe: str,
     source: str = "mt5",
 ) -> tuple[datetime, datetime] | None:
-    """キャッシュ内の最古・最新タイムスタンプを返す。データなしなら None。"""
-    from sqlalchemy import func
+    """指定 (symbol, timeframe, source) のキャッシュ最古・最新タイムスタンプを返す。
 
-    row = session.execute(
-        select(
-            func.min(OhlcM5.timestamp),
-            func.max(OhlcM5.timestamp),
-        ).where(OhlcM5.symbol == symbol, OhlcM5.source == source)
-    ).one()
-
-    if row[0] is None:
+    `func.min/max + WHERE source=?` だと SQLite が PK 全 prefix を走査するため
+    M5 の数百万行で数百 ms かかる。ORDER BY timestamp LIMIT 1 を 2 回実行する
+    形に置き換えると、`(symbol, timeframe, timestamp, source)` の PK を使った
+    順次走査で先頭/末尾の一致行が即座に取れるため 0ms 級まで短縮される。
+    """
+    base = select(Ohlc.timestamp).where(
+        Ohlc.symbol == symbol,
+        Ohlc.timeframe == timeframe,
+        Ohlc.source == source,
+    )
+    oldest_ts = session.execute(base.order_by(Ohlc.timestamp.asc()).limit(1)).scalar()
+    if oldest_ts is None:
         return None
+    latest_ts = session.execute(base.order_by(Ohlc.timestamp.desc()).limit(1)).scalar()
 
-    oldest = row[0].replace(tzinfo=timezone.utc) if row[0].tzinfo is None else row[0]
-    latest = row[1].replace(tzinfo=timezone.utc) if row[1].tzinfo is None else row[1]
+    oldest = oldest_ts.replace(tzinfo=timezone.utc) if oldest_ts.tzinfo is None else oldest_ts
+    latest = latest_ts.replace(tzinfo=timezone.utc) if latest_ts.tzinfo is None else latest_ts
     return oldest, latest

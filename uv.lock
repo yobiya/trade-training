@@ -1076,20 +1076,24 @@ name = "trade-trainer-backend"
 version = "0.0.0"
 source = { editable = "apps/trade-trainer/backend" }
 dependencies = [
+    { name = "anthropic" },
     { name = "fastapi" },
     { name = "itsdangerous" },
     { name = "market-data" },
     { name = "pydantic-settings" },
+    { name = "pyyaml" },
     { name = "shared-schema" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.40" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "itsdangerous", specifier = ">=2.2" },
     { name = "market-data", editable = "packages/market-data" },
     { name = "pydantic-settings", specifier = ">=2.7" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "shared-schema", editable = "packages/shared-schema" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]

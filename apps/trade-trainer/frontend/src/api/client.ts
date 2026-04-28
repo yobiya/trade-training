@@ -2,7 +2,8 @@ import type {
   AdvanceResponse,
   AIHistoryEntry,
   AIRunResponse,
-  ChartResponse,
+  ChartHistoryResponse,
+  ChartStackResponse,
   CreateDrawingRequest,
   Drawing,
   EconomicEvent,
@@ -13,7 +14,6 @@ import type {
   SettingsResponse,
   TradeResponse,
   TradeSession,
-  TradingStyle,
 } from './types'
 
 export * from './types'
@@ -62,10 +62,10 @@ export const api = {
     list: (limit = 20, offset = 0) =>
       request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),
     get: (id: string) => request<TradeSession>(`/sessions/${id}`),
-    skip: (id: string, reason?: string, consideredStyles?: string[]) =>
+    skip: (id: string, reason?: string) =>
       request<TradeSession>(`/sessions/${id}/skip`, {
         method: 'POST',
-        body: JSON.stringify({ reason, considered_styles: consideredStyles }),
+        body: JSON.stringify({ reason }),
       }),
     addCandidate: (id: string, symbol: string, memo?: string) =>
       request<SessionCandidate>(`/sessions/${id}/candidates`, {
@@ -97,17 +97,27 @@ export const api = {
   },
 
   chart: {
-    get: (sessionId: string, timeframe = 'M5', bars = 200, before?: number, symbol?: string) => {
-      const params = new URLSearchParams({ timeframe, bars: String(bars) })
-      if (before !== undefined) {
-        // UNIX 秒 → ISO (UTC)
-        params.set('before', new Date(before * 1000).toISOString())
-      }
+    /** 全 TF を 1 リクエストで取得(ver 1.59 chart-stack)。 */
+    stack: (sessionId: string, symbol?: string) => {
+      const params = new URLSearchParams()
       if (symbol) params.set('symbol', symbol)
-      return request<ChartResponse>(`/sessions/${sessionId}/chart?${params.toString()}`)
+      return request<ChartStackResponse>(`/sessions/${sessionId}/chart-stack?${params.toString()}`)
     },
-    advance: (sessionId: string, bars = 1) =>
-      request<AdvanceResponse>(`/sessions/${sessionId}/advance?bars=${bars}`, { method: 'POST' }),
+    /** 指定 TF の過去バーを `before` より前から N 本追加取得する(loadMoreHistory 用)。 */
+    history: (sessionId: string, timeframe: string, beforeUnix: number, bars: number, symbol?: string) => {
+      const params = new URLSearchParams({
+        timeframe,
+        bars: String(bars),
+        before: new Date(beforeUnix * 1000).toISOString(),
+      })
+      if (symbol) params.set('symbol', symbol)
+      return request<ChartHistoryResponse>(`/sessions/${sessionId}/chart-history?${params.toString()}`)
+    },
+    advance: (sessionId: string, bars = 1, symbol?: string) => {
+      const params = new URLSearchParams({ bars: String(bars) })
+      if (symbol) params.set('symbol', symbol)
+      return request<AdvanceResponse>(`/sessions/${sessionId}/advance?${params.toString()}`, { method: 'POST' })
+    },
   },
 
   trades: {
@@ -121,7 +131,6 @@ export const api = {
       price: number
       sl: number
       tp?: number
-      style_id?: string
     }) =>
       request<TradeResponse>(`/sessions/${sessionId}/trade/enter`, {
         method: 'POST',
@@ -141,13 +150,6 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-  },
-
-  tradingStyles: {
-    // ver 1.45: ファイル管理に移行(data/trading-styles/{id}.md)。
-    // 編集はテキストエディタ + git で行うため、create / update / delete API は提供しない。
-    list: (includeInactive = false) =>
-      request<TradingStyle[]>(`/trading-styles${includeInactive ? '?include_inactive=true' : ''}`),
   },
 
   ai: {

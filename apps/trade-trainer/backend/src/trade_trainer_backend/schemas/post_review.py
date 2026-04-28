@@ -17,22 +17,25 @@ class StageEvalResp(BaseModel):
 
 
 class CandidateReview(BaseModel):
-    """層 1: 候補外し(★ 付きエントリーしなかった銘柄)。"""
+    """層 1: 候補外し(★ 付きエントリーしなかった銘柄)。
+
+    R 基準は持たない(SL 未確定なので pips のみで評価)。
+    """
     symbol: str
     memo: str | None
     skip_reason: str | None
     ref_price: float | None
-    r_unit_pips: float | None            # この候補群の R 基準(considered_styles 由来)
     stages: list[StageEvalResp]
 
 
 class SkipReview(BaseModel):
-    """層 2: エントリー見送り(final_decision.has_entry=False)。"""
+    """層 2: エントリー見送り(final_decision.has_entry=False)。
+
+    R 基準は持たない(SL 未確定なので pips のみで評価)。
+    """
     symbol: str
     reason: str | None
-    considered_styles: list[str] | None
     ref_price: float | None
-    r_unit_pips: float | None
     stages: list[StageEvalResp]
 
 

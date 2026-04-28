@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { EntryReview, PostReviewResponse, StageEval } from '../api/client'
+import type { EntryReview, PostReviewResponse, StageEval, TradeSession } from '../api/client'
 
 type Props = {
-  sessionId: string
+  session: TradeSession
+  onSessionChange: (next: TradeSession) => void
 }
 
 function formatR(r: number | null): string {
@@ -95,10 +96,13 @@ function EntryResultBlock({ e }: { e: EntryReview }) {
  * 仕様書 §9 判断結果の事後確認機能。
  * 層 1 候補・層 2 見送り・エントリー済みトレードそれぞれについて、R 主表示で事後評価を提示する。
  */
-export function PostReviewPanel({ sessionId }: Props) {
+export function PostReviewPanel({ session, onSessionChange }: Props) {
+  const sessionId = session.id
   const [data, setData] = useState<PostReviewResponse | null>(null)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [noteDraft, setNoteDraft] = useState<string>(session.note ?? '')
+  const noteTimerRef = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -113,6 +117,23 @@ export function PostReviewPanel({ sessionId }: Props) {
     if (open && data === null && !loading) void load()
   }, [open, data, loading, load])
 
+  // session.note の外部更新(MemoPanel など)を反映
+  useEffect(() => {
+    setNoteDraft(session.note ?? '')
+  }, [session.note])
+
+  // 振り返りメモ debounce 保存(§4.2.2: 横断メモ非空で settled_at が自動セット)
+  useEffect(() => {
+    if (noteTimerRef.current) window.clearTimeout(noteTimerRef.current)
+    if (noteDraft === (session.note ?? '')) return
+    noteTimerRef.current = window.setTimeout(() => {
+      void api.sessions.updateNote(sessionId, noteDraft || null).then(onSessionChange)
+    }, 500)
+    return () => {
+      if (noteTimerRef.current) window.clearTimeout(noteTimerRef.current)
+    }
+  }, [noteDraft, sessionId, session.note, onSessionChange])
+
   const hasAny = data && (data.candidates.length > 0 || data.skip !== null || data.entry !== null)
 
   return (
@@ -126,6 +147,26 @@ export function PostReviewPanel({ sessionId }: Props) {
       </button>
       {open && (
         <div className="post-review-body">
+          <section className="review-section review-memo-section">
+            <div className="review-memo-header">
+              <h4>振り返りメモ</h4>
+              <span className={`review-memo-status ${session.is_settled ? 'settled' : 'pending'}`}>
+                {session.is_settled ? '決着済み' : '未記入 → 決着済みに自動遷移'}
+              </span>
+            </div>
+            <p className="hint review-memo-hint">
+              ここに記入すると横断メモ(§7.3)として保存され、§4.2.2 により決着済みに自動遷移します。
+              通貨強弱・銘柄比較・シナリオ・決済所感など、セッション全体の思考を残してください。
+            </p>
+            <textarea
+              className="memo-textarea review-memo-textarea"
+              value={noteDraft}
+              onChange={e => setNoteDraft(e.target.value)}
+              placeholder="今回の判断結果から学んだこと・次に活かすこと"
+              rows={6}
+            />
+          </section>
+
           {loading && <p className="hint">読み込み中...</p>}
           {!loading && !hasAny && (
             <p className="hint">見送り・エントリー共に未確定のため、振り返りできる対象がありません。</p>
@@ -150,9 +191,6 @@ export function PostReviewPanel({ sessionId }: Props) {
             <section className="review-section">
               <h4>見送り(層 2)</h4>
               {data.skip.reason && <div className="review-meta">{data.skip.reason}</div>}
-              {data.skip.r_unit_pips != null && (
-                <div className="review-meta aux">代理 R 基準: {data.skip.r_unit_pips.toFixed(1)}pips(考慮スタイルの中央値)</div>
-              )}
               <div className="stage-row">
                 {data.skip.stages.map(s => <StageCell key={s.bars} s={s} />)}
                 {data.skip.stages.length === 0 && <span className="hint">事後データなし</span>}
@@ -162,9 +200,6 @@ export function PostReviewPanel({ sessionId }: Props) {
           {data && data.candidates.length > 0 && (
             <section className="review-section">
               <h4>外した候補(層 1)</h4>
-              {data.candidates[0].r_unit_pips != null && (
-                <div className="review-meta aux">代理 R 基準: {data.candidates[0].r_unit_pips!.toFixed(1)}pips(考慮スタイルの中央値)</div>
-              )}
               {data.candidates.map(c => (
                 <div key={c.symbol} className="review-candidate">
                   <div className="review-meta">

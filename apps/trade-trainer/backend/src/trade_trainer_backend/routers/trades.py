@@ -36,7 +36,6 @@ def _trade_to_response(t: Trade) -> TradeResponse:
         exit_time=exit_time,
         pips_pnl=t.pips_pnl,
         is_open=t.exit_time is None,
-        style_id=t.style_id,
     )
 
 
@@ -60,7 +59,7 @@ def _upsert_candidate_on_entry(session_id: str, symbol: str) -> None:
 @router.post("/sessions/{session_id}/trade/enter", response_model=TradeResponse, status_code=201)
 def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
     """仕様書 §7.4 + §6.1 統合フロー:
-    エントリー時の必須項目は symbol + 方向・価格・SL・TP・スタイル id。
+    エントリー時の必須項目は symbol + 方向・価格・SL・TP。
     エントリー動作そのものが「この銘柄で選定確定」の意味を持つ(§6.3.2)。"""
     agg = _ensure_session(session_id)
     if agg.trade is not None and agg.trade.exit_time is None:
@@ -91,13 +90,12 @@ def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
         amount_pnl=None,
         lot=None,
         mt5_order_id=None,
-        style_id=body.style_id,
         created_at=datetime.now(timezone.utc),
     )
     session_store.save_trade(session_id, trade)
 
     # final_decision: エントリーしたので has_entry=True に確定(以降の見送りはあり得ない)
-    fd = FinalDecision(has_entry=True, skip_reason=None, considered_styles=None)
+    fd = FinalDecision(has_entry=True, skip_reason=None)
     session_store.save_final_decision(session_id, fd)
 
     # ディレクトリ名を pending → symbol に rename

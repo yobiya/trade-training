@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Drawing, DrawingKind } from '../api/types'
-import { DrawingWaveLabelMode, IdleMode, toolStartMode } from '../drawing/modes'
+import {
+  activeToolOf,
+  activeWaveOf,
+  cursorOf,
+  dispatchEvent,
+  hoveredIdOf,
+  idleState,
+  isMovingState,
+  previewOf,
+  type DispatchContext,
+  type DrawingEvent,
+  type DrawingState,
+} from '../drawing/state'
 import type {
   ChartApi,
   CreateDrawingBody,
-  DrawingMode,
-  ModeContext,
   PointPx,
   UpdateDrawingPatch,
 } from '../drawing/types'
@@ -24,7 +34,7 @@ export type DrawingInteraction = {
   preview: Drawing | null
   /** ホバー中の描画 ID(§5.3 TF バッジ表示用) */
   hoveredId: number | null
-  /** 現在アクティブな作成ツール(Drawing*Mode 中のみ非 null)。ボタンのハイライトに使う。 */
+  /** 現在アクティブな作成ツール(drawing-* 状態のみ非 null)。ボタンのハイライトに使う。 */
   activeTool: DrawingKind | null
   /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。 */
   activeWave: 1 | 2 | 3 | 4 | 5 | null
@@ -41,8 +51,8 @@ export type DrawingInteraction = {
 }
 
 /**
- * 描画ツールの対話状態を管理する。現在のモードにイベントを委譲するだけで、
- * 分岐ロジックを持たない(分岐は各モードクラス側が担う)。
+ * 描画ツールの対話状態を管理する。`drawing/state.ts` の `dispatchEvent` に
+ * イベントを委譲するだけで、分岐ロジックを持たない(分岐は state 側 switch が担う)。
  *
  * 詳細: docs/architecture/drawing-tools.md
  */
@@ -50,13 +60,8 @@ export function useDrawingInteraction({
   drawings, activeTimeframe, chartApiRef,
   onCreate, onUpdate, onDelete,
 }: Params): DrawingInteraction {
-  const [mode, setModeState] = useState<DrawingMode>(() => new IdleMode())
-  const modeRef = useRef<DrawingMode>(mode)
-  useEffect(() => { modeRef.current = mode }, [mode])
-
-  // 画面再描画のトリガにする dummy state(preview / cursor の更新用)
-  const [, setTick] = useState(0)
-  const bump = useCallback(() => setTick(t => t + 1), [])
+  const [state, setState] = useState<DrawingState>(idleState)
+  const stateRef = useRef<DrawingState>(state)
 
   // 最新の drawings / activeTimeframe を参照し続けるための ref
   const drawingsRef = useRef(drawings)
@@ -64,92 +69,68 @@ export function useDrawingInteraction({
   const tfRef = useRef(activeTimeframe)
   useEffect(() => { tfRef.current = activeTimeframe }, [activeTimeframe])
 
-  const ctx = useMemo<ModeContext>(() => {
-    const c: ModeContext = {
-      get chartApi() { return chartApiRef.current ?? noopChartApi },
-      get drawings() { return drawingsRef.current },
-      get activeTimeframe() { return tfRef.current },
-      setMode(next) {
-        modeRef.current.onExit?.(c)
-        next.onEnter?.(c)
-        modeRef.current = next
-        setModeState(next)
-      },
-      createDrawing: onCreate,
-      updateDrawing: onUpdate,
-      deleteDrawing: onDelete,
-    }
-    return c
-  }, [chartApiRef, onCreate, onUpdate, onDelete])
+  const ctx = useMemo<DispatchContext>(() => ({
+    get chartApi() { return chartApiRef.current ?? noopChartApi },
+    get drawings() { return drawingsRef.current },
+    get activeTimeframe() { return tfRef.current },
+    createDrawing: onCreate,
+    updateDrawing: onUpdate,
+    deleteDrawing: onDelete,
+  }), [chartApiRef, onCreate, onUpdate, onDelete])
 
-  const selectTool = useCallback((tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => {
-    if (tool === 'wave_label' && wave !== undefined) {
-      ctx.setMode(new DrawingWaveLabelMode(wave))
-    } else {
-      ctx.setMode(toolStartMode(tool))
+  const dispatch = useCallback((event: DrawingEvent) => {
+    const prev = stateRef.current
+    const next = dispatchEvent(prev, event, ctx)
+    if (next === prev) return
+    // moving-* 状態への出入りでチャートのドラッグパンを抑止する(描画操作と干渉させない)。
+    const wasMoving = isMovingState(prev)
+    const nowMoving = isMovingState(next)
+    if (wasMoving !== nowMoving) {
+      ctx.chartApi.setScrollEnabled(!nowMoving)
     }
+    stateRef.current = next
+    setState(next)
   }, [ctx])
 
-  // ESC でキャンセル(モードに委譲)
+  const selectTool = useCallback((tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => {
+    dispatch({ type: 'select-tool', tool, wave })
+  }, [dispatch])
+
+  // ESC でキャンセル(状態に委譲)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        modeRef.current.onEscape?.(ctx)
-        bump()
-      }
+      if (e.key === 'Escape') dispatch({ type: 'escape' })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [ctx, bump])
+  }, [dispatch])
 
   const handlers = useMemo(() => ({
     onChartClick: (price: number, time: number | null, px: PointPx) => {
-      modeRef.current.onChartClick?.({ point: { price, time }, pointerPx: px }, ctx)
-      bump()
+      dispatch({ type: 'click', payload: { point: { price, time }, pointerPx: px } })
     },
     onMouseMove: (price: number | null, time: number | null, px: PointPx) => {
       if (price === null) return
-      modeRef.current.onMouseMove?.({ point: { price, time }, pointerPx: px }, ctx)
-      bump()
+      dispatch({ type: 'mouse-move', payload: { point: { price, time }, pointerPx: px } })
     },
     onMouseDown: (price: number | null, time: number | null, px: PointPx) => {
-      modeRef.current.onMouseDown?.({ point: { price: price ?? NaN, time }, pointerPx: px }, ctx)
-      bump()
+      dispatch({ type: 'mouse-down', payload: { point: { price: price ?? NaN, time }, pointerPx: px } })
     },
     onMouseUp: (price: number | null, time: number | null, px: PointPx) => {
-      modeRef.current.onMouseUp?.({ point: { price: price ?? NaN, time }, pointerPx: px }, ctx)
-      bump()
+      dispatch({ type: 'mouse-up', payload: { point: { price: price ?? NaN, time }, pointerPx: px } })
     },
-    onEscape: () => {
-      modeRef.current.onEscape?.(ctx)
-      bump()
-    },
-  }), [ctx, chartApiRef, bump])
+    onEscape: () => dispatch({ type: 'escape' }),
+  }), [dispatch])
 
   return {
-    cursor: mode.cursor ?? 'default',
-    preview: mode.getPreview?.() ?? null,
-    hoveredId: mode.getHoveredDrawingId?.() ?? null,
-    activeTool: getActiveTool(mode),
-    activeWave: getActiveWave(mode),
+    cursor: cursorOf(state),
+    preview: previewOf(state),
+    hoveredId: hoveredIdOf(state),
+    activeTool: activeToolOf(state),
+    activeWave: activeWaveOf(state),
     selectTool,
     handlers,
   }
-}
-
-function getActiveTool(mode: DrawingMode): DrawingKind | null {
-  switch (mode.id) {
-    case 'drawing-line': return 'line'
-    case 'drawing-trendline': return 'trendline'
-    case 'drawing-fibonacci': return 'fibonacci'
-    case 'drawing-wave-label': return 'wave_label'
-    default: return null
-  }
-}
-
-function getActiveWave(mode: DrawingMode): 1 | 2 | 3 | 4 | 5 | null {
-  if (mode instanceof DrawingWaveLabelMode) return mode.wave
-  return null
 }
 
 const noopChartApi: ChartApi = {

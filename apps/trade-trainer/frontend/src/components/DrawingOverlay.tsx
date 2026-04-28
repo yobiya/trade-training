@@ -52,7 +52,7 @@ function tfBadge(d: Drawing, api: ChartApi): ReactElement | null {
 
 /**
  * チャートに重ねる SVG レイヤ。ツールの renderOverlay を呼んで描画する。
- * ポインタは透過(pointer-events: none)し、ヒットテストは IdleMode 側で行う。
+ * ポインタは透過(pointer-events: none)し、ヒットテストは idle 状態の reducer 側で行う。
  */
 export function DrawingOverlay({ chartHandle, drawings, preview, activeTimeframe, hoveredId }: Props) {
   // チャートのズーム・パン・リサイズで SVG を再描画させる

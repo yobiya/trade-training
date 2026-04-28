@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import type { TradeResponse, TradingStyle } from '../api/client'
-import { StyleSelect } from './StyleSelect'
+import type { TradeResponse } from '../api/client'
+
+export type EntryDraft = { sl: number | null; tp: number | null }
+export type EntryDirection = 'buy' | 'sell' | null
+export type EntryPlacing = 'sl' | 'tp' | null
 
 type EnterArgs = {
   direction: 'buy' | 'sell'
   price: number
   sl: number
   tp: number | undefined
-  styleId: string
 }
 
 type Props = {
@@ -17,31 +19,42 @@ type Props = {
   onExit: (price: number, reason: string) => Promise<void>
   loading: boolean
   digits: number
-  styles: TradingStyle[]
+  /** §7.4 ver 1.50: SL/TP はチャートでドラッグ配置。本コンポーネントは表示と確定操作のみ */
+  entryDraft: EntryDraft
+  entryPlacing: EntryPlacing
+  pipSize: number
+  onPlaceSL: () => void
+  onPlaceTP: () => void
+  onClearSL: () => void
+  onClearTP: () => void
+}
+
+function formatPrice(p: number, digits: number): string {
+  return p.toFixed(digits)
+}
+
+function pipsBetween(a: number, b: number, pipSize: number): number {
+  return Math.round(Math.abs(a - b) / pipSize * 10) / 10
+}
+
+function deriveDirection(currentPrice: number | null, sl: number | null): EntryDirection {
+  if (currentPrice == null || sl == null) return null
+  if (sl < currentPrice) return 'buy'
+  if (sl > currentPrice) return 'sell'
+  return null
 }
 
 /**
- * 仕様書 §7.4: エントリー時の必須は 方向・価格・SL・TP・スタイル id のみ。
- * 根拠・シナリオ・選定理由等はメモパネル(§7.3)で書く。
+ * §7.4 ver 1.50: エントリー価格は現在値で固定。SL の位置から方向を自動判定。
+ * SL/TP はチャート上でクリック配置(SessionPage 経由)。
  */
 export function TradePanel({
-  activeTrade, currentPrice, onEnter, onExit, loading, digits, styles,
+  activeTrade, currentPrice, onEnter, onExit, loading, digits,
+  entryDraft, entryPlacing, pipSize,
+  onPlaceSL, onPlaceTP, onClearSL, onClearTP,
 }: Props) {
   const step = Math.pow(10, -digits).toFixed(digits)
-  const [price, setPrice] = useState('')
-  const [sl, setSl] = useState('')
-  const [tp, setTp] = useState('')
   const [exitPrice, setExitPrice] = useState('')
-  const [styleId, setStyleId] = useState('')
-
-  async function handleEnter(direction: 'buy' | 'sell') {
-    const p = parseFloat(price)
-    const slv = parseFloat(sl)
-    if (isNaN(p) || isNaN(slv) || !styleId) return
-    const tpv = parseFloat(tp) || undefined
-    await onEnter({ direction, price: p, sl: slv, tp: tpv, styleId })
-    setPrice(''); setSl(''); setTp(''); setStyleId('')
-  }
 
   async function handleExit() {
     const p = parseFloat(exitPrice) || currentPrice
@@ -54,7 +67,6 @@ export function TradePanel({
     const pnlClass = activeTrade.pips_pnl == null
       ? ''
       : activeTrade.pips_pnl >= 0 ? 'profit' : 'loss'
-    const style = styles.find(s => s.id === activeTrade.style_id)
     return (
       <div className="trade-panel">
         <div className="active-trade">
@@ -68,11 +80,6 @@ export function TradePanel({
           </div>
           {activeTrade.pips_pnl != null && (
             <div className={`pnl ${pnlClass}`}>{activeTrade.pips_pnl > 0 ? '+' : ''}{activeTrade.pips_pnl} pips</div>
-          )}
-          {style && (
-            <div className="scenario-readout">
-              <div className="scenario-block"><span className="scenario-readout-label">スタイル</span>{style.name}</div>
-            </div>
           )}
           {activeTrade.is_open && (
             <div className="exit-form">
@@ -96,60 +103,105 @@ export function TradePanel({
     )
   }
 
-  const ready = !!(price && sl && styleId)
+  // ---- 分析中: エントリー組み立て UI ----
+  const direction = deriveDirection(currentPrice, entryDraft.sl)
+  const slPips = currentPrice != null && entryDraft.sl != null
+    ? pipsBetween(currentPrice, entryDraft.sl, pipSize)
+    : null
+  const tpPips = currentPrice != null && entryDraft.tp != null
+    ? pipsBetween(currentPrice, entryDraft.tp, pipSize)
+    : null
+  const rr = slPips != null && tpPips != null && slPips > 0
+    ? Math.round((tpPips / slPips) * 100) / 100
+    : null
+
+  // TP が SL と同じ側 → 不正
+  const tpInvalid = (() => {
+    if (entryDraft.tp == null || currentPrice == null || direction == null) return false
+    if (direction === 'buy') return entryDraft.tp <= currentPrice
+    return entryDraft.tp >= currentPrice
+  })()
+
+  const ready = currentPrice != null && entryDraft.sl != null && direction != null && !tpInvalid
+
+  async function handleEnter() {
+    if (!ready || currentPrice == null || entryDraft.sl == null || direction == null) return
+    await onEnter({
+      direction,
+      price: currentPrice,
+      sl: entryDraft.sl,
+      tp: entryDraft.tp ?? undefined,
+    })
+  }
 
   return (
     <div className="trade-panel">
       <div className="entry-form">
-        <StyleSelect
-          styles={styles}
-          styleId={styleId}
-          onStyleIdChange={setStyleId}
-          disabled={loading}
-        />
-        <div className="price-row">
-          <input
-            type="number"
-            placeholder="エントリー価格"
-            value={price}
-            onChange={e => setPrice(e.target.value)}
-            step={step}
-          />
+        <div className="entry-current">
+          <span className="entry-current-label">現在値</span>
+          <span className="entry-current-price">
+            {currentPrice != null ? formatPrice(currentPrice, digits) : '—'}
+          </span>
+          {direction && (
+            <span className={`entry-direction-badge ${direction}`}>
+              {direction.toUpperCase()}
+            </span>
+          )}
         </div>
-        <div className="sl-tp-row">
-          <input
-            type="number"
-            placeholder="SL (必須)"
-            value={sl}
-            onChange={e => setSl(e.target.value)}
-            step={step}
-          />
-          <input
-            type="number"
-            placeholder="TP"
-            value={tp}
-            onChange={e => setTp(e.target.value)}
-            step={step}
-          />
+
+        <div className={`entry-line-row ${entryPlacing === 'sl' ? 'placing' : ''}`}>
+          <span className="entry-line-label sl">SL</span>
+          <span className="entry-line-value">
+            {entryDraft.sl != null
+              ? <>{formatPrice(entryDraft.sl, digits)} <span className="entry-line-pips">({slPips} pips)</span></>
+              : <span className="entry-line-empty">未配置</span>}
+          </span>
+          {entryDraft.sl != null ? (
+            <button className="entry-line-btn" onClick={onClearSL} disabled={loading}>解除</button>
+          ) : (
+            <button
+              className={`entry-line-btn primary ${entryPlacing === 'sl' ? 'active' : ''}`}
+              onClick={onPlaceSL}
+              disabled={loading || currentPrice == null}
+            >
+              {entryPlacing === 'sl' ? 'チャートをクリック…' : '📍 配置'}
+            </button>
+          )}
         </div>
-        <div className="direction-row">
-          <button
-            className="buy-btn"
-            onClick={() => handleEnter('buy')}
-            disabled={loading || !ready}
-            title={!ready ? '価格・SL・スタイルは必須' : ''}
-          >
-            BUY
-          </button>
-          <button
-            className="sell-btn"
-            onClick={() => handleEnter('sell')}
-            disabled={loading || !ready}
-            title={!ready ? '価格・SL・スタイルは必須' : ''}
-          >
-            SELL
-          </button>
+
+        <div className={`entry-line-row ${entryPlacing === 'tp' ? 'placing' : ''} ${tpInvalid ? 'invalid' : ''}`}>
+          <span className="entry-line-label tp">TP</span>
+          <span className="entry-line-value">
+            {entryDraft.tp != null
+              ? <>{formatPrice(entryDraft.tp, digits)} <span className="entry-line-pips">({tpPips} pips{rr ? `, RR 1:${rr}` : ''})</span></>
+              : <span className="entry-line-empty">未配置(任意)</span>}
+          </span>
+          {entryDraft.tp != null ? (
+            <button className="entry-line-btn" onClick={onClearTP} disabled={loading}>解除</button>
+          ) : (
+            <button
+              className={`entry-line-btn ${entryPlacing === 'tp' ? 'active' : ''}`}
+              onClick={onPlaceTP}
+              disabled={loading || currentPrice == null}
+            >
+              {entryPlacing === 'tp' ? 'チャートをクリック…' : '📍 配置'}
+            </button>
+          )}
         </div>
+
+        {tpInvalid && (
+          <p className="entry-warn">TP は SL と反対側に配置してください</p>
+        )}
+
+        <button
+          className={`entry-confirm-btn ${direction ?? ''}`}
+          onClick={() => void handleEnter()}
+          disabled={loading || !ready}
+          title={!ready ? 'SL を配置するとエントリーできます' : ''}
+        >
+          {direction ? `${direction.toUpperCase()} エントリー` : 'エントリー(SL 未配置)'}
+        </button>
+
         <p className="memo-inline-hint">根拠・シナリオは M キー/メモボタンでメモパネルに書く(§7.3)</p>
       </div>
     </div>

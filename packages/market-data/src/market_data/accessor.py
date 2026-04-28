@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from market_data.fetcher import fetch_ohlc_m5
+from market_data.fetcher import fetch_ohlc
 from market_data.providers.base import DataSourceProvider
 from market_data.timeframes import resample_ohlc
 
@@ -46,20 +46,18 @@ def get_ohlc(
     from_dt: datetime,
     to_dt: datetime,
 ) -> pd.DataFrame:
-    """OHLC データを取得して返す。
+    """OHLC データを取得して返す(ver 1.53: TF 別キャッシュ対応)。
 
-    - キャッシュにあればそこから返す
-    - なければ provider(MT5等)から取得してキャッシュに保存
-    - timeframe が M5 以外なら M5 データをリサンプリングして返す
+    - 各 TF が個別にキャッシュされ、2 回目以降は resample なしで返る
+    - M5: provider から直接取得・キャッシュ
+    - 上位足: M5 cache を resample してキャッシュ(末尾バーは毎回再計算で確定値に追従)
     """
     if not _initialized:
         raise RuntimeError("market_data が未初期化です。configure() を先に呼んでください。")
 
     from shared_schema.database import get_session
     with next(get_session()) as session:
-        m5_df = fetch_ohlc_m5(session, symbol, from_dt, to_dt, _provider)
-
-    return resample_ohlc(m5_df, timeframe)
+        return fetch_ohlc(session, symbol, timeframe, from_dt, to_dt, _provider)
 
 
 def get_latest(symbol: str, timeframe: str, n_bars: int = 500) -> pd.DataFrame:

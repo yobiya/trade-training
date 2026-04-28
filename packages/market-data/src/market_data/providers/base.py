@@ -1,4 +1,4 @@
-"""データソースプロバイダの抽象インターフェース(仕様書 2.4)。"""
+"""データソースプロバイダの抽象インターフェース(仕様書 §2.4)。"""
 from abc import ABC, abstractmethod
 from datetime import datetime
 
@@ -11,7 +11,8 @@ class DataSourceProvider(ABC):
     DataFrame の仕様:
     - インデックス: timestamp (UTC aware datetime)
     - カラム: open, high, low, close, volume (float/int)
-    - M5 のみを返す。上位足への変換は timeframes.resample_ohlc で行う。
+    - 任意 TF を返す(ver 1.58 で M5 専用前提を撤廃。確定済みバーは TF 別に取得し、
+      進行中バーは呼び出し側で「一つ下の TF」を集約する)
     """
 
     SOURCE_NAME: str = ""
@@ -29,19 +30,26 @@ class DataSourceProvider(ABC):
         """現在接続中かどうか。"""
 
     @abstractmethod
-    def fetch_ohlc_m5(
-        self, symbol: str, from_dt: datetime, to_dt: datetime
+    def fetch_ohlc(
+        self, symbol: str, timeframe: str, from_dt: datetime, to_dt: datetime
     ) -> pd.DataFrame:
-        """指定期間の M5 OHLC を取得して返す。
+        """指定期間の指定 TF の OHLC を取得して返す(ver 1.58 で追加)。
 
         Args:
             symbol: 銘柄名(接尾辞なし、例: "USDJPY")
+            timeframe: 'M5' / 'M15' / 'H1' / 'H4' / 'D1' / 'W1' / 'MN1'
             from_dt: 開始日時(UTC)
             to_dt: 終了日時(UTC)
 
         Returns:
             UTC インデックスの OHLC DataFrame。データなしなら空 DataFrame。
         """
+
+    def fetch_ohlc_m5(
+        self, symbol: str, from_dt: datetime, to_dt: datetime
+    ) -> pd.DataFrame:
+        """後方互換: M5 の薄いラッパ。新規コードは `fetch_ohlc("M5", ...)` を使う。"""
+        return self.fetch_ohlc(symbol, "M5", from_dt, to_dt)
 
     @abstractmethod
     def fetch_latest_m5(self, symbol: str, n_bars: int) -> pd.DataFrame:

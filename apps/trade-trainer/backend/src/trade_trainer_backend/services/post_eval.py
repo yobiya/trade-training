@@ -5,19 +5,14 @@
 - R:R 比率(R = エントリー時の SL 幅)を一次指標(§9.3)
 - pips は補助として併記(スプレッド影響の読み取り用)
 - 「機会損失 / 正解 / どちらでも」等のラベル判定は採用しない(§9.3 / principles/no-tags)
-- 見送り時の R 基準は TradingStyle.typical_sl_pips の中央値(§9.3)
+- 見送り・候補振り返りは SL 未確定のため R 計算を行わず pips のみで評価する
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from typing import Any
-
-from trade_trainer_backend.services.trading_style_store import (
-    TradingStyle, get_style, list_styles,
-)
 
 # Trade はファイル管理(ver 1.45)の dataclass を渡される想定。
 # 関数内では .symbol / .entry_price / .sl / .exit_price / .exit_time /
@@ -74,45 +69,6 @@ class EntryObservation:
 
 def _pip_size(symbol: str) -> float:
     return 0.01 if symbol.upper().endswith("JPY") else 0.0001
-
-
-def parse_typical_sl_pips(s: str | None) -> float | None:
-    """TradingStyle.typical_sl_pips の文字列から中央値を返す。
-
-    例: "10~20" → 15.0 / "30pips" → 30.0 / "15" → 15.0 / "10 〜 20" → 15.0
-    数字を抽出できなければ None。
-    """
-    if not s:
-        return None
-    nums = [float(m) for m in re.findall(r"\d+(?:\.\d+)?", s)]
-    if not nums:
-        return None
-    if len(nums) == 1:
-        return nums[0]
-    return (min(nums) + max(nums)) / 2
-
-
-def resolve_skip_r_unit_pips(
-    considered_styles: list[str] | None,
-) -> float | None:
-    """§9.3 見送り時の代理 R 基準(pips)を算出する(ver 1.45 でファイル参照化)。
-
-    `considered_styles` で選択された各スタイルの `typical_sl_pips` 中央値の平均。
-    スタイル未選択・解釈不能なら None(呼び出し側で R 計算なしとして扱う)。
-    """
-    if not considered_styles:
-        return None
-    medians: list[float] = []
-    for sid in considered_styles:
-        s = get_style(sid)
-        if s is None:
-            continue
-        m = parse_typical_sl_pips(s.typical_sl_pips)
-        if m is not None:
-            medians.append(m)
-    if not medians:
-        return None
-    return sum(medians) / len(medians)
 
 
 def resolve_trade_r_unit_pips(trade: Trade) -> float | None:

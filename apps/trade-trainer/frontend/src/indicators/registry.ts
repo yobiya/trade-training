@@ -15,12 +15,21 @@ export const INDICATORS: Record<IndicatorType, IndicatorSpec> = {
     defaultColor: '#58a6ff',
     compute: (bars, params) => calcSMA(bars, params.period),
   },
-  EMA: {
-    type: 'EMA',
+  EMA20: {
+    type: 'EMA20',
     label: 'EMA',
-    defaultParams: { period: 50 },
+    defaultParams: { period: 20 },
     placement: 'overlay',
-    defaultColor: '#e3b341',
+    defaultColor: '#87ceeb',  // 薄い青(light sky blue)
+    compute: (bars, params) => calcEMA(bars, params.period),
+  },
+  EMA200: {
+    type: 'EMA200',
+    label: 'EMA',
+    defaultParams: { period: 200 },
+    placement: 'overlay',
+    defaultColor: '#f0883e',  // オレンジ
+    defaultWidth: 2,           // 太線(長期トレンドの視認性確保)
     compute: (bars, params) => calcEMA(bars, params.period),
   },
   RSI: {
@@ -41,5 +50,6 @@ export function defaultIndicatorConfig(type: IndicatorType): IndicatorConfig {
     type,
     params: spec.defaultParams,
     color: spec.defaultColor,
+    width: spec.defaultWidth ?? 1,
   }
 }

@@ -15,7 +15,6 @@ from trade_trainer_backend.routers.events import router as events_router
 from trade_trainer_backend.routers.sessions import router as sessions_router
 from trade_trainer_backend.routers.settings import router as settings_router
 from trade_trainer_backend.routers.trades import router as trades_router
-from trade_trainer_backend.routers.trading_styles import router as trading_styles_router
 
 
 @asynccontextmanager
@@ -32,10 +31,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # §7.2.3 メモテンプレート(Markdown ファイル)を起動時にロード
     from trade_trainer_backend.services.memo_templates import load_memo_templates
     load_memo_templates()
-
-    # §8 トレードスタイル(Markdown ファイル)を起動時にロード
-    from trade_trainer_backend.services.trading_style_store import load_trading_styles
-    load_trading_styles()
 
     from market_data.accessor import configure
     provider = None
@@ -77,7 +72,6 @@ def create_app() -> FastAPI:
     app.include_router(chart_router, prefix="/api")
     app.include_router(trades_router, prefix="/api")
     app.include_router(drawings_router, prefix="/api")
-    app.include_router(trading_styles_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
     app.include_router(events_router, prefix="/api")
     app.include_router(ai_analysis_router, prefix="/api")

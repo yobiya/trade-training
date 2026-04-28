@@ -15,15 +15,15 @@ import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { SYMBOLS, TIMEFRAMES, getTimeframeColor } from '../constants'
+import { SYMBOLS, TIMEFRAMES, TIMEFRAME_MINUTES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { isDrawingVisibleOnTf } from '../drawing/visibility'
 import { useChartRefCache } from '../hooks/useChartRefCache'
+import { useCrosshairSync } from '../hooks/useCrosshairSync'
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
 import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
 import { useEconomicEvents } from '../hooks/useEconomicEvents'
-import { useTradingStyles } from '../hooks/useTradingStyles'
 import { formatJST } from '../utils/datetime'
 
 type Props = {
@@ -33,8 +33,13 @@ type Props = {
 
 type Phase = 'analyzing' | 'holding' | 'reviewing'
 
-function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | null): PriceLine[] {
-  return drawings
+function priceLinesForTf(
+  drawings: Drawing[],
+  tf: string,
+  preview: Drawing | null,
+  entryDraft: { sl: number | null; tp: number | null },
+): PriceLine[] {
+  const lines: PriceLine[] = drawings
     .filter(d => d.kind === 'line' && isDrawingVisibleOnTf(d, tf))
     .map(d => {
       const previewMatch = preview?.id === d.id ? preview : null
@@ -45,6 +50,14 @@ function priceLinesForTf(drawings: Drawing[], tf: string, preview: Drawing | nul
         color: getTimeframeColor(d.timeframe),
       }
     })
+  // §7.4 ver 1.50: 組み立て中の SL / TP を全 TF に表示
+  if (entryDraft.sl != null) {
+    lines.push({ id: -1001, price: entryDraft.sl, label: 'SL', color: '#ff5555' })
+  }
+  if (entryDraft.tp != null) {
+    lines.push({ id: -1002, price: entryDraft.tp, label: 'TP', color: '#58a6ff' })
+  }
+  return lines
 }
 
 /**
@@ -73,6 +86,10 @@ export function SessionPage({ sessionId, onBack }: Props) {
   const [confirmSkipAll, setConfirmSkipAll] = useState(false)
   const [skipAllReasonDraft, setSkipAllReasonDraft] = useState('')
 
+  // §7.4 ver 1.50: チャート上で SL/TP を配置するエントリー組み立て状態
+  const [entryDraft, setEntryDraft] = useState<{ sl: number | null; tp: number | null }>({ sl: null, tp: null })
+  const [entryPlacing, setEntryPlacing] = useState<'sl' | 'tp' | null>(null)
+
   // フェーズ判定
   const phase: Phase = activeTrade
     ? 'holding'
@@ -92,20 +109,26 @@ export function SessionPage({ sessionId, onBack }: Props) {
     return [...head, ...rest]
   }, [entryTf, hiddenTfs])
 
-  const { barsByTf, currentPrice, reloadAll, loadMoreHistory } = useCharts(
+  const { barsByTf, loadingByTf, currentPrice, reloadStack, loadMoreHistory } = useCharts(
     sessionId, currentSymbol, visibleTfs, entryTf,
   )
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } =
     useDrawings(sessionId, currentSymbol)
-  const tradingStyles = useTradingStyles()
 
   const { handles: chartHandles, setRef: setChartRef } = useChartRefCache()
+
+  // §5.1.2 マルチ TF クロスヘア同期(ver 1.55: SessionPage の state を撤去し hook に集約)
+  useCrosshairSync(chartHandles)
   const chartApiRef = useRef<ChartApi | null>(null)
 
   // §5.4 経済指標: 設定読み込み + 表示期間内のイベント取得
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
   useEffect(() => {
-    api.settings.get().then(setSettings).catch(() => setSettings(null))
+    // I-11.6: 設定取得失敗はデフォルト値(null)で graceful 動作。I-11.1 のログ要件は満たす。
+    api.settings.get().then(setSettings).catch(err => {
+      console.warn('[SessionPage] settings.get failed, falling back to null defaults', err)
+      setSettings(null)
+    })
   }, [])
 
   // 表示中 bars の時間範囲(全 TF の最小〜最大)。未来の指標も見えるよう右端は current_position 付近まで。
@@ -187,6 +210,42 @@ export function SessionPage({ sessionId, onBack }: Props) {
     onDelete: handleDeleteDrawing,
   })
 
+  // §7.4 ver 1.50: SL/TP 配置のチャートクリック横取り
+  const pipSize = currentSymbol.toUpperCase().endsWith('JPY') ? 0.01 : 0.0001
+  const roundToDigits = useCallback((p: number): number => {
+    const d = session?.digits ?? 5
+    const factor = Math.pow(10, d)
+    return Math.round(p * factor) / factor
+  }, [session?.digits])
+
+  const handleChartClick = useCallback(
+    (price: number, time: number | null, px: { x: number; y: number }) => {
+      if (entryPlacing) {
+        const rounded = roundToDigits(price)
+        setEntryDraft(prev => ({ ...prev, [entryPlacing]: rounded }))
+        setEntryPlacing(null)
+        return
+      }
+      interaction.handlers.onChartClick(price, time, px)
+    },
+    [entryPlacing, interaction.handlers, roundToDigits],
+  )
+
+  // 配置モードに入ったら描画ツールを Idle に戻す(衝突回避)
+  useEffect(() => {
+    if (entryPlacing && interaction.activeTool) {
+      interaction.selectTool(null)
+    }
+  }, [entryPlacing, interaction])
+
+  // 銘柄切り替え / フェーズ移行で draft をクリア
+  useEffect(() => {
+    if (phase !== 'analyzing') {
+      setEntryDraft({ sl: null, tp: null })
+      setEntryPlacing(null)
+    }
+  }, [phase, currentSymbol])
+
   function notify(msg: string) {
     setNotification(msg)
     setTimeout(() => setNotification(null), 3000)
@@ -214,8 +273,11 @@ export function SessionPage({ sessionId, onBack }: Props) {
   async function handleAdvance(n: number = 1) {
     setAdvancing(true)
     try {
-      const res = await api.chart.advance(sessionId, n)
-      await reloadAll()
+      // 仕様 §5.1.1: 「+N 本」は entry TF の N バー。backend は M5 換算本数を受ける。
+      const m5Bars = Math.max(1, n * Math.round((TIMEFRAME_MINUTES[entryTf] ?? 5) / 5))
+      const res = await api.chart.advance(sessionId, m5Bars, currentSymbol)
+      // ver 1.59: chart-stack を再呼び出して全 TF をまとめて取得し直す。
+      await reloadStack()
       if (res.trade_auto_closed) {
         const pips = res.trade_pips_pnl ?? 0
         notify(`自動決済: ${res.trade_exit_reason?.toUpperCase()} @ ${res.trade_exit_price} (${pips > 0 ? '+' : ''}${pips} pips)`)
@@ -235,7 +297,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
     price: number
     sl: number
     tp: number | undefined
-    styleId: string
   }) {
     setLoading(true)
     try {
@@ -245,10 +306,11 @@ export function SessionPage({ sessionId, onBack }: Props) {
         price: args.price,
         sl: args.sl,
         tp: args.tp,
-        style_id: args.styleId,
       })
       setActiveTrade(trade)
       setLatestTrade(trade)
+      setEntryDraft({ sl: null, tp: null })
+      setEntryPlacing(null)
       const s = await api.sessions.get(sessionId)
       setSession(s)
       notify(`エントリー: ${args.direction.toUpperCase()} ${currentSymbol} @ ${args.price}`)
@@ -270,8 +332,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
     }
   }
 
-  async function handleSkipConfirm(reason: string, consideredStyles: string[]) {
-    await api.sessions.skip(sessionId, reason, consideredStyles)
+  async function handleSkipConfirm(reason: string) {
+    await api.sessions.skip(sessionId, reason)
     const s = await api.sessions.get(sessionId)
     setSession(s)
     setSkipping(false)
@@ -378,21 +440,28 @@ export function SessionPage({ sessionId, onBack }: Props) {
               onMouseEnter={() => handleChartMouseEnter(tf)}
             >
               <div className="tf-badge" style={{ background: getTimeframeColor(tf) }}>{tf}</div>
+              {loadingByTf[tf] && (
+                <div className="chart-loading-overlay" role="status" aria-live="polite">
+                  <div className="chart-loading-spinner" />
+                  <span>読み込み中… (キャッシュ未生成の TF は数秒かかることがあります)</span>
+                </div>
+              )}
               <Chart
+                key={`${tf}-${currentSymbol}`}
                 ref={setChartRef(tf)}
                 bars={barsByTf[tf] ?? []}
                 timeframe={tf}
                 digits={session?.digits}
-                cursor={activeTf === tf ? interaction.cursor : undefined}
-                onNeedMoreHistory={(earliest) => loadMoreHistory(tf, earliest)}
-                onChartClick={activeTf === tf ? interaction.handlers.onChartClick : undefined}
+                cursor={activeTf === tf ? (entryPlacing ? 'crosshair' : interaction.cursor) : undefined}
+                onNeedMoreHistory={(earliest) => void loadMoreHistory(tf, earliest)}
+                onChartClick={activeTf === tf ? handleChartClick : undefined}
                 onMouseMove={activeTf === tf ? (price, time, px) => {
                   interaction.handlers.onMouseMove(price, time, px)
                   setHoveredEvent(findNearestEvent(px.x))
                 } : undefined}
                 onMouseDown={activeTf === tf ? interaction.handlers.onMouseDown : undefined}
                 onMouseUp={activeTf === tf ? interaction.handlers.onMouseUp : undefined}
-                priceLines={priceLinesForTf(drawings, tf, interaction.preview)}
+                priceLines={priceLinesForTf(drawings, tf, interaction.preview, entryDraft)}
                 indicators={indicators}
               />
               <EventOverlay
@@ -437,7 +506,13 @@ export function SessionPage({ sessionId, onBack }: Props) {
               onExit={handleExit}
               loading={loading}
               digits={session?.digits ?? 5}
-              styles={tradingStyles}
+              entryDraft={entryDraft}
+              entryPlacing={entryPlacing}
+              pipSize={pipSize}
+              onPlaceSL={() => setEntryPlacing(p => p === 'sl' ? null : 'sl')}
+              onPlaceTP={() => setEntryPlacing(p => p === 'tp' ? null : 'tp')}
+              onClearSL={() => setEntryDraft(d => ({ ...d, sl: null }))}
+              onClearTP={() => setEntryDraft(d => ({ ...d, tp: null }))}
             />
           )}
 
@@ -451,7 +526,9 @@ export function SessionPage({ sessionId, onBack }: Props) {
             digits={session?.digits ?? 5}
           />
 
-          {phase === 'reviewing' && <PostReviewPanel sessionId={sessionId} />}
+          {phase === 'reviewing' && session && (
+            <PostReviewPanel session={session} onSessionChange={setSession} />
+          )}
           {phase === 'reviewing' && (
             <AiAnalysisPanel sessionId={sessionId} mode="review" chartHandles={chartHandles} />
           )}
@@ -487,7 +564,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
       {skipping && (
         <SkipEntryModal
-          styles={tradingStyles}
           onConfirm={handleSkipConfirm}
           onCancel={() => setSkipping(false)}
         />

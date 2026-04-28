@@ -498,9 +498,36 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 }
 .stacked-chart {
   position: relative;
-  flex: 1 0 260px;  /* 高さは TF 数に応じて均等配分、最小 260px */
-  min-height: 260px;
+  flex: 1 0 520px;  /* 高さは TF 数に応じて均等配分、最小 520px(400px の 1.3 倍、波形を読み取れる縦幅を確保) */
+  min-height: 520px;
   border-bottom: 1px solid var(--border);
+}
+/* §5.1 チャート読み込み中の overlay(I-11.3 loading 状態の UI 表示)。
+   キャッシュ未生成の上位 TF は数秒〜十数秒かかるため、空白で待たせない。 */
+.chart-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(13, 17, 23, 0.75);
+  color: var(--fg);
+  font-size: 13px;
+  z-index: 5;
+  pointer-events: none;
+}
+.chart-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(201, 209, 217, 0.25);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: chart-spin 0.9s linear infinite;
+}
+@keyframes chart-spin {
+  to { transform: rotate(360deg); }
 }
 .stacked-chart.active::before {
   content: '';
@@ -549,24 +576,94 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   border-bottom: 1px solid var(--border);
 }
 .entry-form { display: flex; flex-direction: column; gap: 8px; }
-.price-row input, .sl-tp-row input { width: 100%; }
-.sl-tp-row { display: flex; gap: 6px; }
-.sl-tp-row input { width: 50%; }
-.direction-row { display: flex; gap: 6px; }
-.buy-btn {
-  flex: 1;
-  background: var(--buy);
-  border-color: var(--buy);
-  color: #fff;
-  font-weight: 700;
+
+/* §7.4 ver 1.50: チャート配置型エントリーフォーム */
+.entry-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
 }
-.sell-btn {
-  flex: 1;
-  background: var(--sell);
-  border-color: var(--sell);
-  color: #fff;
+.entry-current-label { font-size: 10px; color: var(--text-dim); }
+.entry-current-price { font-size: 14px; font-weight: 700; flex: 1; }
+.entry-direction-badge {
+  font-size: 11px;
   font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
 }
+.entry-direction-badge.buy { background: var(--buy); color: #fff; }
+.entry-direction-badge.sell { background: var(--sell); color: #fff; }
+
+.entry-line-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.entry-line-row.placing { border-color: var(--accent); background: rgba(88, 166, 255, 0.06); }
+.entry-line-row.invalid { border-color: var(--sell); background: rgba(248, 81, 73, 0.08); }
+.entry-line-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 0;
+  border-radius: 2px;
+  color: #fff;
+}
+.entry-line-label.sl { background: #ff5555; }
+.entry-line-label.tp { background: #58a6ff; }
+.entry-line-value { flex: 1; }
+.entry-line-pips { color: var(--text-dim); font-size: 10px; }
+.entry-line-empty { color: var(--text-dim); font-style: italic; }
+.entry-line-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.entry-line-btn:hover { background: var(--bg3); }
+.entry-line-btn.primary { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 600; }
+.entry-line-btn.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+.entry-line-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.entry-warn {
+  margin: 0;
+  font-size: 11px;
+  color: var(--sell);
+}
+
+.entry-confirm-btn {
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.entry-confirm-btn:not(:disabled) { color: var(--text); }
+.entry-confirm-btn.buy:not(:disabled) { background: var(--buy); border-color: var(--buy); color: #fff; }
+.entry-confirm-btn.sell:not(:disabled) { background: var(--sell); border-color: var(--sell); color: #fff; }
+.entry-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .active-trade { display: flex; flex-direction: column; gap: 8px; }
 .trade-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
@@ -967,13 +1064,21 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 }
 .memo-open-btn:hover { background: var(--bg3); }
 
+.modal:has(.memo-panel) {
+  max-width: 90vw;
+  width: 900px;
+  height: 85vh;
+  max-height: 90vh;
+  display: flex;
+  overflow: hidden;
+}
 .memo-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 600px;
-  max-width: 90vw;
-  max-height: 80vh;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 .memo-panel-header {
   display: flex;
@@ -997,6 +1102,8 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-height: 0;
 }
 .memo-section-header {
   display: flex;
@@ -1024,8 +1131,10 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
   color: var(--text);
   font-size: 12px;
   font-family: 'Consolas', 'Courier New', monospace;
-  resize: vertical;
+  resize: none;
   line-height: 1.5;
+  flex: 1;
+  min-height: 0;
 }
 .memo-textarea:focus { outline: 1px solid var(--accent); }
 .memo-empty-hint { color: var(--text-dim); font-size: 11px; }
@@ -1062,6 +1171,34 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 }
 .review-section { display: flex; flex-direction: column; gap: 4px; }
 .review-section h4 { margin: 0; font-size: 12px; color: var(--accent); }
+.review-memo-section {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--bg);
+}
+.review-memo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.review-memo-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.review-memo-status.settled {
+  color: #58a6ff;
+  border-color: #58a6ff;
+}
+.review-memo-hint { margin: 2px 0 6px; line-height: 1.4; }
+.review-memo-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
 .review-meta { color: var(--text-dim); font-size: 11px; }
 .review-reason { color: var(--text); font-style: italic; }
 .review-candidate {

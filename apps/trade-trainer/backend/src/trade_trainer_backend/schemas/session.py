@@ -19,7 +19,6 @@ class SkipSessionRequest(BaseModel):
     """§7.3 層 2 エントリー見送り。reason は必須(訓練価値)だが、全候補見送り経由では
     任意で通す。フロント側で用途に応じて必須/任意を制御する。"""
     reason: str | None = None
-    considered_styles: list[str] | None = None  # §8.5 見送り時に検討したスタイル
 
 
 # §6.3.1 候補管理(ウォッチリスト)

@@ -11,14 +11,25 @@ class OhlcBar(BaseModel):
     v: int
 
 
-class ChartResponse(BaseModel):
-    bars: list[OhlcBar]
-    current_position: datetime
+class ChartStackEntry(BaseModel):
     timeframe: str
+    bars: list[OhlcBar]
+
+
+class ChartStackResponse(BaseModel):
+    """ver 1.59: 全 TF を一度に返す chart-stack 形式。"""
+    symbol: str
+    current_position: datetime
+    stacks: list[ChartStackEntry]
+
+
+class ChartHistoryResponse(BaseModel):
+    """過去バー追加取得(ズームアウト/左パン時の loadMoreHistory 用)。"""
+    timeframe: str
+    bars: list[OhlcBar]
 
 
 class AdvanceResponse(BaseModel):
-    new_bars: list[OhlcBar]
     current_position: datetime
     trade_auto_closed: bool
     trade_exit_reason: str | None = None

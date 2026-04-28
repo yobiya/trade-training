@@ -1,8 +1,8 @@
 # 描画ツールの状態管理
 
-仕様書 §5.3 / §5.5 の描画ツール（水平線・トレンドライン・フィボナッチ・テキストラベル）を、ツールが増えても複雑さが線形にしか増えないように整理するための設計方針。
+仕様書 §5.3 / §5.5 の描画ツール（水平線・トレンドライン・フィボナッチ・波動ラベル）を、ツールが増えても複雑さが線形にしか増えないように整理するための設計方針。
 
-← [docs index](../Setup.md) | [仕様書](../spec/README.md)
+← [設計ドキュメント](../ARCHITECTURE.md) | [仕様書](../spec/README.md)
 
 ---
 
@@ -12,50 +12,47 @@
 
 - トレンドライン（2 クリックで作成、端点と本体で操作が分岐）
 - フィボナッチ（2 クリックで作成、複数レベル線を自動生成）
-- テキストラベル（1 クリック + テキスト入力、連続採番）
+- 波動ラベル（1 クリックで配置）
 
 を追加すると、各ツールの事情が Chart と TrainingPage に垂れ流しになり、保守不能になる。
 
 ## 2. 設計原則
 
-- **状態は「何を今やっているか」で分類する**：`addMode` や `dragging` 等の独立フラグを重ねず、1 つの「現在のモード」に集約する。
-- **モードはツール × 操作目的の単位**で定義する：「水平線を引く」「水平線を移動する」「トレンドラインを引く」「トレンドラインの端点を動かす」…
-- **各モードは自分の責務だけを知る**：あるモードのコードは他のモードの存在を意識しない。モードが他のモードに切り替えるときだけ、切り替え先のインスタンスを生成する。
+- **状態は「何を今やっているか」で分類する**：`addMode` や `dragging` 等の独立フラグを重ねず、1 つの「現在の状態」に集約する。
+- **状態 = ツール × 操作目的の単位**で定義する：「水平線を引く」「水平線を移動する」「トレンドラインを引く」「トレンドラインの端点を動かす」…
+- **状態は文字列タグで識別**：クラス階層ではなく **discriminated union + switch 分岐** で表現する。
+- **状態遷移は純関数**：`(state, event, ctx) → next_state` の単一関数に集約。永続化(`createDrawing` 等)は副作用として fire-and-forget で発火する。
 - **横断的関心事は分離する**：ヒットテスト・レンダリング・既定の可視性は「ツールのメタデータ」として別レジストリに集約する。
 
 ## 3. 構成要素
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ TrainingPage                                             │
+│ SessionPage                                              │
 │   - drawings の CRUD を useDrawings で管理               │
 │   - ツール選択 UI                                        │
 │   - useDrawingInteraction を通じてイベントを仲介          │
 └──────────────────┬───────────────────────────────────────┘
                    │
           ┌────────▼────────────┐
-          │ DrawingOverlay      │  現行モードに基づき SVG/preview を描画
+          │ DrawingOverlay      │  現状態に基づき SVG/preview を描画
           └────────┬────────────┘
                    │
     ┌──────────────▼────────────────┐
-    │ useDrawingInteraction hook    │  mode を state に保持、イベント中継のみ
+    │ useDrawingInteraction hook    │  state を保持、イベント中継のみ
     │                               │
-    │  ├─ mode: DrawingMode          │
-    │  ├─ ctx: ModeContext           │ ← chartApi, drawings, 永続化 API
+    │  ├─ state: DrawingState        │ ← discriminated union
+    │  ├─ ctx: DispatchContext       │ ← chartApi, drawings, 永続化 API
     │  └─ handlers: {onChartClick…}  │
     └──────────────┬────────────────┘
                    │
     ┌──────────────▼────────────────┐
-    │ modes/                        │  ツール × 操作目的のクラス群
-    │  ├─ IdleMode                   │
-    │  ├─ DrawingLineMode            │
-    │  ├─ MovingLineMode             │
-    │  ├─ DrawingTrendlineMode       │  (将来)
-    │  ├─ MovingTrendlineHandleMode  │  (将来)
-    │  ├─ MovingTrendlineBodyMode    │  (将来)
-    │  ├─ DrawingFibonacciMode       │  (将来)
-    │  ├─ DrawingLabelMode           │  (将来)
-    │  └─ …                           │
+    │ drawing/state.ts              │  状態 + イベント + dispatch を 1 ファイルに集約
+    │  ├─ DrawingState union         │
+    │  ├─ DrawingEvent union         │
+    │  ├─ dispatchEvent(s,e,ctx)     │
+    │  ├─ cursorOf / previewOf       │ ← UI 用 selectors
+    │  └─ activeToolOf / hoveredIdOf │
     └──────────────┬────────────────┘
                    │ メタ情報参照
     ┌──────────────▼────────────────┐
@@ -67,148 +64,163 @@
     └───────────────────────────────┘
 ```
 
-## 4. DrawingMode インタフェース
+## 4. 状態(DrawingState)
+
+状態は文字列タグで識別される discriminated union として 1 箇所に定義する。
 
 ```ts
-export interface DrawingMode {
-  readonly id: string                  // 'idle' | 'drawing-line' | 'moving-line' | ...
-  readonly cursor?: string             // カーソルスタイル
-  onEnter?(ctx: ModeContext): void
-  onExit?(ctx: ModeContext): void
-  onChartClick?(e: PointerPayload, ctx: ModeContext): void
-  onMouseMove?(e: PointerPayload, ctx: ModeContext): void
-  onMouseDown?(e: PointerPayload, ctx: ModeContext): void
-  onMouseUp?(e: PointerPayload, ctx: ModeContext): void
-  onEscape?(ctx: ModeContext): void
-  /** 作成中・編集中の仮描画。SVG オーバーレイが呼ぶ */
-  getPreview?(): Drawing | null
-}
+type DrawingState =
+  | { kind: 'idle'; cursor: string; hoveredId: number | null }
+  | { kind: 'drawing-line' }
+  | { kind: 'drawing-trendline'; firstPoint: PP | null; currentPoint: PP | null }
+  | { kind: 'drawing-fibonacci'; firstPoint: PP | null; currentPoint: PP | null }
+  | { kind: 'drawing-wave-label'; wave: 1|2|3|4|5; previewPoint: PP | null }
+  | { kind: 'moving-line'; original: Drawing; preview: Drawing }
+  | { kind: 'moving-trendline-handle'; original: Drawing; preview: Drawing; handleIndex: number }
+  | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchor: PP }
+  | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
+  | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchor: PP }
+  | { kind: 'moving-wave-label'; original: Drawing; preview: Drawing }
+
+type PP = { t: number; price: number }
 ```
 
-各モードは自身のルールに従って `ctx.setMode(new 別のモード())` で遷移する。呼ばれないイベントには実装不要。
+- `idle`: 何も進行していない待機状態。マウス位置から hoveredId/cursor を導出
+- `drawing-*`: 新規作成中（1 クリック完結 / 2 クリック完結）
+- `moving-*`: 既存描画の編集中。`original` は確定値、`preview` は未保存の中間値
 
-## 5. ModeContext
+旧設計(11 個のクラス)では、`Drawing*Mode`/`Moving*Mode`/`IdleMode` がそれぞれ別ファイルに別クラスとして実装されており、共通プロトコル(`onEnter` / `onExit` / `getPreview` / `cursor` ゲッタ等)を継承で揃えていたため、定型コードが大量に重複していた。union + selector で同等の意味を表現できる。
 
-モードの外側（hook）が提供する、モードが使って良い API。
+## 5. イベント(DrawingEvent)
 
 ```ts
-export interface ModeContext {
+type DrawingEvent =
+  | { type: 'mouse-move'; payload: PointerPayload }
+  | { type: 'mouse-down'; payload: PointerPayload }
+  | { type: 'mouse-up';   payload: PointerPayload }
+  | { type: 'click';      payload: PointerPayload }
+  | { type: 'escape' }
+  | { type: 'select-tool'; tool: DrawingKind | null; wave?: 1|2|3|4|5 }
+```
+
+`escape` と `select-tool` は **どの状態でも一律処理**（前者は idle に戻る、後者は対応する `drawing-*` 状態に遷移）。それ以外は現状態の handler に委譲する。
+
+## 6. DispatchContext
+
+dispatch 関数が使って良い外界 API。
+
+```ts
+interface DispatchContext {
   chartApi: ChartApi                   // 座標変換 (priceToCoordinate 等)
   drawings: Drawing[]                  // 既存描画(ヒットテスト用)
   activeTimeframe: string              // 作成時の timeframe 記録用
-  setMode(next: DrawingMode): void
-  createDrawing(body: CreateDrawingRequest): Promise<Drawing>
+  createDrawing(body: CreateDrawingBody): Promise<Drawing>
   updateDrawing(id: number, patch: UpdateDrawingPatch): Promise<void>
   deleteDrawing(id: number): Promise<void>
 }
-
-export interface ChartApi {
-  priceToY(price: number): number | null
-  yToPrice(y: number): number | null
-  timeToX(time: number): number | null
-  xToTime(x: number): number | null
-}
 ```
 
-## 6. モード一覧（初期 + 予定）
+旧 `ModeContext.setMode` は撤去。状態遷移は `dispatchEvent` の戻り値として表現する。
 
-| モード                        | 遷移元           | 役割                                                | 備考                    |
-| ----------------------------- | ---------------- | --------------------------------------------------- | ----------------------- |
-| `IdleMode`                    | 初期 / 各操作完了 | ヒットテストしてホバー時のカーソル変更、クリック時に編集モードへ遷移 | 常時待機 |
-| `DrawingLineMode`             | ツール選択       | 1 クリックで水平線を作成                            | 実装済み                |
-| `MovingLineMode`              | Idle のクリック  | y ドラッグで価格を更新                              | 実装済み                |
-| `DrawingTrendlineMode`        | ツール選択       | 2 点クリックで作成、マウスムーブ中はプレビュー表示  | 実装済み                |
-| `MovingTrendlineHandleMode`   | Idle のクリック  | 端点を移動                                          | 実装済み                |
-| `MovingTrendlineBodyMode`     | Idle のクリック  | 全体を平行移動                                      | 実装済み                |
-| `DrawingFibonacciMode`        | ツール選択       | 2 点クリックで作成                                  | 実装済み                |
-| `MovingFibonacciHandleMode`   | Idle のクリック  | 端点を移動(レベル線は自動追従)                      | 実装済み                |
-| `MovingFibonacciBodyMode`     | Idle のクリック  | 全体を平行移動                                      | 実装済み                |
+## 7. dispatchEvent
 
-※ エリオット波動カウント(連続採番ラベル)は描画ツールではなく §16 Phase 2b の専用機能として別途提供予定のため、本アーキテクチャには含めない。
+```ts
+function dispatchEvent(state: DrawingState, event: DrawingEvent, ctx: DispatchContext): DrawingState
+```
 
-## 7. 状態遷移の例
+- 純粋関数として「次の状態」を返す
+- 永続化(`createDrawing` / `updateDrawing`)は副作用として fire-and-forget で発火する。結果は `drawings` 配列の再フェッチ経由で UI に反映される
+- ESC は常に `idle` に戻る。作成途中のデータは破棄
+- ツール選択(`select-tool`)も常に対応する `drawing-*` 状態に遷移する
+
+## 8. selector 関数
+
+UI レンダリングに必要な派生値は state から関数で取り出す。
+
+```ts
+cursorOf(state)       → string                // CSS cursor
+previewOf(state)      → Drawing | null        // SVG オーバーレイのプレビュー
+activeToolOf(state)   → DrawingKind | null    // ボタンハイライト
+activeWaveOf(state)   → 1|2|3|4|5 | null      // 波動ラベル選択中の波番号
+hoveredIdOf(state)    → number | null         // §5.3 TF バッジ表示用
+isMovingState(state)  → boolean               // チャートのスクロール抑止判定
+```
+
+## 9. 状態遷移の例
 
 ### 水平線の作成
 
 ```
-Idle
-  │  toolSelected('line')
+idle
+  │  select-tool('line')
   ▼
-DrawingLine
-  │  onChartClick: createDrawing → setMode(Idle)
+drawing-line
+  │  click → ctx.createDrawing(...) (fire-and-forget) → idle
   ▼
-Idle
+idle
 ```
 
 ### 水平線の移動
 
 ```
-Idle
-  │  onMouseMove: ヒットテスト陽性 → cursor 変更 (Idle のまま)
+idle
+  │  mouse-move: ヒットテスト陽性 → cursor / hoveredId 更新 (idle のまま)
   │
-  │  onMouseDown: ヒットテスト陽性 → setMode(MovingLine(target))
+  │  mouse-down: ヒットテスト陽性 → moving-line { original, preview = original }
   ▼
-MovingLine
-  │  onMouseMove: preview 更新 (楽観的に applyOptions)
+moving-line
+  │  mouse-move: preview 更新
   │
-  │  onMouseUp: updateDrawing → setMode(Idle)
-  │  onEscape:                    setMode(Idle)
+  │  mouse-up: ctx.updateDrawing(...) (fire-and-forget) → idle
+  │  escape:                                                idle
   ▼
-Idle
+idle
 ```
 
-### ESC によるキャンセル
+### スクロール抑止
 
-どのモードも `onEscape` で `setMode(new IdleMode())` に戻せる。作成途中のデータは破棄される。
+`moving-*` 状態の間はチャートのドラッグパンと描画ドラッグが干渉するため抑止する。状態遷移を hook 側で監視し、`isMovingState(prev)` と `isMovingState(next)` の差分から `chartApi.setScrollEnabled(boolean)` を呼ぶ。dispatch 関数は副作用を持たない。
 
-## 8. ツールメタデータレジストリ
+## 10. ツールメタデータレジストリ
 
-モードに持たせると重複するため、ツール単位のメタ情報は 1 箇所にまとめる。
+ツール単位のメタ情報は `drawing/tools/` に 1 ファイル 1 ツール、`registry.ts` で集約。
 
 ```ts
-// drawing/tools/registry.ts
-export const TOOLS: Record<DrawingKind, ToolMetadata> = {
+export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
   trendline: trendlineTool,
   fibonacci: fibonacciTool,
+  wave_label: waveLabelTool,
 }
 
 export interface ToolMetadata {
   kind: DrawingKind
   label: string
-  icon: string                            // ボタン表示
-  defaultVisibleTfs: string[] | null      // 仕様書 §5.3 既定
+  icon: string
+  defaultVisibleTfs: string[] | null
   hitTest(d: Drawing, px: PointPx, api: ChartApi): HitResult | null
-  renderOverlay?(d: Drawing, api: ChartApi): SVGElement | null  // null = ライブラリ標準(createPriceLine 等)に委譲
-}
-
-export interface HitResult {
-  drawingId: number
-  kind: DrawingKind
-  part: 'body' | 'handle'
-  handleIndex?: number
+  renderOverlay?(d: Drawing, api: ChartApi): ReactNode
 }
 ```
 
-`IdleMode` は `TOOLS[d.kind].hitTest` を走査し、ヒット時に適切な `Moving*Mode` を生成して遷移する。
+`idle` 状態の handler は `findHit(drawings, px, api)` でヒットテストし、ヒット時に対応する `moving-*` 状態を生成する。
 
-## 9. 新しいツールを追加する手順
+## 11. 新しいツールを追加する手順
 
 1. **DB / API**: `Drawing.kind` の enum 値を追加（必要なら `data` の構造を定義）
-2. **tools/{kind}.ts**: `ToolMetadata` を実装し `TOOLS` レジストリに登録
-3. **modes/Drawing{Kind}Mode.ts**: 作成フローを実装
-4. **modes/Moving{Kind}...Mode.ts**: 編集フローを実装（ツールが複数の編集パターンを持つなら複数作る）
-5. **IdleMode の遷移**: `buildMovingMode(hit)` 関数に case を追加
-6. **DrawingTools ボタン**: `TOOLS` から生成されるため自動
+2. **tools/{kind}.ts(x)**: `ToolMetadata` を実装し `TOOLS` レジストリに登録
+3. **state.ts**: `DrawingState` union に `drawing-{kind}` / `moving-{kind}-*` を追加し、`dispatchEvent` の switch に handler を足す
+4. **selector**: `cursorOf` / `previewOf` / `activeToolOf` の switch に case を追加
+5. **DrawingTools ボタン**: `TOOLS` から生成されるため自動
 
-既存ツールのコードには触らず、追加分だけで完結する。
+`state.ts` を 1 ファイル開いて該当箇所に追記するだけで完結する（旧設計では「Drawing{Kind}Mode.ts と Moving{Kind}Mode.ts と IdleMode の switch 3 箇所」を同時更新する必要があった）。
 
-## 10. 非採用の代替案
+## 12. 非採用の代替案
 
-- **フラット state machine (入力ベース reducer)**: 遷移テーブルが肥大化し、ツール追加で全 case を見直す必要がある。
-- **Chart 側にツールロジックを直接書く**: 現状問題になった原因。再発を避ける。
+- **クラス階層 (旧設計)**: 11 ファイル × クラス継承で重複が多く、状態の全体像をひと目で把握できなかった。union+switch に統合して 1 ファイル化。
+- **Chart 側にツールロジックを直接書く**: 初期実装で問題になった原因。再発を避ける。
 - **lightweight-charts v5 + ISeriesPrimitive**: v4 から v5 への破壊的変更が多く、コストが大きい。将来の移行余地は残す。
 
 ---
 
-*最終更新: 2026-04-19*
+*最終更新: 2026-04-26 (ver 1.55 で 11 クラスから tagged union + 単一 dispatch 関数に統合)*

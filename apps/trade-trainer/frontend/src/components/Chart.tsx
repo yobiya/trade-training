@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import { createChart, LineStyle } from 'lightweight-charts'
+import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts'
 import type {
   IChartApi,
   IPriceLine,
@@ -32,6 +32,16 @@ export type ChartHandle = {
    * 描画オーバーレイ(SVG)・マーカー焼き込みは MVP では含めない(描画情報は payload メタに入る)。
    */
   takeScreenshot: () => string | null
+  /**
+   * §5.1.2 クロスヘア同期(命令的): 他チャートからの時刻を受け取り setCrosshairPosition を呼ぶ。
+   * null でクリア。bars に存在しない time は最寄りバーへスナップ。
+   */
+  setCrosshairTime: (time: number | null) => void
+  /**
+   * §5.1.2 クロスヘア同期(購読): ユーザー操作によるクロスヘア移動のみを通知する。
+   * `setCrosshairTime` で発火した programmatic な move は通知しない(feedback ループ防止)。
+   */
+  subscribeUserCrosshair: (cb: (time: number | null) => void) => () => void
 }
 
 type Props = {
@@ -40,8 +50,8 @@ type Props = {
   cursor?: string
   /** 価格表示の小数桁数(MT5 symbol_info.digits)。 */
   digits?: number
-  /** 可視範囲の左端がデータ範囲を超えたときに呼ばれる(遅延ロード用)。 */
-  onNeedMoreHistory?: (earliest: number) => void
+  /** チャートの可視範囲が左端に近づいた際の遅延ロード(loadMoreHistory)。最古バーの timestamp(秒)が渡る。 */
+  onNeedMoreHistory?: (earliestUnix: number) => void
   /** クリック / マウス移動 / 押下 / 離上 の薄い中継。座標変換済みの Point を渡す。 */
   onChartClick?: (price: number, time: number | null, px: PointPx) => void
   onMouseMove?: (price: number | null, time: number | null, px: PointPx) => void
@@ -59,7 +69,8 @@ function toCandle(bar: OhlcBar): CandlestickData {
   return { time: bar.t as Time, open: bar.o, high: bar.h, low: bar.l, close: bar.c }
 }
 
-const LOAD_MORE_THRESHOLD = 0
+/** 可視範囲の `range.from` がこの値より小さくなったら追加 history を要求する。 */
+const LOAD_MORE_THRESHOLD = 5
 
 /**
  * 純粋なチャート描画コンポーネント。ツール固有のロジックは持たない。
@@ -75,8 +86,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  /** 「初回データ反映 = fitContent 必要」のフラグ。timeframe 変化時に null へリセットされる。 */
   const fittedForTfRef = useRef<string | null>(null)
-  const earliestRef = useRef<number | null>(null)
   const onNeedMoreRef = useRef(onNeedMoreHistory)
   const onChartClickRef = useRef(onChartClick)
   const onMouseMoveRef = useRef(onMouseMove)
@@ -85,6 +96,10 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   const priceLineHandlesRef = useRef<Map<string | number, IPriceLine>>(new Map())
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const rsiPaneConfiguredRef = useRef(false)
+  /** クロスヘア同期: 最新の bars を保持(setCrosshairTime から近接バー検索に使う) */
+  const barsRef = useRef<OhlcBar[]>(bars)
+  /** クロスヘア同期: ユーザー操作だけを通知する subscriber 集合 */
+  const userCrosshairSubsRef = useRef<Set<(t: number | null) => void>>(new Set())
 
   useEffect(() => { onNeedMoreRef.current = onNeedMoreHistory }, [onNeedMoreHistory])
   useEffect(() => { onChartClickRef.current = onChartClick }, [onChartClick])
@@ -137,6 +152,35 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         return null
       }
     },
+    setCrosshairTime(time: number | null) {
+      const chart = chartRef.current
+      const series = seriesRef.current
+      if (!chart || !series) return
+      if (time == null) {
+        chart.clearCrosshairPosition()
+        return
+      }
+      const currentBars = barsRef.current
+      if (currentBars.length === 0) return
+      // bars はソート済(by t)。time 以下の最大 bar(or 最寄りの bar)を線形検索
+      let nearest: OhlcBar | null = null
+      for (const b of currentBars) {
+        if (b.t > time) break
+        nearest = b
+      }
+      if (!nearest) nearest = currentBars[0]
+      try {
+        chart.setCrosshairPosition(nearest.c, nearest.t as Time, series)
+      } catch {
+        // series に該当 time が無い等で失敗してもクラッシュさせない
+      }
+    },
+    subscribeUserCrosshair(cb: (time: number | null) => void) {
+      userCrosshairSubsRef.current.add(cb)
+      return () => {
+        userCrosshairSubsRef.current.delete(cb)
+      }
+    },
   }), [])
 
   useEffect(() => {
@@ -149,6 +193,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       // 仕様書 §5.1.3: 素のホイール = ページスクロール、Ctrl+ホイール = ズーム
       // ライブラリ標準のホイールズームを無効化し、自前の wheel ハンドラで分岐する
       handleScale: { mouseWheel: false },
+      // クロスヘアをカーソル位置に追従させる(既定の Magnet は直近バー close にスナップする)
+      crosshair: { mode: CrosshairMode.Normal },
     })
     const series = chart.addCandlestickSeries({
       upColor: '#26a69a',
@@ -160,10 +206,14 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     chartRef.current = chart
     seriesRef.current = series
 
+    // 可視範囲が左端付近に近づいたら追加 history を要求(loadMoreHistory)。
+    // logical range の `from` がデータ先頭バー(index=0)に近づくと負値になるので、
+    // 一定閾値より下回ったタイミングで onNeedMoreHistory を呼ぶ。
     const rangeHandler = (range: LogicalRange | null) => {
       if (!range) return
-      if (range.from < LOAD_MORE_THRESHOLD && earliestRef.current !== null) {
-        onNeedMoreRef.current?.(earliestRef.current)
+      if (range.from < LOAD_MORE_THRESHOLD) {
+        const oldest = barsRef.current[0]
+        if (oldest) onNeedMoreRef.current?.(oldest.t)
       }
     }
     chart.timeScale().subscribeVisibleLogicalRangeChange(rangeHandler)
@@ -176,6 +226,16 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       onChartClickRef.current?.(price, time, { x: param.point.x, y: param.point.y })
     }
     chart.subscribeClick(clickHandler)
+
+    // §5.1.2 クロスヘア同期: ユーザー操作による crosshair 移動を購読者に通知。
+    // sourceEvent が undefined の呼び出し(= setCrosshairPosition による programmatic)はスキップ
+    // してフィードバックループを防ぐ。
+    const crosshairHandler = (param: MouseEventParams) => {
+      if (param.sourceEvent === undefined) return
+      const t = typeof param.time === 'number' ? param.time : null
+      for (const cb of userCrosshairSubsRef.current) cb(t)
+    }
+    chart.subscribeCrosshairMove(crosshairHandler)
 
     // ネイティブ DOM イベントは上位(hook)へ中継
     const container = containerRef.current
@@ -240,6 +300,7 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     return () => {
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(rangeHandler)
       chart.unsubscribeClick(clickHandler)
+      chart.unsubscribeCrosshairMove(crosshairHandler)
       container.removeEventListener('mousemove', mmHandler)
       container.removeEventListener('mousedown', mdHandler, true)
       container.removeEventListener('wheel', wheelHandler)
@@ -248,19 +309,23 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       chartRef.current = null
       seriesRef.current = null
       fittedForTfRef.current = null
-      earliestRef.current = null
       priceLineHandlesRef.current.clear()
       indicatorSeriesRef.current.clear()
       rsiPaneConfiguredRef.current = false
     }
   }, [])
 
+  // [描画] bars を反映する(ver 1.59: シンプル版に戻す)。
+  // 銘柄切替は SessionPage 側で `<Chart key={`${tf}-${symbol}`}>` による remount で扱うため、
+  // ここでは bars 変化時の素直な setData + 初回 fitContent のみ。
   useEffect(() => {
-    if (!seriesRef.current || bars.length === 0) return
-    seriesRef.current.setData(bars.map(toCandle))
-    earliestRef.current = bars[0].t
+    const series = seriesRef.current
+    const chart = chartRef.current
+    barsRef.current = bars
+    if (!series || !chart || bars.length === 0) return
+    series.setData(bars.map(toCandle))
     if (fittedForTfRef.current !== timeframe) {
-      chartRef.current?.timeScale().fitContent()
+      chart.timeScale().fitContent()
       fittedForTfRef.current = timeframe
     }
   }, [bars, timeframe])
@@ -331,15 +396,17 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     // 追加・更新
     for (const ind of next) {
       const spec = INDICATORS[ind.type]
+      if (!spec) continue  // 旧バージョンの type が state に残っている場合の防御
       const data = spec.compute(bars, ind.params).map(p => ({
         time: p.time as Time,
         value: p.value,
       }))
+      const lineWidth = ind.width ?? 1
       let s = seriesMap.get(ind.key)
       if (!s) {
         s = chart.addLineSeries({
           color: ind.color,
-          lineWidth: 1,
+          lineWidth,
           priceScaleId: spec.placement === 'subpanel' ? RSI_SCALE_ID : 'right',
           lastValueVisible: false,
           priceLineVisible: false,
@@ -347,13 +414,13 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         })
         seriesMap.set(ind.key, s)
       } else {
-        s.applyOptions({ color: ind.color })
+        s.applyOptions({ color: ind.color, lineWidth })
       }
       s.setData(data)
     }
 
     // 系列追加後にスケールのマージンを構成する(サブパネル領域の確保)
-    const hasSubpanel = next.some(i => INDICATORS[i.type].placement === 'subpanel')
+    const hasSubpanel = next.some(i => INDICATORS[i.type]?.placement === 'subpanel')
     if (hasSubpanel) {
       // RSI 用のスケール(系列追加後なので参照可能)
       chart.priceScale(RSI_SCALE_ID).applyOptions({

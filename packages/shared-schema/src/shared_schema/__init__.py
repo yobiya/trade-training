@@ -7,7 +7,7 @@ Trade / HoldingMemo / Drawing)とトレードスタイル(TradingStyle)は
 from shared_schema.base import Base
 from shared_schema.database import get_engine, get_session, init_db
 from shared_schema.models.config import Account, Setting
-from shared_schema.models.market import EconomicEvent, OhlcM5
+from shared_schema.models.market import EconomicEvent, Ohlc
 from shared_schema.seeds import run_all_seeds
 
 __all__ = [
@@ -17,7 +17,7 @@ __all__ = [
     "get_session",
     "run_all_seeds",
     # market
-    "OhlcM5",
+    "Ohlc",
     "EconomicEvent",
     # config
     "Setting",

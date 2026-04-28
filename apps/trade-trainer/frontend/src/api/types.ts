@@ -40,14 +40,23 @@ export type TradeSession = {
   settled_at: string | null
 }
 
-export type ChartResponse = {
-  bars: OhlcBar[]
-  current_position: string
+export type ChartStackEntry = {
   timeframe: string
+  bars: OhlcBar[]
+}
+
+export type ChartStackResponse = {
+  symbol: string
+  current_position: string
+  stacks: ChartStackEntry[]
+}
+
+export type ChartHistoryResponse = {
+  timeframe: string
+  bars: OhlcBar[]
 }
 
 export type AdvanceResponse = {
-  new_bars: OhlcBar[]
   current_position: string
   trade_auto_closed: boolean
   trade_exit_reason: string | null
@@ -68,7 +77,6 @@ export type TradeResponse = {
   exit_time: string | null
   pips_pnl: number | null
   is_open: boolean
-  style_id: string | null
 }
 
 // 仕様書 §5.4 経済指標表示の設定
@@ -127,16 +135,13 @@ export type CandidateReview = {
   memo: string | null
   skip_reason: string | null
   ref_price: number | null
-  r_unit_pips: number | null  // considered_styles 由来の代理 R 基準
   stages: StageEval[]
 }
 
 export type SkipReview = {
   symbol: string
   reason: string | null
-  considered_styles: string[] | null
   ref_price: number | null
-  r_unit_pips: number | null
   stages: StageEval[]
 }
 
@@ -174,18 +179,6 @@ export type SessionFilter = {
   date_to?: string
   days?: number[]
   sessions?: string[]
-}
-
-// 仕様書 §8: トレードスタイル
-export type TradingStyle = {
-  id: string
-  name: string
-  primary_timeframe: string
-  expected_hold_time: string
-  expected_rr: string
-  typical_sl_pips: string
-  description: string | null
-  is_active: boolean
 }
 
 // 仕様書 §5.3/§5.5: 描画オブジェクト

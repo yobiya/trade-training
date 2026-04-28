@@ -48,7 +48,6 @@ class Trade:
     amount_pnl: float | None
     lot: float | None
     mt5_order_id: int | None
-    style_id: str | None
     created_at: datetime
 
 
@@ -57,7 +56,6 @@ class FinalDecision:
     """final_decision.json。見送り確定時のみ存在。"""
     has_entry: bool
     skip_reason: str | None
-    considered_styles: list[str] | None
 
 
 @dataclass

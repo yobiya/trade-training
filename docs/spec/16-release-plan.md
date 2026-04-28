@@ -22,10 +22,9 @@
 - シナリオメモ機能(**最小限**: メモ本文 + エントリー根拠)
 
 ## Phase 2b: 訓練コンセプトの実装
-**出口条件**: 訓練アプリ固有の価値(時間起点・スタイル・3シナリオ)が揃う
+**出口条件**: 訓練アプリ固有の価値(時間起点・3シナリオ)が揃う
 - 時間起点の銘柄選定フロー(左サイドバー銘柄一覧、詳細チャート切替、★ + 候補メモのウォッチリスト)
-- **トレードスタイル管理**: スタイル定義画面、プリセット、エントリー時のスタイル選択UI、見送り時の検討スタイル記録
-- シナリオメモ**拡張**(環境認識、相場観、指標認識、代替シナリオ、スタイル選定理由、銘柄選定理由、比較候補の総評)
+- シナリオメモ**拡張**(環境認識、相場観、指標認識、代替シナリオ、銘柄選定理由、比較候補の総評)
 - 波動ラベリング支援
 
 ## Phase 2c: 振り返り・事後評価・経済指標
@@ -37,13 +36,12 @@
 - 設定画面からの market-data 経済指標手動更新ボタン
 - **セッション情報のファイル化**(ver 1.45、[§13](./13-data-storage.md) / [§17](./17-data-model.md)):
   - 旧 6 テーブル(sessions / session_candidates / session_final_decisions / trades / holding_memos / drawings)を `data/sessions/{dir}/` ファイル群に移行
-  - トレードスタイルも `data/trading-styles/{id}.md` に移行
   - 状態モデルを「進行中 / 決着済み」の 2 状態に整理(`is_suspended` 撤廃)
   - AI 分析結果ディレクトリをセッション配下(`data/sessions/{dir}/ai_analysis/`)に統合
   - Dropbox 同期前提の運用に対応(atomic write、conflict 除外、id 重複検出)
 - スマホUI最適化
 
-※ 横断集計(勝率・期待値・スタイル別成績等)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。一方、**個別セッションのファイル単位での永続保持と振り返り**は ver 1.45 で許容方針に変更。
+※ 横断集計(勝率・期待値・銘柄別成績等)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。一方、**個別セッションのファイル単位での永続保持と振り返り**は ver 1.45 で許容方針に変更。
 
 ## Phase 4: AI 分析機能 (§11)
 - **§11 AI 分析** のファイル保存(`data/sessions/{dir}/ai_analysis/` 配下、[§11.7](./11-ai-analysis.md#117-分析結果の永続化ファイルストレージ))

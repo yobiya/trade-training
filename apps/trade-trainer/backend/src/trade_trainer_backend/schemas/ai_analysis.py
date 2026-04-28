@@ -20,16 +20,6 @@ from pydantic import BaseModel
 # 個別要素
 # --------------------------------------------------------------------------- #
 
-class StyleMeta(BaseModel):
-    """選択・検討したスタイルの最小情報。"""
-    id: str
-    name: str
-    primary_timeframe: str | None = None
-    expected_hold_time: str | None = None
-    expected_rr: str | None = None
-    typical_sl_pips: str | None = None
-
-
 class DecisionMeta(BaseModel):
     """§11.3.2 判断時点のメタ(判断時点分析・振り返り分析 共通)。"""
     decision_type: Literal["entry", "skip"]
@@ -40,10 +30,8 @@ class DecisionMeta(BaseModel):
     direction: Literal["buy", "sell"] | None
     sl_price: float | None
     tp_price: float | None
-    r_unit_pips: float | None                 # エントリー: 実 SL 幅、skip: スタイル代理
-    r_unit_source: Literal["trade_sl", "style_median", "unresolved"]
-    selected_style: StyleMeta | None          # エントリー時
-    considered_styles: list[StyleMeta] = []   # 見送り時(任意)
+    r_unit_pips: float | None                 # エントリー: 実 SL 幅、skip: なし
+    r_unit_source: Literal["trade_sl", "unresolved"]
 
 
 class EntryResult(BaseModel):

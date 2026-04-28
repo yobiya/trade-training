@@ -40,7 +40,6 @@ from trade_trainer_backend.services.post_eval import (
     evaluate_entry,
     evaluate_symbol,
     quick_r_pnl,
-    resolve_skip_r_unit_pips,
     resolve_trade_r_unit_pips,
 )
 
@@ -139,6 +138,11 @@ def _matches_filters(
     sessions: list[str] | None,
 ) -> bool:
     jst = dt_utc + _JST_OFFSET
+    # 仕様書 §4.1 Phase 1 step 2 (ver 1.56): JST 08:00 〜 翌 02:00 の 18 時間枠に限定。
+    # JST 02:00〜08:00 は流動性が極端に低く訓練価値が低いため除外。
+    jst_hour = jst.hour
+    if 2 <= jst_hour < 8:
+        return False
     if days:
         if jst.weekday() not in days:
             return False
@@ -356,7 +360,6 @@ def skip_session(session_id: str, body: SkipSessionRequest) -> SessionResponse:
     fd = FinalDecision(
         has_entry=False,
         skip_reason=body.reason,
-        considered_styles=body.considered_styles,
     )
     session_store.save_final_decision(session_id, fd)
     session_store.rename_dir(session_id)
@@ -379,25 +382,18 @@ def get_post_review(session_id: str) -> PostReviewResponse:
     def to_stage_resp(stages: list) -> list[StageEvalResp]:
         return [StageEvalResp(**st.__dict__) for st in stages]
 
-    # 見送り R 基準
-    considered_styles = (
-        agg.final_decision.considered_styles if agg.final_decision is not None else None
-    )
-    skip_r_unit = resolve_skip_r_unit_pips(considered_styles)
-
-    # 層 1: エントリーしなかった候補
+    # 層 1: エントリーしなかった候補(SL 未確定のため pips のみで評価)
     selected_symbol = agg.trade.symbol if agg.trade is not None else None
     candidate_reviews: list[CandidateReview] = []
     for c in agg.candidates:
         if selected_symbol is not None and c.symbol == selected_symbol:
             continue
-        rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=skip_r_unit)
+        rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=None)
         candidate_reviews.append(CandidateReview(
             symbol=c.symbol,
             memo=c.memo,
             skip_reason=None,
             ref_price=rv.ref_price,
-            r_unit_pips=skip_r_unit,
             stages=to_stage_resp(rv.stages),
         ))
 
@@ -427,15 +423,11 @@ def get_post_review(session_id: str) -> PostReviewResponse:
             continuation_bars=obs.continuation_bars,
             continuation_available=obs.continuation_available,
         )
-    elif agg.final_decision is not None and not agg.final_decision.has_entry and (
-        agg.final_decision.skip_reason or agg.final_decision.considered_styles
-    ):
+    elif agg.final_decision is not None and not agg.final_decision.has_entry and agg.final_decision.skip_reason:
         skip_review = SkipReview(
             symbol="",
             reason=agg.final_decision.skip_reason,
-            considered_styles=agg.final_decision.considered_styles,
             ref_price=None,
-            r_unit_pips=skip_r_unit,
             stages=[],
         )
 
