@@ -104,13 +104,20 @@ export function useCharts(
       }
       setBarsByTf(prev => {
         const existing = prev[tf] ?? []
-        const seen = new Set(existing.map(b => b.t))
-        const fresh = data.bars.filter(b => b.t < earliestUnix && !seen.has(b.t))
-        if (fresh.length === 0) {
+        // 重複除去 + 昇順ソート(レースで earliestUnix が古くなった場合の安全弁)。
+        // chart-stack 再読み込みと loadMoreHistory が時間的に交錯すると、
+        // 単純な [...fresh, ...existing] では順序が崩れることがある。
+        const merged = new Map<number, OhlcBar>()
+        for (const b of existing) merged.set(b.t, b)
+        for (const b of data.bars) {
+          if (!merged.has(b.t)) merged.set(b.t, b)
+        }
+        if (merged.size === existing.length) {
           historyExhaustedRef.current[tf] = true
           return prev
         }
-        return { ...prev, [tf]: [...fresh, ...existing] }
+        const sorted = Array.from(merged.values()).sort((a, b) => a.t - b.t)
+        return { ...prev, [tf]: sorted }
       })
     } catch (err) {
       console.warn('[useCharts] loadMoreHistory failed', { tf, sessionId, symbol: effectiveSymbol, err })

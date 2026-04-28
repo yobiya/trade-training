@@ -543,22 +543,32 @@ main.py
    ▼
 routers/                 ← HTTP ハンドラのみ。例外→HTTP コード変換 + service ディスパッチ
    ├─ auth.py            ← パスワード認証(Starlette session)
-   ├─ sessions.py        ← セッション CRUD / 候補 / メモ / 振り返り
-   ├─ chart.py           ← GET chart / POST advance
+   ├─ sessions.py        ← セッション CRUD / メモ / 振り返り
+   ├─ chart.py           ← GET chart-stack / POST advance / GET chart-history
    ├─ trades.py          ← エントリー / 決済 / 取得
    ├─ drawings.py        ← 描画 CRUD
    ├─ events.py          ← 経済指標取得
    ├─ settings.py        ← アプリ設定
-   └─ ai_analysis.py     ← AI 分析 run / history / report
+   ├─ ai_analysis.py     ← AI 分析 run / history / report
+   └─ _helpers.py        ← session 検証 helper など共通(2026-04-29)
 
 services/                ← ドメインロジック。HTTP に依存しない
-   ├─ session_store.py   ← `data/sessions/{dir}/` のファイル I/O(単純書き込み、ver 1.54)
+   ├─ session_store/     ← セッションファイル I/O(2026-04-29 でパッケージ分割)
+   │  ├─ __init__.py     ←   公開 API(load / save_* / create_session / rename_dir / delete_*)
+   │  ├─ io.py           ←   低レベル I/O(read/write_session_json / dir 操作 / Conflicted-copy 検知)
+   │  └─ serialize.py    ←   dataclass ↔ dict 変換(_meta_to_dict / _aggregate_to_dict / from_dict)
    ├─ session_models.py  ← dataclass(SessionMeta / Trade / Candidate / FinalDecision / Drawing 等)
+   ├─ candidates.py      ← 候補追加削除(2026-04-29 で sessions.py から分離)
    ├─ post_eval.py       ← 事後評価(MFE / MAE / R-pnl / 3 段階観察)
    ├─ ai_input_builder.py ← AI 送信 payload 構築
    ├─ ai_client.py       ← Anthropic SDK ラッパ + モック
    ├─ ai_storage.py      ← AI 履歴(index.json + report.md)+ payload hash キャッシュ
    └─ memo_templates.py  ← data/memo-templates の起動時ロード
+
+utils/                   ← 共通 utility(2026-04-29 で抽出)
+   ├─ json_io.py         ← json_default(datetime/Decimal) / read_json / write_json
+   ├─ datetime.py        ← ensure_aware_utc(dt) ほか tz 補助(I-1 不変条件)
+   └─ http.py            ← HTTPException ファクトリ(not_found / bad_request)
 
 schemas/                 ← Pydantic レスポンス・リクエスト型
 auth.py                  ← パスワード照合
@@ -570,6 +580,7 @@ deps.py                  ← DB session の Depends
 - **router は ifelse / 例外→HTTP の翻訳 + service 呼び出しに留める**(20-30 行/ハンドラ程度)
 - **service は HTTP の Request / Response を知らない**(将来 CLI 化する場合の見通し)
 - **session_store は他 service から呼ばれる窓口**。ファイル I/O はここに閉じる
+- **utils は state-less な共通 helper のみ置く**。ドメイン知識を持たない(知識を持つコードは services へ)
 
 ## D.2 セッションファイル構造
 
@@ -613,9 +624,9 @@ deps.py                  ← DB session の Depends
 
 ver 1.54 以前の旧形式(`trade.json` / `final_decision.json` / `drawings.json` / `holding_memos.jsonl` が分かれていた)は、**読み出し時にフォールバック** で対応する。session.json に対応フィールドがなく、かつ旧ファイルが存在する場合だけ旧ファイルを読む。次回の save 時に統合形式で書き戻され、旧ファイルは削除される(自然移行)。
 
-## D.3 session_store の責務
+## D.3 session_store の責務(2026-04-29 でパッケージ分割)
 
-`services/session_store.py` の公開 API(主要):
+`services/session_store/` パッケージの公開 API は `__init__.py` から re-export(consumer は `from trade_trainer_backend.services import session_store` のまま不変):
 
 | 関数 | 用途 |
 |---|---|

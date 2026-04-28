@@ -3,10 +3,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from market_data.accessor import get_ohlc
 from market_data.timeframes import TIMEFRAME_MINUTES, resample_ohlc
+from trade_trainer_backend.routers._helpers import ensure_session
 from trade_trainer_backend.schemas.chart import (
     AdvanceResponse,
     ChartHistoryResponse,
@@ -15,6 +16,7 @@ from trade_trainer_backend.schemas.chart import (
     OhlcBar,
 )
 from trade_trainer_backend.services import session_store
+from trade_trainer_backend.utils.http import bad_request
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +114,7 @@ def _resolve_symbol(agg, query_symbol: str | None) -> str:
     if query_symbol:
         return query_symbol.upper()
     if agg.trade is None:
-        raise HTTPException(status_code=400, detail="symbol query required in analyzing phase")
+        raise bad_request("symbol query required in analyzing phase")
     return agg.trade.symbol
 
 
@@ -127,9 +129,7 @@ def chart_stack(session_id: str, symbol: str | None = None) -> ChartStackRespons
        → broker の in-progress バー(Friday close 等の未来漏れ)を排除
     4. M5 の最新バーのみ MT5 の値をそのまま使う(最下位なので集約源無し)
     """
-    agg = session_store.load(session_id)
-    if agg is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    agg = ensure_session(session_id)
 
     cp = agg.meta.current_position
     current_pos = cp if cp.tzinfo is not None else cp.replace(tzinfo=timezone.utc)
@@ -203,11 +203,9 @@ def chart_history(
     呼び出される。返す bars は厳密に `before` より前のバーのみ(`before` 自身は含まない)。
     """
     if timeframe not in TIMEFRAME_MINUTES:
-        raise HTTPException(status_code=400, detail=f"Invalid timeframe: {timeframe}")
+        raise bad_request(f"Invalid timeframe: {timeframe}")
 
-    agg = session_store.load(session_id)
-    if agg is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    agg = ensure_session(session_id)
 
     sym = _resolve_symbol(agg, symbol)
     before_utc = before.replace(tzinfo=timezone.utc) if before.tzinfo is None else before.astimezone(timezone.utc)
@@ -243,9 +241,7 @@ def advance_session(
 
     ver 1.59: `new_bars` レスポンスは廃止(frontend は chart-stack 再呼び出しで全 TF 同期取得する)。
     """
-    agg = session_store.load(session_id)
-    if agg is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    agg = ensure_session(session_id)
 
     cp = agg.meta.current_position
     current_pos = cp if cp.tzinfo is not None else cp.replace(tzinfo=timezone.utc)

@@ -3,8 +3,9 @@
 drawings は `data/sessions/{dir}/drawings.json` に配列として保存。
 PATCH / DELETE は session_id を path に含めて該当セッションのファイルのみを書き換える。
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
+from trade_trainer_backend.routers._helpers import ensure_session
 from trade_trainer_backend.schemas.drawing import (
     CreateDrawingRequest,
     DrawingResponse,
@@ -12,15 +13,9 @@ from trade_trainer_backend.schemas.drawing import (
 )
 from trade_trainer_backend.services import session_store
 from trade_trainer_backend.services.session_models import Drawing
+from trade_trainer_backend.utils.http import not_found
 
 router = APIRouter(tags=["drawings"])
-
-
-def _ensure_session(session_id: str):
-    agg = session_store.load(session_id)
-    if agg is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return agg
 
 
 def _to_response(session_id: str, d: Drawing) -> DrawingResponse:
@@ -39,7 +34,7 @@ def _to_response(session_id: str, d: Drawing) -> DrawingResponse:
 @router.get("/sessions/{session_id}/drawings", response_model=list[DrawingResponse])
 def list_drawings(session_id: str, symbol: str | None = None) -> list[DrawingResponse]:
     """§5.3 / §6.1 統合フロー: symbol 指定で該当銘柄のみ返す。"""
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     rows = agg.drawings
     if symbol:
         sym = symbol.upper()
@@ -49,7 +44,7 @@ def list_drawings(session_id: str, symbol: str | None = None) -> list[DrawingRes
 
 @router.post("/sessions/{session_id}/drawings", response_model=DrawingResponse, status_code=201)
 def create_drawing(session_id: str, body: CreateDrawingRequest) -> DrawingResponse:
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     new_id = max((d.id for d in agg.drawings), default=0) + 1
     new = Drawing(
         id=new_id,
@@ -71,14 +66,14 @@ def update_drawing(
     drawing_id: int,
     body: UpdateDrawingRequest,
 ) -> DrawingResponse:
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     target: Drawing | None = None
     for d in agg.drawings:
         if d.id == drawing_id:
             target = d
             break
     if target is None:
-        raise HTTPException(status_code=404, detail="Drawing not found")
+        raise not_found("Drawing not found")
     if body.data is not None:
         target.data = body.data
     if body.label is not None:
@@ -91,8 +86,8 @@ def update_drawing(
 
 @router.delete("/sessions/{session_id}/drawings/{drawing_id}", status_code=204)
 def delete_drawing(session_id: str, drawing_id: int) -> None:
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     new_list = [d for d in agg.drawings if d.id != drawing_id]
     if len(new_list) == len(agg.drawings):
-        raise HTTPException(status_code=404, detail="Drawing not found")
+        raise not_found("Drawing not found")
     session_store.save_drawings(session_id, new_list)

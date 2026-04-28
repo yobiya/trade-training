@@ -38,7 +38,7 @@
   - 旧 6 テーブル(sessions / session_candidates / session_final_decisions / trades / holding_memos / drawings)を `data/sessions/{dir}/` ファイル群に移行
   - 状態モデルを「進行中 / 決着済み」の 2 状態に整理(`is_suspended` 撤廃)
   - AI 分析結果ディレクトリをセッション配下(`data/sessions/{dir}/ai_analysis/`)に統合
-  - Dropbox 同期前提の運用に対応(atomic write、conflict 除外、id 重複検出)
+  - Dropbox 同期前提の運用に対応(conflict 除外、id 重複検出)※ver 1.54 で atomic write は撤去
 - スマホUI最適化
 
 ※ 横断集計(勝率・期待値・銘柄別成績等)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。一方、**個別セッションのファイル単位での永続保持と振り返り**は ver 1.45 で許容方針に変更。

@@ -14,33 +14,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from trade_trainer_backend.services import session_store
+from trade_trainer_backend.utils.json_io import json_default, write_json, write_text
 
 logger = logging.getLogger(__name__)
-
-
-def _atomic_write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, path)
-
-
-def _atomic_write_json(path: Path, data: Any) -> None:
-    _atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2, default=_json_default))
-
-
-def _json_default(o: Any) -> Any:
-    if isinstance(o, datetime):
-        if o.tzinfo is None:
-            o = o.replace(tzinfo=timezone.utc)
-        return o.isoformat().replace("+00:00", "Z")
-    raise TypeError(f"Not JSON serializable: {type(o)}")
 
 
 def _ai_dir(session_id: str) -> Path | None:
@@ -58,7 +39,7 @@ def compute_payload_hash(payload: dict[str, Any]) -> str:
     同一データの再送信が同じハッシュになるようにする。画像は payload に含まれない前提(現状 MVP)。
     """
     stable = {k: v for k, v in payload.items() if k != "generated_at"}
-    canonical = json.dumps(stable, ensure_ascii=False, sort_keys=True, default=_json_default)
+    canonical = json.dumps(stable, ensure_ascii=False, sort_keys=True, default=json_default)
     h = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return h[:16]
 
@@ -153,8 +134,8 @@ def save_run(
     entry_dir = ai_dir / entry_id
     entry_dir.mkdir(parents=True, exist_ok=True)
 
-    _atomic_write_json(entry_dir / "input.json", payload)
-    _atomic_write_text(entry_dir / "report.md", report_md)
+    write_json(entry_dir / "input.json", payload)
+    write_text(entry_dir / "report.md", report_md)
 
     if images:
         img_dir = entry_dir / "images"
@@ -179,7 +160,7 @@ def save_run(
         "cost_yen": cost_yen,
         "created_at": now,
     }
-    _atomic_write_json(entry_dir / "meta.json", meta)
+    write_json(entry_dir / "meta.json", meta)
 
     # index.json 更新(同一 hash があれば置き換え、無ければ追記)
     entries = _read_index(ai_dir)
@@ -193,6 +174,6 @@ def save_run(
         "cost_yen": cost_yen,
         "created_at": now,
     })
-    _atomic_write_json(ai_dir / "index.json", entries)
+    write_json(ai_dir / "index.json", entries)
 
     return entries[-1]

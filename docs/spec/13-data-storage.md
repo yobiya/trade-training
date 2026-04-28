@@ -75,16 +75,13 @@ data/sessions/
 
 Dropbox / OneDrive 等のフォルダ同期を前提とした運用方針。
 
-### atomic write(書き込み中の同期事故防止)
+### ファイル書き込み(ver 1.54 で atomic write を撤去)
 
-ファイル書き込みは **tmp ファイル → rename** の atomic パターンで行う。同期中に部分書き込みされたファイルが他端末に伝播するリスクを最小化する。
+`Path.write_text` / `json.dumps + write_text` の単純書き込みを使用する。個人用シングルプロセス + Dropbox 同期前提では `tmp + os.replace` の atomic 書き込みは過剰だったため撤去した。
 
-```python
-def atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(path)   # POSIX rename は atomic、Windows は os.replace で同等
-```
+ファイル破損リスクの抑制:
+- 書き込み中のクラッシュは個人運用では実用上稀
+- 同期競合は Dropbox 側で `Conflicted copy` ファイルが生成される(下記の通りスキャン除外)
 
 ### conflict ファイルの扱い
 

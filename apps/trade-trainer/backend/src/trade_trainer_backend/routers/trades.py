@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
+from trade_trainer_backend.routers._helpers import ensure_session
 from trade_trainer_backend.routers.chart import _calculate_pips
 from trade_trainer_backend.schemas.trade import (
     EnterTradeRequest,
@@ -12,6 +13,7 @@ from trade_trainer_backend.schemas.trade import (
 )
 from trade_trainer_backend.services import session_store
 from trade_trainer_backend.services.session_models import FinalDecision, Trade
+from trade_trainer_backend.utils.http import not_found
 
 router = APIRouter(tags=["trades"])
 
@@ -39,13 +41,6 @@ def _trade_to_response(t: Trade) -> TradeResponse:
     )
 
 
-def _ensure_session(session_id: str):
-    agg = session_store.load(session_id)
-    if agg is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return agg
-
-
 def _upsert_candidate_on_entry(session_id: str, symbol: str) -> None:
     """統合フロー §6.3.2: エントリーした銘柄の銘柄別メモが無ければ
     テンプレートを初期挿入して作成する(is_selected はファイル管理では trade.symbol で導出)。"""
@@ -61,7 +56,7 @@ def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
     """仕様書 §7.4 + §6.1 統合フロー:
     エントリー時の必須項目は symbol + 方向・価格・SL・TP。
     エントリー動作そのものが「この銘柄で選定確定」の意味を持つ(§6.3.2)。"""
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     if agg.trade is not None and agg.trade.exit_time is None:
         raise HTTPException(status_code=409, detail="Active trade already exists in this session")
     if agg.trade is not None and agg.trade.exit_time is not None:
@@ -107,9 +102,9 @@ def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
 @router.post("/sessions/{session_id}/trade/exit", response_model=TradeResponse)
 def exit_trade(session_id: str, body: ExitTradeRequest) -> TradeResponse:
     """決済。決済理由(TP/SL/裁量)と価格を trade.json に記録。"""
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     if agg.trade is None or agg.trade.exit_time is not None:
-        raise HTTPException(status_code=404, detail="No active trade in this session")
+        raise not_found("No active trade in this session")
 
     current_pos = agg.meta.current_position
     if current_pos.tzinfo is None:
@@ -127,7 +122,7 @@ def exit_trade(session_id: str, body: ExitTradeRequest) -> TradeResponse:
 
 @router.get("/sessions/{session_id}/trade", response_model=TradeResponse | None)
 def get_active_trade(session_id: str) -> TradeResponse | None:
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     if agg.trade is None or agg.trade.exit_time is not None:
         return None
     return _trade_to_response(agg.trade)
@@ -136,7 +131,7 @@ def get_active_trade(session_id: str) -> TradeResponse | None:
 @router.get("/sessions/{session_id}/trade/latest", response_model=TradeResponse | None)
 def get_latest_trade(session_id: str) -> TradeResponse | None:
     """最後のトレードを返す(オープン/クローズ問わず、決済結果表示用)。"""
-    agg = _ensure_session(session_id)
+    agg = ensure_session(session_id)
     if agg.trade is None:
         return None
     return _trade_to_response(agg.trade)
