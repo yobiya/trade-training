@@ -42,7 +42,7 @@ export const BARS_BY_TF: Record<string, number> = {
 // `BARS_BY_TF` は MT5 から取得する全バー数(背景に保持)、こちらは可視範囲のバー数。
 // セッション内メモリ(`chart/visibleBarsMemory.ts`)が確定するまでのフォールバックに使う。
 // 縦積みマルチ TF で各チャートのローソク幅が揃うことを優先し、TF 別差をなくして単一値とする。
-export const DEFAULT_VISIBLE_BARS = 100
+export const DEFAULT_VISIBLE_BARS = 150
 
 // メイン時間足を選んだときに並行表示する上位足(仕様書 §5.1)。
 // MN1 は最上位のため上位足なしで main のみ表示。
