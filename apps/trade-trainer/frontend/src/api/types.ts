@@ -9,7 +9,7 @@ export type SessionListItem = {
   started_at: string
   presented_at: string
   mode: string
-  is_settled: boolean         // §4.2.1 状態モデル(ver 1.45)
+  is_settled: boolean         // §4.2.1 状態モデル
   name: string | null         // §6.1 任意のセッション名
   r_pnl: number | null        // §9.5 実損益 R(決済済みのみ)
   pips_pnl: number | null     // 補助
@@ -17,7 +17,7 @@ export type SessionListItem = {
 }
 
 export type SessionCandidate = {
-  id: string                   // ver 1.45: symbol そのもの
+  id: string                   // 銘柄別メモはファイル管理のため id = symbol そのもの
   symbol: string
   memo: string | null
   is_selected: boolean
@@ -31,7 +31,7 @@ export type TradeSession = {
   presented_at: string
   current_position: string
   mode: string
-  is_settled: boolean   // §4.2.1 状態モデル(ver 1.45)
+  is_settled: boolean   // §4.2.1 状態モデル
   has_active_trade: boolean
   digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
   name: string | null  // §6.1 任意のセッション名

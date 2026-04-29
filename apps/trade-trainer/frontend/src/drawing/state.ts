@@ -13,12 +13,12 @@ import type {
 } from './types'
 
 /**
- * 描画ツールの状態管理(ver 1.55 で 11 クラス階層から tagged union + 単一 dispatch 関数に統合)。
+ * 描画ツールの状態管理(tagged union + 単一 dispatch 関数で実装)。
  * 詳細: docs/architecture/drawing-tools.md
  */
 
 type PP = { t: number; price: number }
-// ver 1.63: 推進波 1-5 + 補正波 A/B/C は wave_label.tsx に集約
+// 推進波 1-5 + 補正波 A/B/C を表す型は wave_label.tsx に集約
 type Wave = WaveValue
 
 export type DrawingState =

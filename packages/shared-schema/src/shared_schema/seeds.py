@@ -1,7 +1,7 @@
 """初期シードデータ。アプリ初回起動時に呼ぶ。
 
-ver 1.45: TradingStyle はファイル管理(`data/trading-styles/{id}.md`)に
-移行したため、シードを撤去。Setting のみ残す。
+DB シードは Setting のみ。TradingStyle 等のユーザー入力系はファイル管理で扱うため
+シードを持たない(§13)。
 """
 from datetime import datetime, timezone
 

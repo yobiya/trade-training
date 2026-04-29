@@ -19,7 +19,7 @@ type Props = {
   onExit: (price: number, reason: string) => Promise<void>
   loading: boolean
   digits: number
-  /** §7.4 ver 1.50: SL/TP はチャートでドラッグ配置。本コンポーネントは表示と確定操作のみ */
+  /** §7.4: SL/TP はチャート上でクリック配置。本コンポーネントは表示と確定操作のみ */
   entryDraft: EntryDraft
   entryPlacing: EntryPlacing
   pipSize: number
@@ -45,7 +45,7 @@ function deriveDirection(currentPrice: number | null, sl: number | null): EntryD
 }
 
 /**
- * §7.4 ver 1.50: エントリー価格は現在値で固定。SL の位置から方向を自動判定。
+ * §7.4: エントリー価格は現在値で固定。SL の位置から方向を自動判定。
  * SL/TP はチャート上でクリック配置(SessionPage 経由)。
  */
 export function TradePanel({

@@ -4,7 +4,7 @@
 
 ---
 
-ver 1.45 で「ユーザー入力 = ファイル / 機械生成キャッシュ = SQLite」のハイブリッド構成に再編([§13](./13-data-storage.md))。
+「ユーザー入力 = ファイル / 機械生成キャッシュ = SQLite」のハイブリッド構成を採る([§13](./13-data-storage.md))。
 
 - **ファイル管理**: セッション関連、メモテンプレート、AI 分析結果
 - **SQLite 管理**(`shared-schema` パッケージ): 市場データキャッシュ、経済指標、Setting、Account、IndicatorConfig
@@ -13,7 +13,7 @@ ver 1.45 で「ユーザー入力 = ファイル / 機械生成キャッシュ =
 
 ## 17.1 セッション情報(ファイル管理)
 
-ver 1.54 で **session.json に統合**(分離していた `trade.json` / `final_decision.json` / `drawings.json` / `holding_memos.jsonl` を 1 ファイルにまとめた)。`note.md` と `candidates/*.md` は自由記述・1ファイル1テキストの利便性のため分割を維持。
+**session.json に集約**: meta・trade・final_decision・drawings・holding_memos を 1 ファイルにまとめる(読み書きパスのシンプル化のため)。`note.md` と `candidates/*.md` は自由記述・1 ファイル 1 テキストの利便性のため分割を維持。
 
 ```
 data/sessions/
@@ -99,10 +99,10 @@ data/sessions/
 - 並び順 → ファイル名アルファベット順
 - skip_reason → メモ本文に自由記述([§9.1](./09-post-review.md#91-判断の記録))
 
-### 旧形式(ver 1.54 以前)との互換性
+### 旧分割形式との互換性
 
-ver 1.54 以前は `trade.json` / `final_decision.json` / `drawings.json` / `holding_memos.jsonl` が個別ファイルだった。コード側は **読み出し時にフォールバック** で対応:
-- session.json に該当フィールドが存在しない、かつ旧個別ファイルが存在する場合のみ、旧ファイルから読む
+過去には `trade.json` / `final_decision.json` / `drawings.json` / `holding_memos.jsonl` を個別ファイルに保存していた時期があり、その形式のまま残っているセッションディレクトリを読み出せるようコード側は **読み出し時にフォールバック** を持つ:
+- session.json に該当フィールドが存在せず、旧個別ファイルが存在する場合のみ、旧ファイルから読む
 - 次回 save 時に統合形式で session.json に書き戻され、旧ファイルは削除される(自然移行)
 
 ## 17.2 SQLite 管理(`shared-schema` パッケージ)
@@ -133,19 +133,19 @@ EconomicEvent
 ├─ 実測値, 予想値, 前回値
 └─ サプライズ度(計算値)
 
-Ohlc(market-data 管理、ver 1.53 で TF 別キャッシュ化)
+Ohlc(market-data 管理、TF 別キャッシュ)
 ├─ symbol, timeframe, timestamp, source(複合 PK)
 ├─ open, high, low, close, volume
 └─ fetched_at
 ```
 
-メモ見出しテンプレートは `data/memo-templates/{candidate,session-note}.md` で管理する(ver 1.44)。Setting には保存しない。
+メモ見出しテンプレートは `data/memo-templates/{candidate,session-note}.md` で管理する。Setting には保存しない。
 
 ## 17.3 ファイル管理にしないデータ(理由)
 
 | 対象 | SQLite 維持の理由 |
 |---|---|
-| `Ohlc` | 数万〜数十万行、範囲クエリの効率重視。再取得可能な消耗品なので同期外。TF 別に保存(ver 1.53) |
+| `Ohlc` | 数万〜数十万行、範囲クエリの効率重視。再取得可能な消耗品なので同期外。TF 別に保存 |
 | `EconomicEvent` | 数千〜数万行、期間/通貨フィルタの効率重視 |
 | `Setting` | 単一行、構造化設定、API 経由の編集が主 |
 | `IndicatorConfig` | バージョン履歴の整合性 |

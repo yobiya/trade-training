@@ -1,8 +1,8 @@
-"""共有 DB スキーマ定義パッケージ(ver 1.45 以降:市場データ・経済指標・設定のみ)。
+"""共有 DB スキーマ定義パッケージ(市場データ・経済指標・設定のみ)。
 
 セッション関連(TradeSession / SessionCandidate / SessionFinalDecision /
-Trade / HoldingMemo / Drawing)とトレードスタイル(TradingStyle)は
-ファイル管理に移行したため、SQLAlchemy モデルは保持しない。
+Trade / HoldingMemo / Drawing)はファイル管理(`data/sessions/{dir}/`)で扱うため、
+SQLAlchemy モデルは保持しない(§13 / §17)。
 """
 from shared_schema.base import Base
 from shared_schema.database import get_engine, get_session, init_db

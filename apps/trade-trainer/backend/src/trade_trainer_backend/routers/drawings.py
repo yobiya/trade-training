@@ -1,6 +1,6 @@
-"""描画オブジェクトの CRUD(仕様書 §5.3/§5.5、ver 1.45 でファイル管理化)。
+"""描画オブジェクトの CRUD(仕様書 §5.3/§5.5)。
 
-drawings は `data/sessions/{dir}/drawings.json` に配列として保存。
+drawings は `data/sessions/{dir}/session.json` 内の `drawings` 配列に保存(§17)。
 PATCH / DELETE は session_id を path に含めて該当セッションのファイルのみを書き換える。
 """
 from fastapi import APIRouter

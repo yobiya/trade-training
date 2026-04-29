@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { ChartHandle } from '../components/Chart'
 
 /**
- * §5.1.2 マルチ TF クロスヘア同期(ver 1.55 で `SessionPage` から hook に集約)。
+ * §5.1.2 マルチ TF クロスヘア同期(SessionPage から独立 hook に集約)。
  *
  * 各 Chart の `ChartHandle.subscribeUserCrosshair` を購読し、ある TF でユーザーが
  * クロスヘアを動かしたら、他のすべての TF に対して `ChartHandle.setCrosshairTime` を呼ぶ。

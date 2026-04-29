@@ -51,7 +51,7 @@ function priceLinesForTf(
         color: getTimeframeColor(d.timeframe),
       }
     })
-  // §7.4 ver 1.50: 組み立て中の SL / TP を全 TF に表示
+  // §7.4: 組み立て中の SL / TP を全 TF に表示
   if (entryDraft.sl != null) {
     lines.push({ id: -1001, price: entryDraft.sl, label: 'SL', color: '#ff5555' })
   }
@@ -64,7 +64,7 @@ function priceLinesForTf(
 /**
  * 仕様書 §6.1 統合フロー: 1 画面で分析 → エントリー → 保有 → 振り返り を通す。
  *
- * ver 1.59 + 2026-04-29 で hook 分解:
+ * 内部状態は以下の hook に分解されている:
  * - `useSessionFetch`: session / activeTrade / latestTrade / phase
  * - `useTradeFlow`: エントリー draft / advance / 決済 / 見送り
  * - `useNotify`: toast 通知(設計 §B I-11.4)
@@ -83,7 +83,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   // UI 配置に直結する local state
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string>(SYMBOLS[0])
-  // 仕様書 §6.1 / §6.2 (ver 1.62): 銘柄セレクタの絞り込みモード
+  // 仕様書 §6.1 / §6.2: 銘柄セレクタの絞り込みモード
   const [symbolMode, setSymbolMode] = useState<'all' | 'star'>('all')
   const [entryTf, setEntryTf] = useState('M5')
   const [activeTf, setActiveTf] = useState('M5')
@@ -102,7 +102,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
   const candidates = session?.candidates ?? []
   const isCurrentStar = candidates.some(c => c.symbol === currentSymbol)
 
-  // 仕様書 §6.2 (ver 1.62): ★ モードの時は候補銘柄のみに絞る
+  // 仕様書 §6.2: ★ モードの時は候補銘柄のみに絞る
   const displaySymbols = useMemo(() => {
     if (symbolMode === 'star' && candidates.length > 0) {
       const set = new Set(candidates.map(c => c.symbol))
@@ -231,7 +231,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     onDelete: handleDeleteDrawing,
   })
 
-  // §7.4 ver 1.50: SL/TP 配置のチャートクリック横取り
+  // §7.4: SL/TP 配置のチャートクリック横取り
   const pipSize = currentSymbol.toUpperCase().endsWith('JPY') ? 0.01 : 0.0001
   const roundToDigits = useCallback((p: number): number => {
     const d = session?.digits ?? 5
@@ -294,7 +294,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     }
   }, [session, currentSymbol, sessionId, refreshSession, notify])
 
-  // 仕様書 §6.2 (ver 1.62): 現在モードのリスト内で前後の銘柄に循環移動
+  // 仕様書 §6.2: 現在モードのリスト内で前後の銘柄に循環移動
   const stepSymbol = useCallback((dir: 1 | -1) => {
     if (displaySymbols.length === 0) return
     const i = displaySymbols.indexOf(currentSymbol)
@@ -306,7 +306,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     setAnalyzingSymbol(displaySymbols[next])
   }, [displaySymbols, currentSymbol])
 
-  // 仕様書 §7.3 (M) / §6.2 (ver 1.62: [, ], F, S) キーボードショートカット
+  // 仕様書 §7.3 (M) / §6.2 ([, ], F, S) キーボードショートカット
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null

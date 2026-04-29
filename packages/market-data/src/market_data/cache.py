@@ -1,4 +1,4 @@
-"""SQLite キャッシュ層 - Ohlc テーブル(TF 別)の読み書き(ver 1.53)。"""
+"""SQLite キャッシュ層 - Ohlc テーブル(TF 別)の読み書き。"""
 import logging
 from datetime import datetime, timezone
 

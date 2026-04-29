@@ -1,4 +1,6 @@
-"""トレードエントリー・決済エンドポイント(ver 1.45 でファイル管理化)。"""
+"""トレードエントリー・決済エンドポイント。
+
+トレード情報は `data/sessions/{dir}/session.json` 内の `trade` フィールドに保存(§17)。"""
 import uuid
 from datetime import datetime, timezone
 

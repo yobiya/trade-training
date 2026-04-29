@@ -4,7 +4,7 @@
 
 ---
 
-ver 1.45 で「ユーザー入力 = ファイル / 機械生成キャッシュ = SQLite」のハイブリッド構成に再編した。
+「ユーザー入力 = ファイル / 機械生成キャッシュ = SQLite」のハイブリッド構成を採る。Dropbox 等での同期 + ローカル PC へのコピーで個別振り返り運用を可能にするため、ユーザー入力はテキストエディタで直接読み書きできるファイル形式に置く。一方、市場データなど自動的に再取得可能な大容量データは SQLite に保持して同期対象から外す。
 
 ## 13.1 全体像
 
@@ -17,11 +17,11 @@ ver 1.45 で「ユーザー入力 = ファイル / 機械生成キャッシュ =
 | アプリ設定 | Setting テーブル(symbols / spreads / 経済指標表示設定 / リスク設定 等) | `trading.db`(SQLite) | 同期対象外 |
 | 認証セッション | Starlette SessionMiddleware | `trading.db` or Redis | 同期対象外 |
 
-「**ユーザー入力はファイル**」という方針は ver 1.44 のメモテンプレート移行(`data/memo-templates/`)と同じ思想で、ver 1.45 でセッション情報全体に拡張した。
+「**ユーザー入力はファイル**」という方針は、テキストエディタで直接編集できる + git や Dropbox で素直に履歴・同期管理できる、という個人運用前提の利便性を最優先する判断による。メモ見出しテンプレート(`data/memo-templates/`)とセッション情報の両方に同じ思想を適用している。
 
 ## 13.2 セッション情報のファイル構造
 
-セッションは 1 ディレクトリ 1 セッションで保存する。ver 1.54 で session.json に統合(trade / final_decision / drawings / holding_memos を内包)。詳細は [§17](./17-data-model.md)。
+セッションは 1 ディレクトリ 1 セッションで保存する。`session.json` に meta + trade + final_decision + drawings + holding_memos を統合し、自由記述系のみ別ファイル(`note.md` / `candidates/*.md`)に分割する。詳細は [§17](./17-data-model.md)。
 
 ```
 data/sessions/
@@ -65,7 +65,7 @@ data/sessions/
 
 ## 13.3 メモ見出しテンプレート(リポジトリ内 Markdown)
 
-§7.2.3 の銘柄別メモ / 横断メモの初期テンプレートは **`data/memo-templates/{candidate,session-note}.md`** で管理する(ver 1.44)。
+§7.2.3 の銘柄別メモ / 横断メモの初期テンプレートは **`data/memo-templates/{candidate,session-note}.md`** で管理する。
 
 - DB に保存しない理由: テキストエディタで直接編集できる + git で履歴・差分を管理できる方が、設定 API + 設定画面 UI 経由よりシンプルかつ運用しやすい(個人運用前提)
 - ファイル無し / 空ファイルの場合は「テンプレ無効」として扱う(新規メモ作成時に挿入しない)
@@ -75,9 +75,9 @@ data/sessions/
 
 Dropbox / OneDrive 等のフォルダ同期を前提とした運用方針。
 
-### ファイル書き込み(ver 1.54 で atomic write を撤去)
+### ファイル書き込み
 
-`Path.write_text` / `json.dumps + write_text` の単純書き込みを使用する。個人用シングルプロセス + Dropbox 同期前提では `tmp + os.replace` の atomic 書き込みは過剰だったため撤去した。
+`Path.write_text` / `json.dumps + write_text` の単純書き込みを使用する。個人用シングルプロセス + Dropbox 同期前提では `tmp + os.replace` 等の atomic 書き込みは過剰なので採用しない。
 
 ファイル破損リスクの抑制:
 - 書き込み中のクラッシュは個人運用では実用上稀

@@ -37,7 +37,7 @@ export type DrawingInteraction = {
   hoveredId: number | null
   /** 現在アクティブな作成ツール(drawing-* 状態のみ非 null)。ボタンのハイライトに使う。 */
   activeTool: DrawingKind | null
-  /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。ver 1.63 で 1-5 + A/B/C に拡張。 */
+  /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。1-5 推進波 + A/B/C 補正波。 */
   activeWave: WaveValue | null
   /** ツールボタンから呼ぶ。null で Idle に戻る。wave_label の場合は wave 番号必須。 */
   selectTool: (tool: DrawingKind | null, wave?: WaveValue) => void

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from typing import Any
 
-# Trade はファイル管理(ver 1.45)の dataclass を渡される想定。
+# Trade はファイル管理(`session.json` 内の trade フィールド)の dataclass を渡される想定。
 # 関数内では .symbol / .entry_price / .sl / .exit_price / .exit_time /
 # .direction / .entry_time のフィールドアクセスのみを使うため
 # 構造的型(duck-typed)として扱う。型注釈は Any。

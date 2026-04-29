@@ -1,4 +1,4 @@
-"""チャート取得 / 足送りエンドポイント(ver 1.59: chart-stack 単一エンドポイント)。"""
+"""チャート取得 / 足送りエンドポイント(chart-stack 単一エンドポイント、設計 §C.3)。"""
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -22,12 +22,12 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chart"])
 
-# 仕様書 §5.1.1 / 設計 §B I-2 (ver 1.59): 下位 TF から順にフェッチして連鎖集約する
+# 仕様書 §5.1.1 / 設計 §B I-2: 下位 TF から順にフェッチして連鎖集約する
 _TF_ORDER = ["M5", "M15", "H1", "H4", "D1", "W1", "MN1"]
 _BARS_BY_TF: dict[str, int] = {
     "M5": 500, "M15": 300, "H1": 200, "H4": 150, "D1": 100, "W1": 60, "MN1": 24,
 }
-# bars × tf_minutes に掛ける単純係数(週末・祝日吸収)。TF 別の細工は不要(ver 1.59)
+# bars × tf_minutes に掛ける単純係数(週末・祝日吸収)。TF 別の細工は不要
 _FACTOR = 1.5
 
 
@@ -122,7 +122,7 @@ def _resolve_symbol(agg, query_symbol: str | None) -> str:
 def chart_stack(session_id: str, symbol: str | None = None) -> ChartStackResponse:
     """全 TF の OHLC を 1 リクエストで返す。
 
-    アルゴリズム(ver 1.59):
+    アルゴリズム:
     1. M5 → MN1 の順に直列で `provider.fetch_ohlc(tf, ...)` を実行
     2. 各 TF の確定済みバーは `bar_start(current_pos, tf)` より前のもの
     3. 上位 TF の最新バー(進行中)は **直前の TF の DataFrame** から `[boundary, current_pos]` 範囲を集約
@@ -239,7 +239,7 @@ def advance_session(
 ) -> AdvanceResponse:
     """足を N 本(M5 換算)進める。SL/TP ヒット時は自動決済する。
 
-    ver 1.59: `new_bars` レスポンスは廃止(frontend は chart-stack 再呼び出しで全 TF 同期取得する)。
+    `new_bars` レスポンスは持たない(frontend は chart-stack を再呼び出しして全 TF を同期取得する)。
     """
     agg = ensure_session(session_id)
 

@@ -46,7 +46,7 @@ def get_ohlc(
     from_dt: datetime,
     to_dt: datetime,
 ) -> pd.DataFrame:
-    """OHLC データを取得して返す(ver 1.53: TF 別キャッシュ対応)。
+    """OHLC データを取得して返す(TF 別キャッシュ対応)。
 
     - 各 TF が個別にキャッシュされ、2 回目以降は resample なしで返る
     - M5: provider から直接取得・キャッシュ

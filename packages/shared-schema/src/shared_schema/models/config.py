@@ -11,7 +11,7 @@ from shared_schema.base import Base
 DEFAULT_SYMBOLS = ["USDJPY", "EURUSD", "GBPUSD", "AUDUSD", "EURJPY", "GBPJPY", "AUDJPY", "EURGBP"]
 
 # 仕様書 §7.2.3 メモ見出しテンプレートはリポジトリ内 Markdown ファイル
-# (`data/memo-templates/{candidate,session-note}.md`)で管理する(ver 1.44 で DB から移行)。
+# (`data/memo-templates/{candidate,session-note}.md`)で管理する。DB には保存しない。
 
 # 初期スプレッド暫定値(pips)。MT5 デモ接続後に実測値で上書き(仕様書 3章)。
 DEFAULT_SPREADS = {

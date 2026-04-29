@@ -4,7 +4,7 @@ Revision ID: b9d6f5e1a3c8
 Revises: a7c3e2b9d4f1
 Create Date: 2026-04-25 14:00:00.000000
 
-仕様書 §7.2.3 / §13 ver 1.44:
+仕様書 §7.2.3 / §13:
   - メモテンプレートを DB → リポジトリ内 Markdown ファイル管理に移行
   - settings テーブルから 3 カラムを drop
 """

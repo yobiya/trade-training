@@ -1,10 +1,10 @@
-"""per-timeframe ohlc cache (ver 1.53)
+"""per-timeframe ohlc cache
 
 Revision ID: c8e3f2a4b6d9
 Revises: b9d7c4a8e2f5
 Create Date: 2026-04-25 16:00:00.000000
 
-仕様書 §2.2 / §13 ver 1.53:
+仕様書 §2.2 / §13:
   - 上位足(M15 / H1 / H4 / D1 / W1 / MN1)を都度 resample する方式から、
     TF 別にキャッシュして再利用する方式へ切替。
   - 旧 `ohlc_m5` テーブルを drop し、PK が

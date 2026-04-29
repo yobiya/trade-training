@@ -1,6 +1,6 @@
-"""HTTPException ファクトリ(ver 1.60 で utils へ統合)。
+"""HTTPException ファクトリ。
 
-各 router で散在していた `HTTPException(404, ...)` 等を共通化する。
+各 router で散在しがちな `HTTPException(404, ...)` 等を共通化する。
 """
 from fastapi import HTTPException
 

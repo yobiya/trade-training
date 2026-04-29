@@ -1,8 +1,8 @@
-"""OHLC fetcher(ver 1.59: キャッシュなし、provider 直叩き)。
+"""OHLC fetcher: キャッシュなし、provider 直叩きの薄いラッパ。
 
-旧版(キャッシュ層 + 上位足の再帰集約)は MT5 のシリアライズ特性で cold load が遅延し、
-複雑度の割に効果が出なかったため白紙再構築。本モジュールは「provider に問い合わせて
-DataFrame を返す」だけの薄いラッパに留める。
+MT5 Python API はリクエスト処理がシリアライズされる特性があり、キャッシュ層 + 上位足の
+再帰集約を挟むと cold load が遅延しやすい。これを避けるため、本モジュールは「provider に
+問い合わせて DataFrame を返す」だけの薄いラッパに留める。
 
 上位 TF の最新バー連鎖集約は backend `routers/chart.py:chart_stack` 側で行う(設計 §B I-2)。
 """
@@ -29,7 +29,7 @@ def fetch_ohlc(
 ) -> pd.DataFrame:
     """指定 TF の OHLC を provider から直接取得して返す。
 
-    キャッシュ層を経由しない(ver 1.59)。provider が接続されていない or 範囲外で
+    キャッシュ層を経由しない。provider が接続されていない or 範囲外で
     空 DataFrame が返る場合もある(I-11.3 に準じて呼び出し側が空を許容する)。
     """
     if timeframe not in TIMEFRAME_MINUTES:

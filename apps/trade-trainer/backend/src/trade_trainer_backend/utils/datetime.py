@@ -1,4 +1,4 @@
-"""tz-aware UTC 変換 utility(I-1 不変条件、ver 1.60 で utils へ統合)。"""
+"""tz-aware UTC 変換 utility(I-1 不変条件)。"""
 from datetime import datetime, timezone
 
 

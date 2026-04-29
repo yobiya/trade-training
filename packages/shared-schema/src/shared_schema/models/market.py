@@ -8,7 +8,7 @@ from shared_schema.base import Base
 
 
 class Ohlc(Base):
-    """OHLC キャッシュ(ver 1.53: TF 別キャッシュ)。
+    """OHLC キャッシュ(TF 別キャッシュ)。
 
     `M5` は provider(MT5 等)から直接取得した値を保存する。
     上位足(`M15` / `H1` / `H4` / `D1` / `W1` / `MN1`)は M5 から resample した

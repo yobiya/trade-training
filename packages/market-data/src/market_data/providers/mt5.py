@@ -21,7 +21,7 @@ except ImportError as e:
 # get_available_symbols() で補完する
 _SYMBOL_SUFFIX_CACHE: dict[str, str] = {}
 
-# 仕様 §5.1.1 / 設計 §B I-2(ver 1.58): 各 TF を MT5 から個別取得する
+# 仕様 §5.1.1 / 設計 §B I-2: 各 TF を MT5 から個別取得する
 _MT5_TIMEFRAME = {
     "M1": mt5.TIMEFRAME_M1,
     "M5": mt5.TIMEFRAME_M5,

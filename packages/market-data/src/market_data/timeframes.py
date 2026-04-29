@@ -35,7 +35,7 @@ SUPPORTED_TIMEFRAMES = list(TIMEFRAME_MINUTES.keys())
 def resample_ohlc(df: pd.DataFrame, target_tf: str) -> pd.DataFrame:
     """任意 src TF の DataFrame を target_tf に集約して返す。
 
-    主用途: chart-stack エンドポイントで上位 TF の最新バーを「一つ下の TF」から集約する(ver 1.59)。
+    主用途: chart-stack エンドポイントで上位 TF の最新バーを「一つ下の TF」から集約する(設計 §C.3)。
     確定済みバーの集約には使用しない(各 TF は MT5 から個別取得する)。
     """
     if target_tf not in _RESAMPLE_RULE:

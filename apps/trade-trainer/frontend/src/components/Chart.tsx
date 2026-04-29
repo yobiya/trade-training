@@ -11,7 +11,7 @@ import type {
 } from 'lightweight-charts'
 import type { OhlcBar } from '../api/client'
 import { getVisibleWidth, setVisibleWidth } from '../chart/visibleBarsMemory'
-import { DEFAULT_VISIBLE_BARS_BY_TF } from '../constants'
+import { DEFAULT_VISIBLE_BARS } from '../constants'
 import type { ChartApi, PointPx } from '../drawing/types'
 import { INDICATORS } from '../indicators/registry'
 import type { IndicatorConfig } from '../indicators/types'
@@ -104,7 +104,7 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   const barsRef = useRef<OhlcBar[]>(bars)
   /** クロスヘア同期: ユーザー操作だけを通知する subscriber 集合 */
   const userCrosshairSubsRef = useRef<Set<(t: number | null) => void>>(new Set())
-  /** §5.1.3 (ver 1.64): rangeHandler から現在の TF を参照するための ref */
+  /** §5.1.3: rangeHandler から現在の TF を参照するための ref */
   const tfRef = useRef<string>(timeframe)
   /** 初回 setVisibleLogicalRange より前の rangeHandler 通知を memory に書き込まない */
   const initialRangeAppliedRef = useRef(false)
@@ -226,7 +226,7 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         const oldest = barsRef.current[0]
         if (oldest) onNeedMoreRef.current?.(oldest.t)
       }
-      // §5.1.3 (ver 1.64): ユーザー操作による zoom / pan の幅を TF メモリに反映
+      // §5.1.3: ユーザー操作による zoom / pan の幅を TF メモリに反映
       if (initialRangeAppliedRef.current) {
         setVisibleWidth(tfRef.current, range.to - range.from)
       }
@@ -342,8 +342,7 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     if (!series || !chart || bars.length === 0) return
     series.setData(bars.map(toCandle))
     if (fittedForTfRef.current !== timeframe) {
-      const fallback = DEFAULT_VISIBLE_BARS_BY_TF[timeframe] ?? 100
-      const width = getVisibleWidth(timeframe, fallback)
+      const width = getVisibleWidth(timeframe, DEFAULT_VISIBLE_BARS)
       const to = bars.length - 1 + RIGHT_OFFSET
       const from = Math.max(-RIGHT_OFFSET, to - width)
       chart.timeScale().setVisibleLogicalRange({ from, to })

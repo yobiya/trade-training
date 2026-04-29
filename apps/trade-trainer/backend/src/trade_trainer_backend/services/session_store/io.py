@@ -138,7 +138,7 @@ def all_indexed_ids() -> list[str]:
 
 
 # ============================================================================
-# 旧形式(ver 1.54 以前)の読み出し helper / 統合移行後の削除
+# 旧分割形式の読み出し helper / 統合移行後の削除
 # ============================================================================
 
 def delete_legacy_files(dir_path: Path) -> None:
@@ -166,7 +166,7 @@ def read_legacy_drawings_list(dir_path: Path) -> list[Any]:
 
 
 def read_legacy_holding_memos_jsonl(dir_path: Path) -> list[Any]:
-    """`holding_memos.jsonl` の各行を JSON として読み出す(ver 1.54 以前のフォーマット)。"""
+    """`holding_memos.jsonl` の各行を JSON として読み出す(旧分割形式のフォーマット)。"""
     p = dir_path / "holding_memos.jsonl"
     if not p.exists():
         return []

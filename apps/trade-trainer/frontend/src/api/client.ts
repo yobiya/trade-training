@@ -72,7 +72,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ symbol, memo }),
       }),
-    // ver 1.45: candidate id は symbol そのもの(string)
+    // candidate id は symbol そのもの(string、銘柄別メモはファイル名 = symbol で管理)
     updateCandidate: (id: string, candidateSymbol: string, memo: string | null) =>
       request<SessionCandidate>(`/sessions/${id}/candidates/${encodeURIComponent(candidateSymbol)}`, {
         method: 'PATCH',
@@ -97,7 +97,7 @@ export const api = {
   },
 
   chart: {
-    /** 全 TF を 1 リクエストで取得(ver 1.59 chart-stack)。 */
+    /** 全 TF を 1 リクエストで取得(chart-stack エンドポイント、設計 §C.3)。 */
     stack: (sessionId: string, symbol?: string) => {
       const params = new URLSearchParams()
       if (symbol) params.set('symbol', symbol)
@@ -153,9 +153,9 @@ export const api = {
   },
 
   ai: {
-    // §11 AI 分析(ver 1.49: 送信前プレビュー機能は撤去。
-    // メモには AI に送ってよい内容のみが書かれている前提で、実行ボタンで直接 run。
-    // 非公開情報を扱う場合は AI 分析自体を使わない運用で対応)
+    // §11 AI 分析: 送信前プレビュー機能は持たない。
+    // メモには AI に送ってよい内容のみが書かれている前提で、実行ボタンで直接 run する。
+    // 非公開情報を扱う場合は AI 分析自体を使わない運用で対応する。
     run: (
       sessionId: string,
       mode?: 'decision' | 'review',
@@ -204,7 +204,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    // ver 1.45: drawing は session 配下管理のため URL に session_id を含む
+    // drawing は session 配下管理のため URL に session_id を含む
     update: (sessionId: string, drawingId: number, body: {
       data?: Record<string, unknown>
       label?: string | null

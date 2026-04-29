@@ -1,4 +1,4 @@
-"""JSON 読み書きの共通 helper(ver 1.60 で utils へ統合)。
+"""JSON 読み書きの共通 helper。
 
 datetime の serialization は I-1 不変条件に従い ISO 8601 + Z 形式に固定する。
 """

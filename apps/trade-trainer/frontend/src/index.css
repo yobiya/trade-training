@@ -447,7 +447,7 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .symbol { font-weight: 700; font-size: 15px; }
 .position { color: var(--text-dim); font-size: 12px; }
 
-/* 仕様書 §6.2 (ver 1.62): ヘッダ統合の銘柄セレクタ */
+/* 仕様書 §6.2: ヘッダ統合の銘柄セレクタ */
 .symbol-selector { display: flex; gap: 6px; align-items: center; }
 .symbol-mode-pills {
   display: flex;
@@ -632,7 +632,7 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 }
 .entry-form { display: flex; flex-direction: column; gap: 8px; }
 
-/* §7.4 ver 1.50: チャート配置型エントリーフォーム */
+/* §7.4 チャート配置型エントリーフォーム */
 .entry-current {
   display: flex;
   align-items: center;

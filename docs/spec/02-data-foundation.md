@@ -13,7 +13,7 @@
 - **ハイブリッドキャッシュ方式**: 事前バルク取得は行わず、使われた範囲を自動的にSQLiteにキャッシュ
 - **M5(5分足)を最小単位として管理**
 - ユーザーの判断軸の最小時間軸が M5 のため、M1 は保存しない
-- **TF 別キャッシュ**(ver 1.53):上位足(M15 / H1 / H4 / D1 / W1 / MN1)は M5 を resample した結果も `ohlc(timeframe=...)` テーブルにキャッシュする。2 回目以降は resample なしで直接読み出す(D1 以上の表示遅延対策)。末尾バーは未確定の可能性があるため、毎回末尾 2 本を再 resample → upsert して確定値に追従させる
+- **TF 別キャッシュ**: 上位足(M15 / H1 / H4 / D1 / W1 / MN1)は M5 を resample した結果も `ohlc(timeframe=...)` テーブルにキャッシュする。2 回目以降は resample なしで直接読み出す(D1 以上の表示遅延対策)。末尾バーは未確定の可能性があるため、毎回末尾 2 本を再 resample → upsert して確定値に追従させる
 - **最小保存足は設定可能**: 将来スキャルピング訓練等でM1が必要になった場合は設定変更で対応
 - **DB**: SQLite(WALモードで読み書きの並行性が良い。2 アプリでの共有に適する)
 - **データの扱い**: キャッシュレコードには取得日時・データソースを記録、後から再取得判定が可能
@@ -72,7 +72,7 @@ CREATE TABLE ohlc (
 ## 2.8 対象銘柄
 - 設定画面でユーザーが指定
 - 有効化した銘柄群を出題対象として使用
-- **初期対象(デフォルト 28 ペア、ver 1.61 で 8 → 28 に拡張)**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
+- **初期対象(デフォルト 28 ペア)**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
   - USD ストレート: `USDJPY`, `EURUSD`, `GBPUSD`, `AUDUSD`, `NZDUSD`, `USDCAD`, `USDCHF`
   - JPY クロス: `EURJPY`, `GBPJPY`, `AUDJPY`, `NZDJPY`, `CADJPY`, `CHFJPY`
   - EUR クロス: `EURGBP`, `EURAUD`, `EURNZD`, `EURCAD`, `EURCHF`

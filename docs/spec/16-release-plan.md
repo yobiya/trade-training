@@ -34,20 +34,20 @@
 
 ## Phase 3: 運用性(B の完成)
 - 設定画面からの market-data 経済指標手動更新ボタン
-- **セッション情報のファイル化**(ver 1.45、[§13](./13-data-storage.md) / [§17](./17-data-model.md)):
-  - 旧 6 テーブル(sessions / session_candidates / session_final_decisions / trades / holding_memos / drawings)を `data/sessions/{dir}/` ファイル群に移行
-  - 状態モデルを「進行中 / 決着済み」の 2 状態に整理(`is_suspended` 撤廃)
-  - AI 分析結果ディレクトリをセッション配下(`data/sessions/{dir}/ai_analysis/`)に統合
-  - Dropbox 同期前提の運用に対応(conflict 除外、id 重複検出)※ver 1.54 で atomic write は撤去
+- **セッション情報のファイル化**([§13](./13-data-storage.md) / [§17](./17-data-model.md)):
+  - セッション関連データを `data/sessions/{dir}/` ファイル群に置く(SQLite ではなく、テキストエディタ + Dropbox での運用に最適化するため)
+  - 状態モデルを「進行中 / 決着済み」の 2 状態に整理(独立した「保留中」状態は持たない)
+  - AI 分析結果ディレクトリはセッション配下(`data/sessions/{dir}/ai_analysis/`)に同居させる
+  - Dropbox 同期前提の運用に対応(conflict 除外、id 重複検出)。atomic write(`tmp + os.replace`)は個人運用では過剰なため採用しない
 - スマホUI最適化
 
-※ 横断集計(勝率・期待値・銘柄別成績等)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。一方、**個別セッションのファイル単位での永続保持と振り返り**は ver 1.45 で許容方針に変更。
+※ 横断集計(勝率・期待値・銘柄別成績等)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。一方、**個別セッションのファイル単位での永続保持と振り返り**は許容する(集計せず、ユーザーが手動で見返す用途)。
 
 ## Phase 4: AI 分析機能 (§11)
 - **§11 AI 分析** のファイル保存(`data/sessions/{dir}/ai_analysis/` 配下、[§11.7](./11-ai-analysis.md#117-分析結果の永続化ファイルストレージ))
 - チャート画像レンダリング、メタデータ・メモ送付、Markdown レポート表示
 - **1 セッション単位のみ**。AI 分析結果はセッションディレクトリ配下に保存され、ユーザーが OS / Dropbox 上でセッションディレクトリを削除すれば同時に消える([§13](./13-data-storage.md))
-- コスト管理(月額バジェット・利用量ダッシュボード)は採用しない([§11.6](./11-ai-analysis.md#116-キャッシュ使用量メタ時刻整形)、ver 1.47)
+- コスト管理(月額バジェット・利用量ダッシュボード)は採用しない([§11.6](./11-ai-analysis.md#116-キャッシュ使用量メタ時刻整形))
 - 専用の集計アプリ(trade-analyzer)は持たない。AI 分析は trade-trainer 本体の機能として統合する
 - **データ蓄積を前提としないため、Phase 1-3 運用後の待ち時間は不要**。実装が揃えばすぐに利用可能
 

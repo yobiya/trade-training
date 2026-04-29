@@ -1,15 +1,15 @@
-"""仕様書 §13 / §17 セッション情報のファイル I/O 公開窓口(2026-04-29 でパッケージ化)。
+"""仕様書 §13 / §17 セッション情報のファイル I/O 公開窓口。
 
-旧 `services/session_store.py` を `io.py`(I/O + index)+ `serialize.py`(変換)+
-本 `__init__.py`(公開 API + 後方互換読み出し)に分割した。`from trade_trainer_backend.services
-import session_store` から従来通り `session_store.load(...)` 等が利用可能。
+`io.py`(I/O + index)+ `serialize.py`(変換)+ 本 `__init__.py`(公開 API + 旧分割形式の
+後方互換読み出し)の 3 ファイルパッケージ。consumer は `from trade_trainer_backend.services
+import session_store` から `session_store.load(...)` 等を使う。
 
 設計原則(設計 §D.3):
 - ディレクトリ単位で読み書きする(`data/sessions/{dir}/`)
 - 識別子は session.json の `id` フィールド(不変)
 - ディレクトリ名は `{YYYYMMDD-HHMM}-{symbol}-{name}`(可読ラベル、変更可)
-- ver 1.54 から session.json に trade / final_decision / drawings / holding_memos を統合
-- 旧形式(個別 .json / .jsonl)は読み出し時のみフォールバック対応、次回 save で自動移行
+- session.json に trade / final_decision / drawings / holding_memos を集約
+- 旧分割形式(個別 .json / .jsonl)は読み出し時のみフォールバック対応、次回 save で自動移行
 - 削除はアプリ側で行わない(OS 直接操作のみ、§13)
 """
 from __future__ import annotations
@@ -76,7 +76,7 @@ def list_sessions() -> list[SessionAggregate]:
 def load(session_id: str) -> SessionAggregate | None:
     """session.json + note.md + candidates/*.md を読んで SessionAggregate に組み立てる。
 
-    session.json 内のフィールドが優先。無ければ旧個別ファイルからフォールバック(ver 1.54 後方互換)。
+    session.json 内のフィールドが優先。無ければ旧個別ファイルからフォールバック(旧分割形式の後方互換)。
     """
     dir_path = io.get_dir(session_id)
     if dir_path is None:

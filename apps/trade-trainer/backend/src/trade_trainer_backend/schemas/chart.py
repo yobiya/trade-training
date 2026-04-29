@@ -17,7 +17,7 @@ class ChartStackEntry(BaseModel):
 
 
 class ChartStackResponse(BaseModel):
-    """ver 1.59: 全 TF を一度に返す chart-stack 形式。"""
+    """全 TF を一度に返す chart-stack 形式(設計 §C.3)。"""
     symbol: str
     current_position: datetime
     stacks: list[ChartStackEntry]

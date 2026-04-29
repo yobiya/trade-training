@@ -11,8 +11,8 @@ class DataSourceProvider(ABC):
     DataFrame の仕様:
     - インデックス: timestamp (UTC aware datetime)
     - カラム: open, high, low, close, volume (float/int)
-    - 任意 TF を返す(ver 1.58 で M5 専用前提を撤廃。確定済みバーは TF 別に取得し、
-      進行中バーは呼び出し側で「一つ下の TF」を集約する)
+    - 任意 TF を返す。確定済みバーは TF 別に取得し、進行中バーは呼び出し側で
+      「一つ下の TF」を集約する
     """
 
     SOURCE_NAME: str = ""
@@ -33,7 +33,7 @@ class DataSourceProvider(ABC):
     def fetch_ohlc(
         self, symbol: str, timeframe: str, from_dt: datetime, to_dt: datetime
     ) -> pd.DataFrame:
-        """指定期間の指定 TF の OHLC を取得して返す(ver 1.58 で追加)。
+        """指定期間の指定 TF の OHLC を取得して返す。
 
         Args:
             symbol: 銘柄名(接尾辞なし、例: "USDJPY")

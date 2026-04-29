@@ -5,7 +5,7 @@ import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
 
 const HIT_RADIUS_PX = 12
 
-// ver 1.63: 推進波 1-5 + 補正波 A/B/C を文字列で統一保存(JSON 上の型を 1 種類に揃える)
+// 推進波 1-5 + 補正波 A/B/C を文字列で統一保存(JSON 上の型を 1 種類に揃え consumer の分岐を減らす)
 export type WaveValue = '1' | '2' | '3' | '4' | '5' | 'A' | 'B' | 'C'
 export const WAVE_VALUES: readonly WaveValue[] = ['1', '2', '3', '4', '5', 'A', 'B', 'C'] as const
 const WAVE_VALUE_SET: ReadonlySet<string> = new Set(WAVE_VALUES)

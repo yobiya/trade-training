@@ -2,7 +2,7 @@ import type { Drawing, DrawingKind } from '../api/client'
 import { TOOLS } from '../drawing/tools/registry'
 import type { WaveValue } from '../drawing/tools/wave_label'
 
-// ver 1.63: 推進波 1-5 + 補正波 A/B/C(全て文字列で統一保存)
+// 推進波 1-5 + 補正波 A/B/C(全て文字列で統一保存)
 const IMPULSE_WAVES: readonly WaveValue[] = ['1', '2', '3', '4', '5'] as const
 const CORRECTIVE_WAVES: readonly WaveValue[] = ['A', 'B', 'C'] as const
 

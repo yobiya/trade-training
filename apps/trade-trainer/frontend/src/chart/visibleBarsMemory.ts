@@ -1,4 +1,4 @@
-// 仕様書 §5.1.3 (ver 1.64): 銘柄切替時に「直前と同じ表示本数」を維持するためのメモリ。
+// 仕様書 §5.1.3: 銘柄切替時に「直前と同じ表示本数」を維持するためのメモリ。
 //
 // `<Chart key={tf-symbol}>` が銘柄切替で unmount/remount されるため、Chart 内 React state
 // では持続できない。モジュールスコープの Map に「TF ごとの可視幅(visible logical range の

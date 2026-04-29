@@ -76,7 +76,7 @@ type DrawingState =
   | { kind: 'drawing-fibonacci'; firstPoint: PP | null; currentPoint: PP | null }
   | { kind: 'drawing-wave-label'; wave: WaveLabel; previewPoint: PP | null }
   // WaveLabel = '1'|'2'|'3'|'4'|'5' (推進波) | 'A'|'B'|'C' (補正波)
-  //  ver 1.63 で文字列に統一(JSON 上の型を 1 種類に揃え consumer の分岐を減らす)
+  //  値は文字列で統一(JSON 上の型を 1 種類に揃え consumer の分岐を減らす)
   | { kind: 'moving-line'; original: Drawing; preview: Drawing }
   | { kind: 'moving-trendline-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchor: PP }
@@ -223,8 +223,3 @@ export interface ToolMetadata {
 - **Chart 側にツールロジックを直接書く**: 初期実装で問題になった原因。再発を避ける。
 - **lightweight-charts v5 + ISeriesPrimitive**: v4 から v5 への破壊的変更が多く、コストが大きい。将来の移行余地は残す。
 
----
-
-*最終更新: 2026-04-29 (ver 1.63 で 波動ラベルに ABC 補正波を追加。`WaveValue` 型を `'1'|'2'|'3'|'4'|'5'|'A'|'B'|'C'` の文字列に統一)*
-
-*2026-04-26 (ver 1.55 で 11 クラスから tagged union + 単一 dispatch 関数に統合)*

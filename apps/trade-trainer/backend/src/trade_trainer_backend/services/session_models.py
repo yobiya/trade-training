@@ -1,7 +1,6 @@
-"""仕様書 §17 セッション情報のファイル管理用 dataclass(ver 1.45)。
+"""仕様書 §17 セッション情報のファイル管理用 dataclass。
 
-DB の SQLAlchemy モデル(旧 TradeSession / SessionCandidate / Trade 等)を
-廃止し、ファイル I/O 層が読み書きするドメインモデルに置き換える。
+ファイル I/O 層(`session_store/`)が読み書きするドメインモデル。
 """
 from __future__ import annotations
 

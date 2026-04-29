@@ -5,9 +5,9 @@
 - GET  /sessions/{id}/ai-analysis/history  履歴一覧(index.json)
 - GET  /sessions/{id}/ai-analysis/report/{entry_id}  レポート Markdown 取得
 
-ver 1.49: 送信前プレビュー / 個別要素の除外チェック機能は撤去
-([§11.6](docs/spec/11-ai-analysis.md))。メモには AI に送ってよい内容のみが書かれている前提で、
-非公開情報を扱う場合は AI 分析自体を使わない運用で対応する。
+送信前プレビュー / 個別要素の除外チェック機能は持たない([§11.6](docs/spec/11-ai-analysis.md))。
+メモには AI に送ってよい内容のみが書かれている前提で、非公開情報を扱う場合は AI 分析自体を
+使わない運用で対応する。
 """
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse

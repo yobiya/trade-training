@@ -1,7 +1,7 @@
 // アプリ全体で参照する業務定数。散在を避け一箇所に集約する。
 // 仕様書の該当セクションをコメントで併記。
 
-// 仕様書 §2.8 対象銘柄(ver 1.61 でメジャー 8 通貨の全 28 ペアに拡張)
+// 仕様書 §2.8 対象銘柄(メジャー 8 通貨の全 28 ペア)
 export const SYMBOLS: string[] = [
   // USD ストレート
   'USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF',
@@ -15,10 +15,10 @@ export const SYMBOLS: string[] = [
   'AUDNZD', 'AUDCAD', 'AUDCHF', 'NZDCAD', 'NZDCHF', 'CADCHF',
 ]
 
-// 仕様書 §5.1 時間軸 (ver 1.52: M30 撤去 / W1 / MN1 追加)
+// 仕様書 §5.1 時間軸
 export const TIMEFRAMES: string[] = ['M5', 'M15', 'H1', 'H4', 'D1', 'W1', 'MN1']
 
-// 仕様書 §5.1.1: TF を分単位で表現(ver 1.55「+N 本 = entry TF の N バー」換算用)。
+// 仕様書 §5.1.1: TF を分単位で表現(「+N 本 = entry TF の N バー」換算用)。
 // MN1 は月毎日数が異なるため 30 日 = 30 × 24 × 60 = 43200 分 で近似する。
 export const TIMEFRAME_MINUTES: Record<string, number> = {
   M5: 5,
@@ -31,18 +31,17 @@ export const TIMEFRAME_MINUTES: Record<string, number> = {
 }
 
 // 時間足ごとに初回取得するバー本数(仕様書 §5.1 マルチタイムフレーム)。
-// ver 1.58: 上位 TF を削減。新規銘柄 cold load 時の MT5 ヒストリ取得時間を短縮。
+// 上位 TF は本数を抑える(新規銘柄 cold load 時の MT5 ヒストリ取得時間を短縮するため)。
 // 過去 history は frontend の loadMoreHistory(左端到達時)で動的拡張される。
 export const BARS_BY_TF: Record<string, number> = {
   M5: 500, M15: 300, H1: 200, H4: 150, D1: 100, W1: 60, MN1: 24,
 }
 
-// 仕様書 §5.1.3 (ver 1.64): 銘柄切替時に維持する「画面に表示するバー本数」の既定値。
-// `BARS_BY_TF` は MT5 から取得する全バー数(背景に保持)、こちらは初期表示する可視範囲のバー数。
+// 仕様書 §5.1.3: 初期表示する可視範囲のバー数(全 TF 統一)。
+// `BARS_BY_TF` は MT5 から取得する全バー数(背景に保持)、こちらは可視範囲のバー数。
 // セッション内メモリ(`chart/visibleBarsMemory.ts`)が確定するまでのフォールバックに使う。
-export const DEFAULT_VISIBLE_BARS_BY_TF: Record<string, number> = {
-  M5: 120, M15: 100, H1: 80, H4: 60, D1: 50, W1: 40, MN1: 24,
-}
+// 縦積みマルチ TF で各チャートのローソク幅が揃うことを優先し、TF 別差をなくして単一値とする。
+export const DEFAULT_VISIBLE_BARS = 100
 
 // メイン時間足を選んだときに並行表示する上位足(仕様書 §5.1)。
 // MN1 は最上位のため上位足なしで main のみ表示。

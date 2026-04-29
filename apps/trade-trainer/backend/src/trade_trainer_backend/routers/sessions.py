@@ -1,7 +1,7 @@
-"""セッション管理エンドポイント(ver 1.45 でファイル管理化)。
+"""セッション管理エンドポイント。
 
-セッションは `data/sessions/{dir}/` 単位で永続化。
-DB は使わず、SessionStore (`services/session_store.py`) 経由で読み書きする。
+セッションは `data/sessions/{dir}/` 単位でファイル永続化(設計 §D.2)。
+DB は使わず、SessionStore (`services/session_store/`) 経由で読み書きする。
 """
 import random
 from datetime import datetime, timedelta, timezone
@@ -133,7 +133,7 @@ def _matches_filters(
     sessions: list[str] | None,
 ) -> bool:
     jst = dt_utc + _JST_OFFSET
-    # 仕様書 §4.1 Phase 1 step 2 (ver 1.56): JST 08:00 〜 翌 02:00 の 18 時間枠に限定。
+    # 仕様書 §4.1 Phase 1 step 2: JST 08:00 〜 翌 02:00 の 18 時間枠に限定。
     # JST 02:00〜08:00 は流動性が極端に低く訓練価値が低いため除外。
     jst_hour = jst.hour
     if 2 <= jst_hour < 8:
@@ -263,8 +263,8 @@ def get_session(session_id: str) -> SessionResponse:
 
 @router.delete("/{session_id}", status_code=204)
 def close_session(session_id: str) -> None:
-    """ver 1.45: アプリ側に自動破棄を持たない。本エンドポイントは互換性のため残すが
-    フロントから 通常呼ばれない(削除は OS / Dropbox での手動操作)。"""
+    """アプリ側に自動破棄は持たない。本エンドポイントは互換性のため残すが
+    フロントから通常呼ばれない(削除は OS / Dropbox での手動操作で行う、§13)。"""
     # 何もしない(セッションは決着済みのままファイルとして残る)
     ensure_session(session_id)
 

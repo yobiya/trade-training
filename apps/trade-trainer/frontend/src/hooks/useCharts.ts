@@ -4,7 +4,7 @@ import type { OhlcBar } from '../api/client'
 import { useNotify } from './useNotify'
 
 export type ChartsApi = {
-  /** TF 別バー配列(ver 1.59: chart-stack で一括取得) */
+  /** TF 別バー配列(chart-stack で一括取得) */
   barsByTf: Record<string, OhlcBar[]>
   /** TF 別の loading フラグ。chart-stack 受信前は全 TF が true。 */
   loadingByTf: Record<string, boolean>
@@ -19,9 +19,9 @@ export type ChartsApi = {
 /**
  * マルチタイムフレーム縦積み表示のチャートデータを一括管理する(§5.1 / §6.1)。
  *
- * ver 1.59 (chart-stack): backend の単一エンドポイント `/chart-stack` を 1 回呼ぶだけで
- * 全 TF の bars を受け取り、`barsByTf` に展開する。下位 TF から順に直列フェッチされ、
- * 上位 TF の最新バーは下位 TF を集約して算出される(設計 §B I-2)。
+ * backend の単一エンドポイント `/chart-stack` を 1 回呼ぶだけで全 TF の bars を受け取り、
+ * `barsByTf` に展開する。下位 TF から順に直列フェッチされ、上位 TF の最新バーは下位 TF を
+ * 集約して算出される(設計 §B I-2)。
  */
 export function useCharts(
   sessionId: string,
