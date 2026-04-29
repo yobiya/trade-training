@@ -37,6 +37,13 @@ export const BARS_BY_TF: Record<string, number> = {
   M5: 500, M15: 300, H1: 200, H4: 150, D1: 100, W1: 60, MN1: 24,
 }
 
+// 仕様書 §5.1.3 (ver 1.64): 銘柄切替時に維持する「画面に表示するバー本数」の既定値。
+// `BARS_BY_TF` は MT5 から取得する全バー数(背景に保持)、こちらは初期表示する可視範囲のバー数。
+// セッション内メモリ(`chart/visibleBarsMemory.ts`)が確定するまでのフォールバックに使う。
+export const DEFAULT_VISIBLE_BARS_BY_TF: Record<string, number> = {
+  M5: 120, M15: 100, H1: 80, H4: 60, D1: 50, W1: 40, MN1: 24,
+}
+
 // メイン時間足を選んだときに並行表示する上位足(仕様書 §5.1)。
 // MN1 は最上位のため上位足なしで main のみ表示。
 export const UPPER_TFS: Record<string, string[]> = {

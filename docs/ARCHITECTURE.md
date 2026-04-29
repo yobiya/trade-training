@@ -1093,6 +1093,7 @@ ChartHandle = {
 - ~~**`SessionPage` 600+ LOC god component**~~ → 2026-04-29 で `useSessionFetch` / `useTradeFlow` / `useNotify` に分解。SessionPage は orchestration のみを担う 250 行程度に圧縮
 - ~~**`entryDraft` 双方向**~~ → `useTradeFlow` に集約済(2026-04-29)
 - ~~**クロスヘア二重追跡**~~ → ver 1.55 で `useCrosshairSync` に集約済
+- **`visibleBarsMemory.ts` の module-level Map**(ver 1.64): TF ごとの visible logical width をセッション内で保持するためにモジュールスコープの可変 state を採用。ページ離脱で破棄、Chart unmount/remount(銘柄切替時に `<Chart key={tf-symbol}>` が再生成される)を跨いでも生存する必要があるため。React state では `<Chart>` 単位にスコープが切れて目的を果たせないので意図的にモジュール変数を選択している
 
 ### 残課題(将来の別タスク)
 

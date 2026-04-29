@@ -10,6 +10,8 @@ import type {
   Time,
 } from 'lightweight-charts'
 import type { OhlcBar } from '../api/client'
+import { getVisibleWidth, setVisibleWidth } from '../chart/visibleBarsMemory'
+import { DEFAULT_VISIBLE_BARS_BY_TF } from '../constants'
 import type { ChartApi, PointPx } from '../drawing/types'
 import { INDICATORS } from '../indicators/registry'
 import type { IndicatorConfig } from '../indicators/types'
@@ -71,6 +73,8 @@ function toCandle(bar: OhlcBar): CandlestickData {
 
 /** 可視範囲の `range.from` がこの値より小さくなったら追加 history を要求する。 */
 const LOAD_MORE_THRESHOLD = 5
+/** lightweight-charts の `timeScale.options.rightOffset` と同値(右端余白のバー幅)。 */
+const RIGHT_OFFSET = 4
 
 /**
  * 純粋なチャート描画コンポーネント。ツール固有のロジックは持たない。
@@ -100,12 +104,17 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   const barsRef = useRef<OhlcBar[]>(bars)
   /** クロスヘア同期: ユーザー操作だけを通知する subscriber 集合 */
   const userCrosshairSubsRef = useRef<Set<(t: number | null) => void>>(new Set())
+  /** §5.1.3 (ver 1.64): rangeHandler から現在の TF を参照するための ref */
+  const tfRef = useRef<string>(timeframe)
+  /** 初回 setVisibleLogicalRange より前の rangeHandler 通知を memory に書き込まない */
+  const initialRangeAppliedRef = useRef(false)
 
   useEffect(() => { onNeedMoreRef.current = onNeedMoreHistory }, [onNeedMoreHistory])
   useEffect(() => { onChartClickRef.current = onChartClick }, [onChartClick])
   useEffect(() => { onMouseMoveRef.current = onMouseMove }, [onMouseMove])
   useEffect(() => { onMouseDownRef.current = onMouseDown }, [onMouseDown])
   useEffect(() => { onMouseUpRef.current = onMouseUp }, [onMouseUp])
+  useEffect(() => { tfRef.current = timeframe }, [timeframe])
 
   useImperativeHandle(ref, () => ({
     get api(): ChartApi {
@@ -217,6 +226,10 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         const oldest = barsRef.current[0]
         if (oldest) onNeedMoreRef.current?.(oldest.t)
       }
+      // §5.1.3 (ver 1.64): ユーザー操作による zoom / pan の幅を TF メモリに反映
+      if (initialRangeAppliedRef.current) {
+        setVisibleWidth(tfRef.current, range.to - range.from)
+      }
     }
     chart.timeScale().subscribeVisibleLogicalRangeChange(rangeHandler)
 
@@ -311,15 +324,17 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       chartRef.current = null
       seriesRef.current = null
       fittedForTfRef.current = null
+      initialRangeAppliedRef.current = false
       priceLineHandlesRef.current.clear()
       indicatorSeriesRef.current.clear()
       rsiPaneConfiguredRef.current = false
     }
   }, [])
 
-  // [描画] bars を反映する(ver 1.59: シンプル版に戻す)。
+  // [描画] bars を反映する。
   // 銘柄切替は SessionPage 側で `<Chart key={`${tf}-${symbol}`}>` による remount で扱うため、
-  // ここでは bars 変化時の素直な setData + 初回 fitContent のみ。
+  // 初回 setData 時にだけ可視範囲を「右端 = 最新バー、幅 = TF メモリ(or 既定値)」で設定する。
+  // 以降の bars 更新(advance / loadMoreHistory)はユーザーの zoom 状態を維持する。
   useEffect(() => {
     const series = seriesRef.current
     const chart = chartRef.current
@@ -327,8 +342,13 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     if (!series || !chart || bars.length === 0) return
     series.setData(bars.map(toCandle))
     if (fittedForTfRef.current !== timeframe) {
-      chart.timeScale().fitContent()
+      const fallback = DEFAULT_VISIBLE_BARS_BY_TF[timeframe] ?? 100
+      const width = getVisibleWidth(timeframe, fallback)
+      const to = bars.length - 1 + RIGHT_OFFSET
+      const from = Math.max(-RIGHT_OFFSET, to - width)
+      chart.timeScale().setVisibleLogicalRange({ from, to })
       fittedForTfRef.current = timeframe
+      initialRangeAppliedRef.current = true
     }
   }, [bars, timeframe])
 
