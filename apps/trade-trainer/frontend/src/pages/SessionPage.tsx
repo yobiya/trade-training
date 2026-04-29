@@ -83,6 +83,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   // UI 配置に直結する local state
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string>(SYMBOLS[0])
+  // 仕様書 §6.1 / §6.2 (ver 1.62): 銘柄セレクタの絞り込みモード
+  const [symbolMode, setSymbolMode] = useState<'all' | 'star'>('all')
   const [entryTf, setEntryTf] = useState('M5')
   const [activeTf, setActiveTf] = useState('M5')
   const [hiddenTfs, setHiddenTfs] = useState<Set<string>>(new Set())
@@ -96,6 +98,25 @@ export function SessionPage({ sessionId, onBack }: Props) {
   const currentSymbol = phase === 'analyzing'
     ? analyzingSymbol
     : (activeTrade?.symbol ?? latestTrade?.symbol ?? analyzingSymbol)
+
+  const candidates = session?.candidates ?? []
+  const isCurrentStar = candidates.some(c => c.symbol === currentSymbol)
+
+  // 仕様書 §6.2 (ver 1.62): ★ モードの時は候補銘柄のみに絞る
+  const displaySymbols = useMemo(() => {
+    if (symbolMode === 'star' && candidates.length > 0) {
+      const set = new Set(candidates.map(c => c.symbol))
+      return SYMBOLS.filter(s => set.has(s))
+    }
+    return SYMBOLS
+  }, [symbolMode, candidates])
+
+  // ★ 0 件で star モードに留まらないよう自動フォールバック
+  useEffect(() => {
+    if (symbolMode === 'star' && candidates.length === 0) {
+      setSymbolMode('all')
+    }
+  }, [symbolMode, candidates.length])
 
   // 表示順序: エントリー足を最上段
   const visibleTfs = useMemo(() => {
@@ -246,19 +267,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
     }
   }, [phase, currentSymbol, trade])
 
-  // 仕様書 §7.3: M キーでメモパネルをトグル
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'm' && e.key !== 'M') return
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      e.preventDefault()
-      setMemoOpen(v => !v)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   async function handleSkipConfirm(reason: string) {
     await trade.handleSkip(reason)
     setSkipping(false)
@@ -270,7 +278,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     setSkipAllReasonDraft('')
   }
 
-  async function toggleCandidate() {
+  const toggleCandidate = useCallback(async () => {
     if (!session) return
     const existing = session.candidates.find(c => c.symbol === currentSymbol)
     try {
@@ -284,10 +292,47 @@ export function SessionPage({ sessionId, onBack }: Props) {
       console.warn('[SessionPage] toggleCandidate failed', err)
       notify('候補の更新に失敗しました', 'error')
     }
-  }
+  }, [session, currentSymbol, sessionId, refreshSession, notify])
 
-  const candidates = session?.candidates ?? []
-  const isCurrentStar = candidates.some(c => c.symbol === currentSymbol)
+  // 仕様書 §6.2 (ver 1.62): 現在モードのリスト内で前後の銘柄に循環移動
+  const stepSymbol = useCallback((dir: 1 | -1) => {
+    if (displaySymbols.length === 0) return
+    const i = displaySymbols.indexOf(currentSymbol)
+    if (i < 0) {
+      setAnalyzingSymbol(displaySymbols[0])
+      return
+    }
+    const next = (i + dir + displaySymbols.length) % displaySymbols.length
+    setAnalyzingSymbol(displaySymbols[next])
+  }, [displaySymbols, currentSymbol])
+
+  // 仕様書 §7.3 (M) / §6.2 (ver 1.62: [, ], F, S) キーボードショートカット
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      // M はフェーズ問わず有効
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault()
+        setMemoOpen(v => !v)
+        return
+      }
+      // 銘柄操作系は分析中のみ
+      if (phase !== 'analyzing') return
+      if (e.key === '[') { e.preventDefault(); stepSymbol(-1) }
+      else if (e.key === ']') { e.preventDefault(); stepSymbol(1) }
+      else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        setSymbolMode(m => m === 'all' ? 'star' : 'all')
+      }
+      else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault()
+        void toggleCandidate()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [phase, stepSymbol, toggleCandidate])
 
   return (
     <div className="training-page session-page">
@@ -316,16 +361,61 @@ export function SessionPage({ sessionId, onBack }: Props) {
         />
         <div className="session-info">
           {phase === 'analyzing' ? (
-            <select
-              className="symbol-dropdown"
-              value={currentSymbol}
-              onChange={e => setAnalyzingSymbol(e.target.value)}
-            >
-              {SYMBOLS.map(sym => {
-                const star = candidates.some(c => c.symbol === sym) ? '★ ' : ''
-                return <option key={sym} value={sym}>{star}{sym}</option>
-              })}
-            </select>
+            <div className="symbol-selector">
+              <div className="symbol-mode-pills" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={symbolMode === 'all'}
+                  className={`pill ${symbolMode === 'all' ? 'active' : ''}`}
+                  onClick={() => setSymbolMode('all')}
+                  title="全銘柄を表示 (F)"
+                >
+                  ALL ({SYMBOLS.length})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={symbolMode === 'star'}
+                  className={`pill ${symbolMode === 'star' ? 'active' : ''}`}
+                  onClick={() => setSymbolMode('star')}
+                  disabled={candidates.length === 0}
+                  title="★ を付けた銘柄のみ表示 (F)"
+                >
+                  ★ ({candidates.length})
+                </button>
+              </div>
+              <button
+                type="button"
+                className="symbol-step-btn"
+                onClick={() => stepSymbol(-1)}
+                title="前の銘柄 ([)"
+              >‹</button>
+              <select
+                className="symbol-dropdown"
+                value={currentSymbol}
+                onChange={e => setAnalyzingSymbol(e.target.value)}
+              >
+                {displaySymbols.map(sym => {
+                  const star = candidates.some(c => c.symbol === sym) ? '★ ' : ''
+                  return <option key={sym} value={sym}>{star}{sym}</option>
+                })}
+              </select>
+              <button
+                type="button"
+                className="symbol-step-btn"
+                onClick={() => stepSymbol(1)}
+                title="次の銘柄 (])"
+              >›</button>
+              <button
+                type="button"
+                className={`star-btn ${isCurrentStar ? 'on' : ''}`}
+                onClick={() => void toggleCandidate()}
+                title="現在銘柄の ★ をトグル (S)"
+              >
+                {isCurrentStar ? '★' : '☆'}
+              </button>
+            </div>
           ) : (
             <span className="symbol">{currentSymbol}</span>
           )}
@@ -409,18 +499,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
         </div>
 
         <div className="sidebar">
-          {phase === 'analyzing' && (
-            <div className="pick-candidate-header">
-              <span>候補: {currentSymbol}</span>
-              <button
-                className={`star-btn ${isCurrentStar ? 'on' : ''}`}
-                onClick={() => void toggleCandidate()}
-              >
-                {isCurrentStar ? '★ 解除' : '☆ 追加'}
-              </button>
-            </div>
-          )}
-
           {phase !== 'reviewing' && (
             <TradePanel
               activeTrade={activeTrade}

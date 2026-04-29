@@ -446,6 +446,39 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .session-info { flex: 1; display: flex; gap: 12px; align-items: center; }
 .symbol { font-weight: 700; font-size: 15px; }
 .position { color: var(--text-dim); font-size: 12px; }
+
+/* 仕様書 §6.2 (ver 1.62): ヘッダ統合の銘柄セレクタ */
+.symbol-selector { display: flex; gap: 6px; align-items: center; }
+.symbol-mode-pills {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.symbol-mode-pills .pill {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--bg2);
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.symbol-mode-pills .pill:hover:not(:disabled):not(.active) { background: var(--bg3); color: var(--text); }
+.symbol-mode-pills .pill.active { background: var(--accent); color: #0d1117; }
+.symbol-mode-pills .pill:disabled { opacity: 0.4; cursor: not-allowed; }
+.symbol-step-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+.symbol-step-btn:hover { background: var(--bg3); }
 .tf-selector { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .tf-selector-label { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
 .tf-selector-sep { color: var(--border); margin: 0 4px; }

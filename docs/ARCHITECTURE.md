@@ -873,7 +873,7 @@ phase 別の表示要素:
 | 通知メッセージ(toast) | **`NotifyContext`** + `useNotify()` | 各種失敗 / 成功通知 |
 | `barsByTf, loadingByTf, currentPrice` | `useCharts` | 銘柄/TF 切替・advance |
 | クロスヘア同期 | `useCrosshairSync` hook | hook 内に閉じる(ver 1.55 で一元化) |
-| `analyzingSymbol, entryTf, activeTf, hiddenTfs, memoOpen, skipping, confirmSkipAll, skipAllReasonDraft, hoveredEvent` | SessionPage local | UI 配置に直結する分のみ |
+| `analyzingSymbol, symbolMode, entryTf, activeTf, hiddenTfs, memoOpen, skipping, confirmSkipAll, skipAllReasonDraft, hoveredEvent` | SessionPage local | UI 配置に直結する分のみ。`symbolMode: 'all' \| 'star'`(ver 1.62) はヘッダ銘柄セレクタの絞り込みモード |
 
 ### 新 hook の契約(2026-04-29 確定)
 

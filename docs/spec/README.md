@@ -61,7 +61,9 @@
 
 ---
 
-*仕様書 ver 1.61 - 2026/04/29 (§2.8 対象銘柄を **8 ペア → 28 ペア** に拡張。メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せを初期対象とする。frontend `constants.ts` の `SYMBOLS` 配列のみ更新)*
+*仕様書 ver 1.62 - 2026/04/29 (§6.1 / §6.2 銘柄セレクタをヘッダ統合型のコンパクト UI に再設計。ver 1.61 で 28 ペアに拡張した結果、単一 `<select>` の縦スクロールが操作しづらくなった問題への対応。新 UI は **ALL / ★ モード切替ピル + prev/next ボタン + フィルタ済みドロップダウン + ★ トグル** を 1 行に集約し、サイドバーの「☆ 追加 / ★ 解除」ブロックは撤去してヘッダに動線を集中させる。ALL モードは §2.8 全 28 ペアを表示、★ モードは本セッションで ★ を付けた候補銘柄のみに絞る(★ 0 件で ALL 自動フォールバック)。分析中フェーズでのみキーボードショートカット `[` / `]`(前後の銘柄)、`F`(モードトグル)、`S`(★ トグル)を有効化(入力欄フォーカス時は無効)。実装は frontend のみ(`pages/SessionPage.tsx` ヘッダ JSX 再構成 + `symbolMode` state + `stepSymbol` callback + key listener 追加 / `index.css` に `.symbol-selector` / `.symbol-mode-pills` / `.symbol-step-btn` を追加)。設計書 §E.4 状態所有表に `symbolMode` を追記。backend / データモデル変更なし)*
+
+*ver 1.61 - 2026/04/29 (§2.8 対象銘柄を **8 ペア → 28 ペア** に拡張。メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せを初期対象とする。frontend `constants.ts` の `SYMBOLS` 配列のみ更新)*
 
 *ver 1.60 - 2026/04/29 (backend リファクタリング + spec 整合スイープ。設計面: backend `services/session_store.py` 697 行を `session_store/{io.py, serialize.py, __init__.py}` の 3 ファイルパッケージに分割(公開 API 不変、consumers の import 文も不変)。共通 utility を `apps/.../utils/{json_io.py, datetime.py, http.py}` に抽出(`json_default` の重複削除、`ensure_aware_utc` 統一、`HTTPException(404/400)` ファクトリ化)。`routers/_helpers.py` を新設し各 router に散在していた `_ensure_session` を共通化。設計書 §D.1 レイヤ構成図と §D.3 session_store 責務節を更新。仕様面: §13 atomic write セクションを「ver 1.54 で撤去」追記に書換、§16 リリース計画から atomic write 表記を撤去、principles/no-future-info の `TradingStyle.expected_rr` 例(ver 1.50 で全廃)を `Trade.sl ベース` に置換。実装挙動の変更なし、frontend 影響なし)*
 
