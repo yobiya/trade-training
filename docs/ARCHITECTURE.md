@@ -422,7 +422,7 @@ providers/
 
 ```python
 TF_ORDER = ["M5", "M15", "H1", "H4", "D1", "W1", "MN1"]
-BARS_BY_TF = {"M5": 500, "M15": 300, "H1": 200, "H4": 150, "D1": 100, "W1": 60, "MN1": 24}
+BARS_BY_TF = {"M5": 200, "M15": 200, "H1": 200, "H4": 200, "D1": 200, "W1": 200, "MN1": 200}
 FACTOR = 1.5
 
 prev_tf_df = None

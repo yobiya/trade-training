@@ -31,10 +31,11 @@ export const TIMEFRAME_MINUTES: Record<string, number> = {
 }
 
 // 時間足ごとに初回取得するバー本数(仕様書 §5.1 マルチタイムフレーム)。
-// 上位 TF は本数を抑える(新規銘柄 cold load 時の MT5 ヒストリ取得時間を短縮するため)。
+// 全 TF で `DEFAULT_VISIBLE_BARS = 100` を満たせるよう一律 200 本取得する
+// (ブローカーの保有データが 100 本未満の場合は MT5 が返す範囲のみとなる)。
 // 過去 history は frontend の loadMoreHistory(左端到達時)で動的拡張される。
 export const BARS_BY_TF: Record<string, number> = {
-  M5: 500, M15: 300, H1: 200, H4: 150, D1: 100, W1: 60, MN1: 24,
+  M5: 200, M15: 200, H1: 200, H4: 200, D1: 200, W1: 200, MN1: 200,
 }
 
 // 仕様書 §5.1.3: 初期表示する可視範囲のバー数(全 TF 統一)。

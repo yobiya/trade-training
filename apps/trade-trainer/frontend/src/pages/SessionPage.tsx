@@ -252,20 +252,27 @@ export function SessionPage({ sessionId, onBack }: Props) {
     [trade, interaction.handlers, roundToDigits],
   )
 
-  // 配置モードに入ったら描画ツールを Idle に戻す(衝突回避)
+  // 配置モードに入ったら描画ツールを Idle に戻す(衝突回避)。
+  // `interaction` 全体ではなく具体プロパティを dep にする(全体は毎レンダで新参照のため)
+  const interactionSelectTool = interaction.selectTool
+  const interactionActiveTool = interaction.activeTool
   useEffect(() => {
-    if (trade.entryPlacing && interaction.activeTool) {
-      interaction.selectTool(null)
+    if (trade.entryPlacing && interactionActiveTool) {
+      interactionSelectTool(null)
     }
-  }, [trade.entryPlacing, interaction])
+  }, [trade.entryPlacing, interactionActiveTool, interactionSelectTool])
 
-  // 銘柄切替 / フェーズ移行で draft をクリア
+  // 銘柄切替 / フェーズ移行で draft をクリア。
+  // `trade` 全体は毎レンダで新参照になるので、stable な setter のみを dep に取る。
+  // setEntryDraft は object 比較で React の bail-out が効かないため、関数更新で同一参照を返して loop を防ぐ。
+  const tradeSetEntryDraft = trade.setEntryDraft
+  const tradeSetEntryPlacing = trade.setEntryPlacing
   useEffect(() => {
     if (phase !== 'analyzing') {
-      trade.setEntryDraft({ sl: null, tp: null })
-      trade.setEntryPlacing(null)
+      tradeSetEntryDraft(prev => (prev.sl === null && prev.tp === null) ? prev : { sl: null, tp: null })
+      tradeSetEntryPlacing(null)
     }
-  }, [phase, currentSymbol, trade])
+  }, [phase, currentSymbol, tradeSetEntryDraft, tradeSetEntryPlacing])
 
   async function handleSkipConfirm(reason: string) {
     await trade.handleSkip(reason)

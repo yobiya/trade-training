@@ -6,7 +6,9 @@
 
 ---
 
-*仕様書 ver 1.65 - 2026/04/29 (§5.1.3 初期表示バー数を全 TF 統一に変更。前 ver 1.64 では TF 別の既定値 `DEFAULT_VISIBLE_BARS_BY_TF`(M5=120 / M15=100 / H1=80 / H4=60 / D1=50 / W1=40 / MN1=24)を持っていたが、縦積みマルチ TF で各チャートのローソク幅 / 表示密度がバラついて見づらかったため、単一定数 `DEFAULT_VISIBLE_BARS = 100` に置換。実装は `constants.ts` の定数差し替え + `Chart.tsx` の参照修正のみ、API / データモデル変更なし。ユーザーが zoom した値はこれまで通り `visibleBarsMemory` で TF 別に保持される)*
+*仕様書 ver 1.66 - 2026/04/30 (§5.1.3 全 TF 統一の `DEFAULT_VISIBLE_BARS = 100` を実際に満たせるよう、`BARS_BY_TF`(MT5 から取得する全バー数)を **全 TF 一律 200 本** に統一。前 ver 1.64-65 で「全 TF 100 本表示」を仕様化したものの、`BARS_BY_TF[W1]=60` / `BARS_BY_TF[MN1]=24` がボトルネックで実挙動は W1 / MN1 のみ少なく表示されていた問題の解消。M5=500・M15=300 等 TF 別に異なっていた本数も一律 200 へ。最新バー集約(設計 §C.3)は「一つ下の TF」の最後の数本だけで足りるため、M5 を 500 で取る必要は無く、200 本で全 TF の表示と集約に十分。frontend `constants.ts` と backend `routers/chart.py` の両方を更新、設計書 §C.3 のアルゴリズム例も連動修正。ブローカーの保有データが 100 本未満の場合は MT5 が返す範囲のみ表示される(broker 側の制約はそのまま))*
+
+*ver 1.65 - 2026/04/29 (§5.1.3 初期表示バー数を全 TF 統一に変更。前 ver 1.64 では TF 別の既定値 `DEFAULT_VISIBLE_BARS_BY_TF`(M5=120 / M15=100 / H1=80 / H4=60 / D1=50 / W1=40 / MN1=24)を持っていたが、縦積みマルチ TF で各チャートのローソク幅 / 表示密度がバラついて見づらかったため、単一定数 `DEFAULT_VISIBLE_BARS = 100` に置換。実装は `constants.ts` の定数差し替え + `Chart.tsx` の参照修正のみ、API / データモデル変更なし。ユーザーが zoom した値はこれまで通り `visibleBarsMemory` で TF 別に保持される)*
 
 *ver 1.64 - 2026/04/29 (§5.1.3 にチャートの表示本数維持を追加。銘柄切替時に毎回 `fitContent()` が走って表示バー数(zoom)がリセットされていた問題の解消。各 TF ごとに「直近の表示幅(visible logical range の `to - from`)」をセッション内のモジュールスコープメモリ(`src/chart/visibleBarsMemory.ts`)で保持し、銘柄切替・初回マウント時は右端を最新バーに合わせてその幅で `setVisibleLogicalRange` する方式に切替。フォールバック既定値 `DEFAULT_VISIBLE_BARS_BY_TF`(M5=120 / M15=100 / H1=80 / H4=60 / D1=50 / W1=40 / MN1=24)を `constants.ts` に追加。ユーザーの Ctrl+ホイール / ドラッグによる zoom 変更は同 TF の次回表示にも引き継がれる。実装は frontend の `Chart.tsx` の bars effect 修正 + 新規 `visibleBarsMemory.ts` 1 ファイル追加のみ、データモデル / backend 変更なし)*
 
