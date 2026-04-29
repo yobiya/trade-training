@@ -61,7 +61,9 @@
 
 ---
 
-*仕様書 ver 1.60 - 2026/04/29 (backend リファクタリング + spec 整合スイープ。設計面: backend `services/session_store.py` 697 行を `session_store/{io.py, serialize.py, __init__.py}` の 3 ファイルパッケージに分割(公開 API 不変、consumers の import 文も不変)。共通 utility を `apps/.../utils/{json_io.py, datetime.py, http.py}` に抽出(`json_default` の重複削除、`ensure_aware_utc` 統一、`HTTPException(404/400)` ファクトリ化)。`routers/_helpers.py` を新設し各 router に散在していた `_ensure_session` を共通化。設計書 §D.1 レイヤ構成図と §D.3 session_store 責務節を更新。仕様面: §13 atomic write セクションを「ver 1.54 で撤去」追記に書換、§16 リリース計画から atomic write 表記を撤去、principles/no-future-info の `TradingStyle.expected_rr` 例(ver 1.50 で全廃)を `Trade.sl ベース` に置換。実装挙動の変更なし、frontend 影響なし)*
+*仕様書 ver 1.61 - 2026/04/29 (§2.8 対象銘柄を **8 ペア → 28 ペア** に拡張。メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せを初期対象とする。frontend `constants.ts` の `SYMBOLS` 配列のみ更新)*
+
+*ver 1.60 - 2026/04/29 (backend リファクタリング + spec 整合スイープ。設計面: backend `services/session_store.py` 697 行を `session_store/{io.py, serialize.py, __init__.py}` の 3 ファイルパッケージに分割(公開 API 不変、consumers の import 文も不変)。共通 utility を `apps/.../utils/{json_io.py, datetime.py, http.py}` に抽出(`json_default` の重複削除、`ensure_aware_utc` 統一、`HTTPException(404/400)` ファクトリ化)。`routers/_helpers.py` を新設し各 router に散在していた `_ensure_session` を共通化。設計書 §D.1 レイヤ構成図と §D.3 session_store 責務節を更新。仕様面: §13 atomic write セクションを「ver 1.54 で撤去」追記に書換、§16 リリース計画から atomic write 表記を撤去、principles/no-future-info の `TradingStyle.expected_rr` 例(ver 1.50 で全廃)を `Trade.sl ベース` に置換。実装挙動の変更なし、frontend 影響なし)*
 
 *ver 1.59 - 2026/04/28 (チャート取得層を白紙再構築。前回 ver 1.58 の TF 別個別取得 + 再帰集約方式は cold load で MT5 がシリアライズして 20 秒以上かかる問題が解消できなかったため、**キャッシュ層撤去 + 単一 chart-stack エンドポイント + 直列フェッチ** に切替。仕様面: §5.1.1 を「最新バーは一つ下の TF を集約して算出」に明記(未来漏れ防止)。実装面: backend に `GET /sessions/{id}/chart-stack` を新設し、M5 → M15 → … → MN1 の順で provider.fetch_ohlc を直列実行、各 TF の最新バーは直前 TF の DataFrame から集約。frontend は `useCharts` から per-TF 並列 fetch / `refreshTails` / `mergeM5Bars` / `loadMoreHistory` を撤去し、chart-stack を単一呼び出しに統一。Chart.tsx の `latestTimeRef` / `isRightExtension` / `update()` 経路は全削除して `setData` + `fitContent` のシンプル版に戻す。`ohlc` テーブルは未使用化、データは残置)*
 

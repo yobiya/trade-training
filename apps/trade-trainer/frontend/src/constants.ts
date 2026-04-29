@@ -1,10 +1,18 @@
 // アプリ全体で参照する業務定数。散在を避け一箇所に集約する。
 // 仕様書の該当セクションをコメントで併記。
 
-// 仕様書 §2.8 対象銘柄(デフォルト 8 ペア)
+// 仕様書 §2.8 対象銘柄(ver 1.61 でメジャー 8 通貨の全 28 ペアに拡張)
 export const SYMBOLS: string[] = [
-  'USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD',
-  'EURJPY', 'GBPJPY', 'AUDJPY', 'EURGBP',
+  // USD ストレート
+  'USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF',
+  // JPY クロス
+  'EURJPY', 'GBPJPY', 'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY',
+  // EUR クロス
+  'EURGBP', 'EURAUD', 'EURNZD', 'EURCAD', 'EURCHF',
+  // GBP クロス
+  'GBPAUD', 'GBPNZD', 'GBPCAD', 'GBPCHF',
+  // AUD / NZD / CAD クロス
+  'AUDNZD', 'AUDCAD', 'AUDCHF', 'NZDCAD', 'NZDCHF', 'CADCHF',
 ]
 
 // 仕様書 §5.1 時間軸 (ver 1.52: M30 撤去 / W1 / MN1 追加)

@@ -72,9 +72,13 @@ CREATE TABLE ohlc (
 ## 2.8 対象銘柄
 - 設定画面でユーザーが指定
 - 有効化した銘柄群を出題対象として使用
-- **初期対象(デフォルト8ペア)**: `USDJPY`, `EURUSD`, `GBPUSD`, `AUDUSD`, `EURJPY`, `GBPJPY`, `AUDJPY`, `EURGBP`
-  - メジャー通貨ペア + 主要クロス円を網羅
-  - ユーザーは設定画面から追加・無効化可能
+- **初期対象(デフォルト 28 ペア、ver 1.61 で 8 → 28 に拡張)**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
+  - USD ストレート: `USDJPY`, `EURUSD`, `GBPUSD`, `AUDUSD`, `NZDUSD`, `USDCAD`, `USDCHF`
+  - JPY クロス: `EURJPY`, `GBPJPY`, `AUDJPY`, `NZDJPY`, `CADJPY`, `CHFJPY`
+  - EUR クロス: `EURGBP`, `EURAUD`, `EURNZD`, `EURCAD`, `EURCHF`
+  - GBP クロス: `GBPAUD`, `GBPNZD`, `GBPCAD`, `GBPCHF`
+  - AUD / NZD / CAD クロス: `AUDNZD`, `AUDCAD`, `AUDCHF`, `NZDCAD`, `NZDCHF`, `CADCHF`
+- ユーザーは設定画面から追加・無効化可能(将来実装)
 
 ## 2.9 データ更新
 - **価格データ**: ユーザーのアクセス時に market-data ライブラリが自動取得・キャッシュ(明示的な更新ボタンは不要)
