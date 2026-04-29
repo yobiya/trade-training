@@ -5,7 +5,8 @@
 すべての作業を始める前に必ず以下を読んでから着手すること。
 
 - **[`docs/WORKFLOW.md`](./docs/WORKFLOW.md)** — 仕様書 / 設計 / コードの三層を保つための作業手順。**例外なく従う**
-- [`docs/spec/README.md`](./docs/spec/README.md) — 仕様書インデックス(章 / 横断方針 / 変更履歴)
+- [`docs/spec/README.md`](./docs/spec/README.md) — 仕様書インデックス(章 / 横断方針)
+- [`docs/CHANGELOG.md`](./docs/CHANGELOG.md) — 仕様書の変更履歴(ver 1.X 単位、append-only)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — 設計ドキュメント(モジュール責務・状態所有・データフロー・横断不変条件)+ [`docs/architecture/drawing-tools.md`](./docs/architecture/drawing-tools.md)(描画モード状態機械)
 
 ## タスク種別の判定
@@ -22,3 +23,4 @@
 - ✗ コードを先に書いて仕様書 / 設計を後回しにする
 - ✗ 静的チェック(`npx tsc --noEmit` / `uv run python -c "import trade_trainer_backend.main"`)をスキップして「確認してください」とユーザーに投げる
 - ✗ 設計上の不変条件違反(警告ログ / assert 違反)を見て見ぬふりする
+- ✗ 仕様書本文や設計書本文に `ver 1.X で〜に変更` のような時系列マーカーを書く(変更履歴は `docs/CHANGELOG.md` に集約する)
