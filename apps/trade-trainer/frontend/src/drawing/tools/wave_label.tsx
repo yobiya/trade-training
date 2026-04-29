@@ -50,15 +50,17 @@ export const waveLabelTool: ToolMetadata = {
     const color = getTimeframeColor(drawing.timeframe)
     const isPreview = drawing.id < 0
 
+    // 仕様書 §5.3: TF 色を背景にしているため、TF 色(青/黄/緑/紫/桃 等)に対して
+    // 視認性が高い濃色のテキストを使う(従来の white では黄/桃/淡紫で潰れていた)。
     return (
       <g opacity={isPreview ? 0.6 : 1}>
-        <circle cx={x} cy={y} r={9} fill={color} />
+        <circle cx={x} cy={y} r={10} fill={color} stroke="#0d1117" strokeWidth={1} />
         <text
           x={x}
           y={y + 4}
           textAnchor="middle"
-          fill="white"
-          fontSize={11}
+          fill="#0d1117"
+          fontSize={12}
           fontWeight="bold"
           fontFamily="monospace"
         >
