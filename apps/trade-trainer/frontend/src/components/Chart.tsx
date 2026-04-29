@@ -342,9 +342,11 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     if (!series || !chart || bars.length === 0) return
     series.setData(bars.map(toCandle))
     if (fittedForTfRef.current !== timeframe) {
+      // §5.1.3: 全 TF でバー幅 / 表示密度を揃えるため、可視 logical 幅は常に `width` 固定
+      // (バー数が `width` 未満の TF では `from` が負値となり、左に空白領域が表示される)。
       const width = getVisibleWidth(timeframe, DEFAULT_VISIBLE_BARS)
       const to = bars.length - 1 + RIGHT_OFFSET
-      const from = Math.max(-RIGHT_OFFSET, to - width)
+      const from = to - width
       chart.timeScale().setVisibleLogicalRange({ from, to })
       fittedForTfRef.current = timeframe
       initialRangeAppliedRef.current = true
