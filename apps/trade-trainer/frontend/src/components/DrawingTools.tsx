@@ -1,12 +1,15 @@
 import type { Drawing, DrawingKind } from '../api/client'
 import { TOOLS } from '../drawing/tools/registry'
+import type { WaveValue } from '../drawing/tools/wave_label'
 
-const WAVE_NUMBERS = [1, 2, 3, 4, 5] as const
+// ver 1.63: 推進波 1-5 + 補正波 A/B/C(全て文字列で統一保存)
+const IMPULSE_WAVES: readonly WaveValue[] = ['1', '2', '3', '4', '5'] as const
+const CORRECTIVE_WAVES: readonly WaveValue[] = ['A', 'B', 'C'] as const
 
 type Props = {
   activeTool: DrawingKind | null
-  activeWave: 1 | 2 | 3 | 4 | 5 | null
-  onSelectTool: (tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => void
+  activeWave: WaveValue | null
+  onSelectTool: (tool: DrawingKind | null, wave?: WaveValue) => void
   drawings: Drawing[]
   onRemove: (id: number) => void
   digits: number
@@ -15,7 +18,7 @@ type Props = {
 // 通常描画ツールの順序(wave_label は波動セクションで別途表示)
 const TOOL_ORDER: DrawingKind[] = ['line', 'trendline', 'fibonacci']
 
-function hintFor(tool: DrawingKind, wave: 1 | 2 | 3 | 4 | 5 | null): string {
+function hintFor(tool: DrawingKind, wave: WaveValue | null): string {
   switch (tool) {
     case 'line': return 'チャートをクリックで追加 / ESC で中止'
     case 'trendline': return '2 点をクリックで引く / ESC で中止'
@@ -66,8 +69,8 @@ export function DrawingTools({
       </div>
 
       <div className="drawing-toolbar wave-toolbar">
-        <span className="wave-label-header">波動</span>
-        {WAVE_NUMBERS.map(n => {
+        <span className="wave-label-header">推進</span>
+        {IMPULSE_WAVES.map(n => {
           const active = activeTool === 'wave_label' && activeWave === n
           return (
             <button
@@ -76,6 +79,21 @@ export function DrawingTools({
               className={`tool-btn wave-btn ${active ? 'active' : ''}`}
               onClick={() => onSelectTool(active ? null : 'wave_label', n)}
               title={`波動 ${n}`}
+            >
+              {n}
+            </button>
+          )
+        })}
+        <span className="wave-label-header wave-label-header-abc">補正</span>
+        {CORRECTIVE_WAVES.map(n => {
+          const active = activeTool === 'wave_label' && activeWave === n
+          return (
+            <button
+              key={n}
+              type="button"
+              className={`tool-btn wave-btn wave-btn-abc ${active ? 'active' : ''}`}
+              onClick={() => onSelectTool(active ? null : 'wave_label', n)}
+              title={`補正波 ${n}`}
             >
               {n}
             </button>

@@ -12,7 +12,7 @@ class CreateDrawingRequest(BaseModel):
       - line(水平線):   { "price": float }
       - trendline:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
       - fibonacci:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
-      - wave_label:     { "t": int, "price": float, "wave": 1-5 }
+      - wave_label:     { "t": int, "price": float, "wave": str ('1'|'2'|'3'|'4'|'5'|'A'|'B'|'C', ver 1.63 で文字列統一)}
 
     `symbol` は統合フロー(§6.1)対応: 銘柄別に描画を紐付け、銘柄切替時に該当銘柄のみ表示する。
     """

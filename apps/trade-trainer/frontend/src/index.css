@@ -875,17 +875,22 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 }
 .wave-toolbar {
   margin-top: 4px;
+  flex-wrap: wrap;
 }
 .wave-label-header {
   font-size: 11px;
   color: var(--text-dim);
   margin-right: 2px;
 }
+.wave-label-header-abc {
+  margin-left: 8px;
+}
 .wave-btn {
   min-width: 28px;
   font-weight: 600;
   padding: 4px 6px;
 }
+.wave-btn-abc.active { background: #f0883e; border-color: #f0883e; color: #0d1117; }
 .event-tooltip {
   background: rgba(13, 17, 23, 0.96);
   border: 1px solid var(--border);

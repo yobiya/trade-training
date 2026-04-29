@@ -3,7 +3,7 @@ import { lineTool } from './tools/line'
 import { fibonacciTool, getFibPoints } from './tools/fibonacci'
 import { findHit } from './tools/registry'
 import { trendlineTool, getTrendlinePoints } from './tools/trendline'
-import { waveLabelTool, getWaveLabelData } from './tools/wave_label'
+import { waveLabelTool, getWaveLabelData, type WaveValue } from './tools/wave_label'
 import type {
   ChartApi,
   CreateDrawingBody,
@@ -18,7 +18,8 @@ import type {
  */
 
 type PP = { t: number; price: number }
-type Wave = 1 | 2 | 3 | 4 | 5
+// ver 1.63: 推進波 1-5 + 補正波 A/B/C は wave_label.tsx に集約
+type Wave = WaveValue
 
 export type DrawingState =
   | { kind: 'idle'; cursor: string; hoveredId: number | null }

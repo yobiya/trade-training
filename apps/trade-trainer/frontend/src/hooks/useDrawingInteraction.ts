@@ -19,6 +19,7 @@ import type {
   PointPx,
   UpdateDrawingPatch,
 } from '../drawing/types'
+import type { WaveValue } from '../drawing/tools/wave_label'
 
 type Params = {
   drawings: Drawing[]
@@ -36,10 +37,10 @@ export type DrawingInteraction = {
   hoveredId: number | null
   /** 現在アクティブな作成ツール(drawing-* 状態のみ非 null)。ボタンのハイライトに使う。 */
   activeTool: DrawingKind | null
-  /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。 */
-  activeWave: 1 | 2 | 3 | 4 | 5 | null
+  /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。ver 1.63 で 1-5 + A/B/C に拡張。 */
+  activeWave: WaveValue | null
   /** ツールボタンから呼ぶ。null で Idle に戻る。wave_label の場合は wave 番号必須。 */
-  selectTool: (tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => void
+  selectTool: (tool: DrawingKind | null, wave?: WaveValue) => void
   /** Chart に繋ぐイベント中継 */
   handlers: {
     onChartClick: (price: number, time: number | null, px: PointPx) => void
@@ -92,7 +93,7 @@ export function useDrawingInteraction({
     setState(next)
   }, [ctx])
 
-  const selectTool = useCallback((tool: DrawingKind | null, wave?: 1 | 2 | 3 | 4 | 5) => {
+  const selectTool = useCallback((tool: DrawingKind | null, wave?: WaveValue) => {
     dispatch({ type: 'select-tool', tool, wave })
   }, [dispatch])
 
