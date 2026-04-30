@@ -53,6 +53,7 @@ data/sessions/
     "id": "uuid-...",
     "symbol": "USDJPY",
     "direction": "buy",                // buy | sell
+    "entry_tf": "M5",                  // §5.1.5 エントリー時のフォーカス TF。advance 単位 / マーカー描画 TF はこれを参照
     "entry_time": "...",
     "entry_price": 150.0,
     "sl": 149.8,

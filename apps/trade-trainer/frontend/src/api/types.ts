@@ -68,6 +68,7 @@ export type TradeResponse = {
   id: string
   symbol: string
   direction: 'buy' | 'sell'
+  entry_tf: string                           // §5.1.5 エントリー時のフォーカス TF
   entry_price: number
   sl: number | null
   tp: number | null

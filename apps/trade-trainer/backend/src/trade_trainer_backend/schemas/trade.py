@@ -8,9 +8,11 @@ class EnterTradeRequest(BaseModel):
     根拠・シナリオ等は横断メモ(Session.note)/ 銘柄別メモ(SessionCandidate.memo)に自由記述。
 
     統合フロー(§6.1)対応: エントリーアクションで銘柄が確定するため、`symbol` を必須にする。
+    `entry_tf`(§5.1.5 フォーカス TF)はエントリー時の advance 単位 / マーカー描画 TF として保存する。
     """
     symbol: str
     direction: Literal["buy", "sell"]
+    entry_tf: str
     price: float
     sl: float
     tp: float | None = None
@@ -26,6 +28,7 @@ class TradeResponse(BaseModel):
     id: str
     symbol: str
     direction: str
+    entry_tf: str
     entry_price: float
     sl: float
     tp: float | None

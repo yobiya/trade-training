@@ -153,8 +153,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string>(SYMBOLS[0])
   // 仕様書 §6.1 / §6.2: 銘柄セレクタの絞り込みモード
   const [symbolMode, setSymbolMode] = useState<'all' | 'star'>('all')
-  const [entryTf, setEntryTf] = useState('M5')
-  const [activeTf, setActiveTf] = useState('M5')
+  // §5.1.5: 旧 entryTf + activeTf を統合した「フォーカス TF」。クリックで明示選択する。
+  const [focusedTf, setFocusedTf] = useState('M5')
   const [hiddenTfs, setHiddenTfs] = useState<Set<string>>(new Set())
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
   const [skipping, setSkipping] = useState(false)
@@ -188,13 +188,12 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   // 表示順序: エントリー足を最上段
   const visibleTfs = useMemo(() => {
-    const rest = TIMEFRAMES.filter(tf => tf !== entryTf && !hiddenTfs.has(tf))
-    const head = hiddenTfs.has(entryTf) ? [] : [entryTf]
-    return [...head, ...rest]
-  }, [entryTf, hiddenTfs])
+    // §5.1.1: 並び順は TF 固定順 (M5 → MN1)。フォーカス TF で並び替えない。
+    return TIMEFRAMES.filter(tf => !hiddenTfs.has(tf))
+  }, [hiddenTfs])
 
   const { barsByTf, loadingByTf, currentPrice, reloadStack, loadMoreHistory } = useCharts(
-    sessionId, currentSymbol, visibleTfs, entryTf,
+    sessionId, currentSymbol, visibleTfs, focusedTf,
   )
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } =
     useDrawings(sessionId, currentSymbol)
@@ -207,7 +206,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   // トレード操作系を hook に集約(2026-04-29 で SessionPage から分離)
   const trade = useTradeFlow({
-    sessionId, currentSymbol, entryTf,
+    sessionId, currentSymbol, focusedTf,
     reloadStack,
     setSession, setActiveTrade, setLatestTrade,
   })
@@ -217,10 +216,11 @@ export function SessionPage({ sessionId, onBack }: Props) {
     ? activeTrade
     : (phase === 'reviewing' ? latestTrade : null)
 
-  // §5.5.4: エントリー TF に渡す三角マーカー(エントリー / 決済時刻)
+  // §5.5.4: Trade.entry_tf チャートに渡す三角マーカー(エントリー / 決済時刻)
   const entryMarkers = useMemo<ChartMarker[]>(() => {
     if (!displayTrade) return []
-    const entryBars = barsByTf[entryTf] ?? []
+    const tradeTf = displayTrade.entry_tf || 'M5'
+    const entryBars = barsByTf[tradeTf] ?? []
     if (entryBars.length === 0) return []
     const out: ChartMarker[] = []
     const entryUnix = Math.floor(new Date(displayTrade.entry_time).getTime() / 1000)
@@ -252,7 +252,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
       }
     }
     return out
-  }, [displayTrade, barsByTf, entryTf])
+  }, [displayTrade, barsByTf])
 
   // §5.4 経済指標: 設定読み込み + 表示期間内のイベント取得
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
@@ -289,8 +289,13 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   const [hoveredEvent, setHoveredEvent] = useState<EconomicEvent | null>(null)
 
+  // §5.1.5: マウスホバーではフォーカスを変えず、chartApiRef だけ更新する
+  // (経済指標ホバー検出 / 描画オーバーレイ用)。フォーカス自体はクリックで明示変更。
   function handleChartMouseEnter(tf: string) {
-    setActiveTf(tf)
+    chartApiRef.current = chartHandles.get(tf)?.api ?? null
+  }
+  function handleChartFocus(tf: string) {
+    setFocusedTf(tf)
     chartApiRef.current = chartHandles.get(tf)?.api ?? null
   }
 
@@ -334,7 +339,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   const interaction = useDrawingInteraction({
     drawings,
-    activeTimeframe: activeTf,
+    activeTimeframe: focusedTf,
     chartApiRef,
     onCreate: handleCreateDrawing,
     onUpdate: handleUpdateDrawing,
@@ -547,8 +552,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
           <span className="position">{formatJST(session?.current_position, '')}</span>
         </div>
         <TimeframeSelector
-          entryTf={entryTf}
-          onEntryChange={setEntryTf}
           hiddenTfs={hiddenTfs}
           onToggleVisibility={toggleTfVisibility}
         />
@@ -566,8 +569,9 @@ export function SessionPage({ sessionId, onBack }: Props) {
           {visibleTfs.map(tf => (
             <div
               key={tf}
-              className={`stacked-chart ${activeTf === tf ? 'active' : ''}`}
+              className={`stacked-chart ${focusedTf === tf ? 'focused' : ''}`}
               onMouseEnter={() => handleChartMouseEnter(tf)}
+              onMouseDownCapture={() => handleChartFocus(tf)}
             >
               <div className="tf-badge" style={{ background: getTimeframeColor(tf) }}>{tf}</div>
               {loadingByTf[tf] && (
@@ -582,17 +586,17 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 bars={barsByTf[tf] ?? []}
                 timeframe={tf}
                 digits={session?.digits}
-                cursor={activeTf === tf ? (trade.entryPlacing ? 'crosshair' : interaction.cursor) : undefined}
+                cursor={focusedTf === tf ? (trade.entryPlacing ? 'crosshair' : interaction.cursor) : undefined}
                 onNeedMoreHistory={(earliest) => void loadMoreHistory(tf, earliest)}
-                onChartClick={activeTf === tf ? handleChartClick : undefined}
-                onMouseMove={activeTf === tf ? (price, time, px) => {
+                onChartClick={focusedTf === tf ? handleChartClick : undefined}
+                onMouseMove={focusedTf === tf ? (price, time, px) => {
                   interaction.handlers.onMouseMove(price, time, px)
                   setHoveredEvent(findNearestEvent(px.x))
                 } : undefined}
-                onMouseDown={activeTf === tf ? interaction.handlers.onMouseDown : undefined}
-                onMouseUp={activeTf === tf ? interaction.handlers.onMouseUp : undefined}
+                onMouseDown={focusedTf === tf ? interaction.handlers.onMouseDown : undefined}
+                onMouseUp={focusedTf === tf ? interaction.handlers.onMouseUp : undefined}
                 priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft, displayTrade, session?.digits ?? 5)}
-                markers={tf === entryTf ? entryMarkers : undefined}
+                markers={displayTrade && tf === (displayTrade.entry_tf || 'M5') ? entryMarkers : undefined}
                 indicators={indicators}
               />
               <EventOverlay
@@ -600,14 +604,14 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 events={events}
                 shadingBeforeMin={settings?.event_shading_before_min ?? 5}
                 shadingAfterMin={settings?.event_shading_after_min ?? 30}
-                hoveredEvent={activeTf === tf ? hoveredEvent : null}
+                hoveredEvent={focusedTf === tf ? hoveredEvent : null}
               />
               <DrawingOverlay
                 chartHandle={chartHandles.get(tf) ?? null}
                 drawings={drawings}
-                preview={activeTf === tf ? interaction.preview : null}
+                preview={focusedTf === tf ? interaction.preview : null}
                 activeTimeframe={tf}
-                hoveredId={activeTf === tf ? interaction.hoveredId : null}
+                hoveredId={focusedTf === tf ? interaction.hoveredId : null}
               />
             </div>
           ))}

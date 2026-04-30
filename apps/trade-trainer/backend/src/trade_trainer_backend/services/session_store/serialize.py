@@ -36,6 +36,7 @@ def trade_from_dict(data: Any) -> Trade | None:
         id=data.get("id", ""),
         symbol=data.get("symbol", ""),
         direction=data.get("direction", "buy"),
+        entry_tf=data.get("entry_tf", "M5"),  # 旧データに entry_tf が無ければ M5 で読む
         entry_time=parse_iso_datetime(data.get("entry_time")) or datetime.now(timezone.utc),
         entry_price=float(data.get("entry_price", 0)),
         sl=_opt_float(data.get("sl")),
@@ -56,6 +57,7 @@ def trade_to_dict(t: Trade) -> dict[str, Any]:
         "id": t.id,
         "symbol": t.symbol,
         "direction": t.direction,
+        "entry_tf": t.entry_tf,
         "entry_time": t.entry_time,
         "entry_price": t.entry_price,
         "sl": t.sl,

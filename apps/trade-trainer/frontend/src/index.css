@@ -584,14 +584,15 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 @keyframes chart-spin {
   to { transform: rotate(360deg); }
 }
-.stacked-chart.active::before {
+/* §5.1.5 フォーカス TF: クリックで明示選択された TF にハイライト枠を表示 */
+.stacked-chart.focused::before {
   content: '';
   position: absolute;
   inset: 0;
   border: 2px solid var(--accent);
   pointer-events: none;
   z-index: 6;
-  opacity: 0.35;
+  opacity: 0.55;
 }
 .tf-badge {
   position: absolute;

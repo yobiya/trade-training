@@ -22,7 +22,8 @@ export type TradeFlowApi = {
 type Params = {
   sessionId: string
   currentSymbol: string
-  entryTf: string
+  /** §5.1.5 フォーカス TF: advance 単位 / エントリー時の Trade.entry_tf として使う */
+  focusedTf: string
   reloadStack: () => Promise<void>
   setSession: (s: TradeSession | null) => void
   setActiveTrade: (t: TradeResponse | null) => void
@@ -36,7 +37,7 @@ type Params = {
  * `useSessionFetch` の setter は **props 注入** で受ける(双方向依存を避けるため)。
  */
 export function useTradeFlow({
-  sessionId, currentSymbol, entryTf,
+  sessionId, currentSymbol, focusedTf,
   reloadStack, setSession, setActiveTrade, setLatestTrade,
 }: Params): TradeFlowApi {
   const { notify } = useNotify()
@@ -60,6 +61,7 @@ export function useTradeFlow({
       const trade = await api.trades.enter(sessionId, {
         symbol: currentSymbol,
         direction: args.direction,
+        entry_tf: focusedTf,
         price: args.price,
         sl: args.sl,
         tp: args.tp,
@@ -76,7 +78,7 @@ export function useTradeFlow({
     } finally {
       setLoading(false)
     }
-  }, [sessionId, currentSymbol, refreshSession, setActiveTrade, setLatestTrade, notify])
+  }, [sessionId, currentSymbol, focusedTf, refreshSession, setActiveTrade, setLatestTrade, notify])
 
   const handleExit = useCallback<TradeFlowApi['handleExit']>(async (price, reason) => {
     setLoading(true)
@@ -97,8 +99,8 @@ export function useTradeFlow({
   const handleAdvance = useCallback<TradeFlowApi['handleAdvance']>(async (n = 1) => {
     setAdvancing(true)
     try {
-      // 仕様 §5.1.1: 「+N 本」は entry TF の N バー。backend は M5 換算本数を受ける。
-      const m5Bars = Math.max(1, n * Math.round((TIMEFRAME_MINUTES[entryTf] ?? 5) / 5))
+      // 仕様 §5.1.1: 「+N 本」はフォーカス TF の N バー。backend は M5 換算本数を受ける。
+      const m5Bars = Math.max(1, n * Math.round((TIMEFRAME_MINUTES[focusedTf] ?? 5) / 5))
       const res = await api.chart.advance(sessionId, m5Bars, currentSymbol)
       await reloadStack()
       if (res.trade_auto_closed) {
@@ -118,7 +120,7 @@ export function useTradeFlow({
     } finally {
       setAdvancing(false)
     }
-  }, [sessionId, currentSymbol, entryTf, reloadStack, refreshSession, setActiveTrade, setLatestTrade, notify])
+  }, [sessionId, currentSymbol, focusedTf, reloadStack, refreshSession, setActiveTrade, setLatestTrade, notify])
 
   const handleSkip = useCallback<TradeFlowApi['handleSkip']>(async (reason) => {
     try {

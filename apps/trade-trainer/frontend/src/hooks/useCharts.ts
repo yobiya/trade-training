@@ -8,7 +8,7 @@ export type ChartsApi = {
   barsByTf: Record<string, OhlcBar[]>
   /** TF 別の loading フラグ。chart-stack 受信前は全 TF が true。 */
   loadingByTf: Record<string, boolean>
-  /** エントリー足の最新バー終値(未取得時は null) */
+  /** フォーカス TF の最新バー終値(未取得時は null) */
   currentPrice: number | null
   /** 全 TF を再取得する(銘柄切替 / advance 後の追従用) */
   reloadStack: () => Promise<void>
@@ -27,7 +27,7 @@ export function useCharts(
   sessionId: string,
   symbol: string | null | undefined,
   timeframes: string[],
-  entryTf: string,
+  focusedTf: string,
 ): ChartsApi {
   const { notify } = useNotify()
   const [barsByTf, setBarsByTf] = useState<Record<string, OhlcBar[]>>({})
@@ -37,8 +37,8 @@ export function useCharts(
   const historyLoadingRef = useRef<Record<string, boolean>>({})
   const historyExhaustedRef = useRef<Record<string, boolean>>({})
 
-  const entryBars = barsByTf[entryTf] ?? []
-  const currentPrice = entryBars.length > 0 ? entryBars[entryBars.length - 1].c : null
+  const focusedBars = barsByTf[focusedTf] ?? []
+  const currentPrice = focusedBars.length > 0 ? focusedBars[focusedBars.length - 1].c : null
 
   const tfsKey = [...timeframes].sort().join(',')
   const effectiveSymbol = symbol || ''

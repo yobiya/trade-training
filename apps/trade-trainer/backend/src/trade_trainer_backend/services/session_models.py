@@ -36,6 +36,7 @@ class Trade:
     id: str
     symbol: str
     direction: str                             # 'buy' | 'sell'
+    entry_tf: str                              # §5.1.5 エントリー時のフォーカス TF (M5 / M15 / ... / MN1)
     entry_time: datetime
     entry_price: float
     sl: float | None

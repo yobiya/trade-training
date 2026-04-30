@@ -128,6 +128,7 @@ export const api = {
     enter: (sessionId: string, body: {
       symbol: string
       direction: 'buy' | 'sell'
+      entry_tf: string
       price: number
       sl: number
       tp?: number
