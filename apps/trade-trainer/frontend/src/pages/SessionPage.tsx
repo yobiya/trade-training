@@ -597,7 +597,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 onMouseUp={focusedTf === tf ? interaction.handlers.onMouseUp : undefined}
                 priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft, displayTrade, session?.digits ?? 5)}
                 markers={displayTrade && tf === (displayTrade.entry_tf || 'M5') ? entryMarkers : undefined}
-                indicators={indicators}
+                indicators={indicators.filter(i => i.timeframe === tf)}
               />
               <EventOverlay
                 chartHandle={chartHandles.get(tf) ?? null}
@@ -639,12 +639,13 @@ export function SessionPage({ sessionId, onBack }: Props) {
             />
           )}
 
-          <IndicatorPanel active={indicators} onChange={setIndicators} />
+          <IndicatorPanel active={indicators} focusedTf={focusedTf} onChange={setIndicators} />
           <DrawingTools
             activeTool={interaction.activeTool}
             activeWave={interaction.activeWave}
             onSelectTool={interaction.selectTool}
-            drawings={drawings}
+            drawings={drawings.filter(d => d.timeframe === focusedTf)}
+            focusedTf={focusedTf}
             onRemove={(id) => void removeDrawing(id)}
             digits={session?.digits ?? 5}
           />

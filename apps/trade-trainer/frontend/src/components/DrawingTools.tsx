@@ -10,7 +10,9 @@ type Props = {
   activeTool: DrawingKind | null
   activeWave: WaveValue | null
   onSelectTool: (tool: DrawingKind | null, wave?: WaveValue) => void
+  /** §5.3: フォーカス TF で作成された描画のみが渡される(SessionPage 側でフィルタ済み) */
   drawings: Drawing[]
+  focusedTf: string
   onRemove: (id: number) => void
   digits: number
 }
@@ -45,7 +47,7 @@ function describe(d: Drawing, digits: number): string {
 }
 
 export function DrawingTools({
-  activeTool, activeWave, onSelectTool, drawings, onRemove, digits,
+  activeTool, activeWave, onSelectTool, drawings, focusedTf, onRemove, digits,
 }: Props) {
   return (
     <div className="drawing-tools">
@@ -105,12 +107,12 @@ export function DrawingTools({
         <span className="drawing-hint">{hintFor(activeTool, activeWave)}</span>
       )}
 
-      {drawings.length > 0 && (
+      <div className="drawing-list-header">描画一覧 [{focusedTf}]</div>
+      {drawings.length > 0 ? (
         <ul className="drawing-list">
           {drawings.map(d => (
             <li key={d.id} className="drawing-item">
               <span className="drawing-kind">{describe(d, digits)}</span>
-              {d.timeframe && <span className="drawing-tf">({d.timeframe})</span>}
               <button
                 type="button"
                 className="drawing-remove"
@@ -120,6 +122,8 @@ export function DrawingTools({
             </li>
           ))}
         </ul>
+      ) : (
+        <div className="drawing-list-empty">{focusedTf} に描画なし</div>
       )}
     </div>
   )

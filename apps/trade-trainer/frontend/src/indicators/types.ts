@@ -6,10 +6,12 @@ export type IndicatorType = 'SMA' | 'EMA20' | 'EMA200' | 'RSI'
 export type IndicatorParams = { period: number }
 
 export type IndicatorConfig = {
-  /** 一意キー(type と params の組から生成)。Chart が Series インスタンスの同一性を判別するのに使う */
+  /** 一意キー(type + params + timeframe の組から生成)。Chart が Series インスタンスの同一性を判別するのに使う */
   key: string
   type: IndicatorType
   params: IndicatorParams
+  /** §5.2.1: 作成時のフォーカス TF。この TF のチャートにのみ描画される */
+  timeframe: string
   color: string
   /** 線の太さ(lightweight-charts の LineWidth: 1-4)。未指定時は 1 */
   width?: 1 | 2 | 3 | 4
@@ -33,6 +35,6 @@ export type IndicatorSpec = {
   compute(bars: OhlcBar[], params: IndicatorParams): IndicatorPoint[]
 }
 
-export function indicatorKey(type: IndicatorType, params: IndicatorParams): string {
-  return `${type}-${params.period}`
+export function indicatorKey(type: IndicatorType, params: IndicatorParams, timeframe: string): string {
+  return `${type}-${params.period}-${timeframe}`
 }

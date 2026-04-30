@@ -42,13 +42,14 @@ export const INDICATORS: Record<IndicatorType, IndicatorSpec> = {
   },
 }
 
-/** タイプから既定パラメータの IndicatorConfig を生成する */
-export function defaultIndicatorConfig(type: IndicatorType): IndicatorConfig {
+/** タイプとフォーカス TF から既定パラメータの IndicatorConfig を生成する(§5.2.1) */
+export function defaultIndicatorConfig(type: IndicatorType, timeframe: string): IndicatorConfig {
   const spec = INDICATORS[type]
   return {
-    key: indicatorKey(type, spec.defaultParams),
+    key: indicatorKey(type, spec.defaultParams, timeframe),
     type,
     params: spec.defaultParams,
+    timeframe,
     color: spec.defaultColor,
     width: spec.defaultWidth ?? 1,
   }

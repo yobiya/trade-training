@@ -3,25 +3,28 @@ import type { IndicatorConfig, IndicatorType } from '../indicators/types'
 
 type Props = {
   active: IndicatorConfig[]
+  /** §5.2.1: フォーカス TF のインジケーターのみをパネルに表示し、トグル ON はその TF にスコープして追加 */
+  focusedTf: string
   onChange: (next: IndicatorConfig[]) => void
 }
 
 const ORDER: IndicatorType[] = ['SMA', 'EMA20', 'EMA200', 'RSI']
 
-export function IndicatorPanel({ active, onChange }: Props) {
-  const isActive = (type: IndicatorType) => active.some(a => a.type === type)
+export function IndicatorPanel({ active, focusedTf, onChange }: Props) {
+  const isActive = (type: IndicatorType) =>
+    active.some(a => a.type === type && a.timeframe === focusedTf)
 
   function toggle(type: IndicatorType) {
     if (isActive(type)) {
-      onChange(active.filter(a => a.type !== type))
+      onChange(active.filter(a => !(a.type === type && a.timeframe === focusedTf)))
     } else {
-      onChange([...active, defaultIndicatorConfig(type)])
+      onChange([...active, defaultIndicatorConfig(type, focusedTf)])
     }
   }
 
   return (
     <div className="indicator-panel">
-      <div className="indicator-label">インジケーター</div>
+      <div className="indicator-label">インジケーター [{focusedTf}]</div>
       <div className="indicator-chips">
         {ORDER.map(type => {
           const spec = INDICATORS[type]
@@ -34,7 +37,7 @@ export function IndicatorPanel({ active, onChange }: Props) {
               type="button"
               className={`chip ${on ? 'active' : ''}`}
               onClick={() => toggle(type)}
-              title={`${spec.label}(${spec.defaultParams.period})`}
+              title={`${spec.label}(${spec.defaultParams.period}) - ${focusedTf}`}
             >
               {spec.label} {spec.defaultParams.period}
             </button>

@@ -938,6 +938,18 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .event-tooltip-values td:last-child {
   text-align: right;
 }
+.drawing-list-header {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.drawing-list-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 2px 0;
+}
 .drawing-list {
   list-style: none;
   padding: 0;
