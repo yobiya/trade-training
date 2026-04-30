@@ -5,13 +5,15 @@ import type {
   IPriceLine,
   ISeriesApi,
   CandlestickData,
+  Logical,
   LogicalRange,
   MouseEventParams,
+  SeriesMarker,
   Time,
 } from 'lightweight-charts'
 import type { OhlcBar } from '../api/client'
 import { getVisibleWidth, setVisibleWidth } from '../chart/visibleBarsMemory'
-import { DEFAULT_VISIBLE_BARS } from '../constants'
+import { DEFAULT_VISIBLE_BARS, TIMEFRAME_MINUTES } from '../constants'
 import type { ChartApi, PointPx } from '../drawing/types'
 import { INDICATORS } from '../indicators/registry'
 import type { IndicatorConfig } from '../indicators/types'
@@ -21,6 +23,16 @@ export type PriceLine = {
   price: number
   label?: string
   color?: string
+}
+
+/** §5.5.4 エントリー / 決済の縦マーカー(エントリー TF のみ表示)。 */
+export type ChartMarker = {
+  /** バー時刻に丸めた Unix 秒(`SeriesMarker.time` が要求する) */
+  time: number
+  position: 'aboveBar' | 'belowBar'
+  shape: 'arrowUp' | 'arrowDown'
+  color: string
+  text?: string
 }
 
 export type ChartHandle = {
@@ -61,6 +73,8 @@ type Props = {
   onMouseUp?: (price: number | null, time: number | null, px: PointPx) => void
   /** チャートに重ねて表示する価格線。 */
   priceLines?: PriceLine[]
+  /** §5.5.4 エントリー / 決済のマーカー(エントリー TF のチャートにのみ渡す)。 */
+  markers?: ChartMarker[]
   /** チャートに重ねて表示するインジケーター。 */
   indicators?: IndicatorConfig[]
 }
@@ -85,7 +99,7 @@ const RIGHT_OFFSET = 4
 export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   bars, timeframe, cursor, digits, onNeedMoreHistory,
   onChartClick, onMouseMove, onMouseDown, onMouseUp,
-  priceLines, indicators,
+  priceLines, markers, indicators,
 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -116,6 +130,56 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   useEffect(() => { onMouseUpRef.current = onMouseUp }, [onMouseUp])
   useEffect(() => { tfRef.current = timeframe }, [timeframe])
 
+  /**
+   * §5.3: バー範囲外(右余白・左余白)のクリック / マウス位置でも描画ができるよう、
+   * `coordinateToTime` が null を返す位置では `coordinateToLogical` + TF 間隔で線形外挿する。
+   * 返り値はバーが存在する範囲ならライブラリ値、それ以外は外挿値(Unix 秒)。
+   */
+  function pxToTime(pxX: number): number | null {
+    const chart = chartRef.current
+    if (!chart) return null
+    const ts = chart.timeScale()
+    const logical = ts.coordinateToLogical(pxX)
+    if (logical == null) return null
+    const bars = barsRef.current
+    if (bars.length === 0) return null
+    const lastIdx = bars.length - 1
+    if (logical >= 0 && logical <= lastIdx) {
+      const t = ts.coordinateToTime(pxX)
+      return typeof t === 'number' ? t : null
+    }
+    const tfSec = (TIMEFRAME_MINUTES[tfRef.current] ?? 5) * 60
+    if (logical > lastIdx) {
+      return Math.floor(bars[lastIdx].t + (logical - lastIdx) * tfSec)
+    }
+    return Math.floor(bars[0].t + logical * tfSec)
+  }
+
+  /**
+   * §5.3: バー範囲外の時刻を持つ描画(トレンドラインの未来側端点等)が消えないよう、
+   * `timeToCoordinate` が null を返す時刻では TF 間隔換算の論理 index 経由で x を求める。
+   */
+  function timeToPx(time: number): number | null {
+    const chart = chartRef.current
+    if (!chart) return null
+    const ts = chart.timeScale()
+    const x = ts.timeToCoordinate(time as Time)
+    if (x !== null) return x
+    const bars = barsRef.current
+    if (bars.length === 0) return null
+    const tfSec = (TIMEFRAME_MINUTES[tfRef.current] ?? 5) * 60
+    const lastIdx = bars.length - 1
+    let logical: number
+    if (time > bars[lastIdx].t) {
+      logical = lastIdx + (time - bars[lastIdx].t) / tfSec
+    } else if (time < bars[0].t) {
+      logical = (time - bars[0].t) / tfSec
+    } else {
+      return null
+    }
+    return ts.logicalToCoordinate(logical as Logical) ?? null
+  }
+
   useImperativeHandle(ref, () => ({
     get api(): ChartApi {
       return {
@@ -124,11 +188,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
           const p = seriesRef.current?.coordinateToPrice(y)
           return typeof p === 'number' ? p : null
         },
-        timeToX: (time: number) => chartRef.current?.timeScale().timeToCoordinate(time as Time) ?? null,
-        xToTime: (x: number) => {
-          const t = chartRef.current?.timeScale().coordinateToTime(x)
-          return typeof t === 'number' ? t : null
-        },
+        timeToX: (time: number) => timeToPx(time),
+        xToTime: (x: number) => pxToTime(x),
         setScrollEnabled: (enabled: boolean) => {
           chartRef.current?.applyOptions({
             handleScroll: { pressedMouseMove: enabled, horzTouchDrag: enabled, vertTouchDrag: enabled },
@@ -237,7 +298,8 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       if (!param.point || !seriesRef.current) return
       const price = seriesRef.current.coordinateToPrice(param.point.y)
       if (price == null) return
-      const time = typeof param.time === 'number' ? param.time : null
+      // §5.3: バー範囲外でも描画できるよう、param.time が無い場合は外挿で時刻を求める
+      const time = typeof param.time === 'number' ? param.time : pxToTime(param.point.x)
       onChartClickRef.current?.(price, time, { x: param.point.x, y: param.point.y })
     }
     chart.subscribeClick(clickHandler)
@@ -261,16 +323,13 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     const mmHandler = (e: MouseEvent) => {
       const px = toPx(e)
       const price = seriesRef.current ? seriesRef.current.coordinateToPrice(px.y) : null
-      const tRaw = chartRef.current?.timeScale().coordinateToTime(px.x)
-      const time = typeof tRaw === 'number' ? tRaw : null
+      const time = pxToTime(px.x)
       onMouseMoveRef.current?.(typeof price === 'number' ? price : null, time, px)
     }
     const convert = (px: PointPx): { price: number | null; time: number | null } => {
       const rawPrice = seriesRef.current?.coordinateToPrice(px.y)
       const price = typeof rawPrice === 'number' ? rawPrice : null
-      const rawTime = chartRef.current?.timeScale().coordinateToTime(px.x)
-      const time = typeof rawTime === 'number' ? rawTime : null
-      return { price, time }
+      return { price, time: pxToTime(px.x) }
     }
     const mdHandler = (e: MouseEvent) => {
       if (e.button !== 0) return
@@ -394,6 +453,20 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       }
     }
   }, [priceLines])
+
+  // §5.5.4 マーカー: setMarkers([]) でクリア + 一括上書き(差分管理は不要)
+  useEffect(() => {
+    const series = seriesRef.current
+    if (!series) return
+    const next: SeriesMarker<Time>[] = (markers ?? []).map(m => ({
+      time: m.time as Time,
+      position: m.position,
+      shape: m.shape,
+      color: m.color,
+      text: m.text,
+    }))
+    series.setMarkers(next)
+  }, [markers])
 
   // インジケーターの差分更新(仕様書 §5.2)。
   // - overlay: ローソク足と同じ右側価格軸に重ねる

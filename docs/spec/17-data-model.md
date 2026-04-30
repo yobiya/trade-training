@@ -74,7 +74,7 @@ data/sessions/
   "drawings": [                        // 描画オブジェクト配列
     {
       "id": 1,
-      "symbol": "USDJPY",              // 銘柄別紐付け §5.3 / §5.5
+      "symbol": "USDJPY",              // 銘柄別紐付け §5.3 / §5.6
       "kind": "line",                  // line | trendline | fibonacci | wave_label
       "data": { ... },                 // 座標データ(kind ごとに異なる。wave_label の wave は文字列 '1'|'2'|'3'|'4'|'5'|'A'|'B'|'C')
       "label": null,

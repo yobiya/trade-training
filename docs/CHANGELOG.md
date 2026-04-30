@@ -6,7 +6,11 @@
 
 ---
 
-*仕様書 ver 1.67 - 2026/04/30 (§5.1.3 初期表示バー数を `DEFAULT_VISIBLE_BARS = 100 → 150` へ 1.5 倍に増量。マルチ TF 縦積み表示で 1 画面あたりの情報量を増やすため。`BARS_BY_TF = 200` は据え置き(150 visible + 余裕分で十分カバー)。frontend `constants.ts` の単一定数差し替えのみ、API / データモデル変更なし)*
+*仕様書 ver 1.69 - 2026/04/30 (§5.3 描画ツールがバー範囲外でも頂点を置けるよう、`coordinateToTime` が null を返す右余白(最終バーより右)・左余白(最初のバーより左)で **TF 間隔の線形外挿による時刻生成** を追加。トレンドラインやフィボナッチの 2 点目を未来側のチャート余白に配置する運用が可能に。frontend `Chart.tsx` に `pxToTime(pxX)` ヘルパーを新設し、`subscribeClick` / `mousemove` / `mousedown` / `mouseup` / `xToTime` の経路を全て差し替え。MN1 は `TIMEFRAME_MINUTES[MN1] = 43200`(30 日近似)で外挿、確定済みバー範囲内ではこれまで通り `coordinateToTime` のライブラリ値を使う。実装は frontend のみ、API / データモデル変更なし)*
+
+*ver 1.68 - 2026/04/30 (§5.5 「エントリー / 決済情報の表示」を新設。Trade 情報(entry_price / sl / tp / exit_price)を全 TF の priceLine として横線表示し、エントリー / 決済時刻の三角マーカーをエントリー TF のチャートに `setMarkers` API で配置。phase 別表示マトリクス: 分析中(エントリー組み立て中)= SL/TP draft のみ / 保有中 = entry + SL + TP + entry マーカー / 振り返り = 全部(exit 横線・マーカー含む)。マーカー位置は `entry_time` / `exit_time` をエントリー TF の bar 開始時刻に丸めた値を使用。既存の `priceLinesForTf` を Trade 4 行注入で拡張、`Chart` に `markers` prop を追加。§5 の旧 §5.5「描画の保存」「§5.6「技術選定」は §5.6 / §5.7 に番号繰り下げ。`README` トピック索引、`architecture/drawing-tools.md`、`spec/17-data-model.md` の §5.5 参照を §5.6 に追従)*
+
+*ver 1.67 - 2026/04/30 (§5.1.3 初期表示バー数を `DEFAULT_VISIBLE_BARS = 100 → 150` へ 1.5 倍に増量。マルチ TF 縦積み表示で 1 画面あたりの情報量を増やすため。`BARS_BY_TF = 200` は据え置き(150 visible + 余裕分で十分カバー)。frontend `constants.ts` の単一定数差し替えのみ、API / データモデル変更なし)*
 
 *ver 1.66 - 2026/04/30 (§5.1.3 全 TF 統一の `DEFAULT_VISIBLE_BARS = 100` を実際に満たせるよう、`BARS_BY_TF`(MT5 から取得する全バー数)を **全 TF 一律 200 本** に統一。前 ver 1.64-65 で「全 TF 100 本表示」を仕様化したものの、`BARS_BY_TF[W1]=60` / `BARS_BY_TF[MN1]=24` がボトルネックで実挙動は W1 / MN1 のみ少なく表示されていた問題の解消。M5=500・M15=300 等 TF 別に異なっていた本数も一律 200 へ。最新バー集約(設計 §C.3)は「一つ下の TF」の最後の数本だけで足りるため、M5 を 500 で取る必要は無く、200 本で全 TF の表示と集約に十分。frontend `constants.ts` と backend `routers/chart.py` の両方を更新、設計書 §C.3 のアルゴリズム例も連動修正。ブローカーの保有データが 100 本未満の場合は MT5 が返す範囲のみ表示される(broker 側の制約はそのまま))*
 

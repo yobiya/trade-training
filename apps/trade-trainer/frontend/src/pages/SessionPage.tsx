@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Drawing, EconomicEvent, SettingsResponse } from '../api/client'
 import { Chart } from '../components/Chart'
-import type { PriceLine } from '../components/Chart'
+import type { ChartMarker, PriceLine } from '../components/Chart'
+import type { OhlcBar } from '../api/client'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { EventOverlay } from '../components/EventOverlay'
@@ -34,11 +35,44 @@ type Props = {
   onBack: () => void
 }
 
+/** §5.5 Trade 由来の表示価格を保持。phase に応じて優先順を決める(holding=activeTrade, reviewing=latestTrade)。 */
+type TradeForDisplay = {
+  entry_price: number
+  sl: number | null
+  tp: number | null
+  exit_price: number | null
+  pips_pnl: number | null
+} | null
+
+/**
+ * §5.5.4: マーカー時刻を `bars` の最寄りバー timestamp にスナップする。
+ * lightweight-charts は厳密一致する time でないとマーカーを描画しない。
+ */
+function nearestBarTime(bars: OhlcBar[], targetUnix: number): number | null {
+  if (bars.length === 0) return null
+  let nearest = bars[0].t
+  let bestDiff = Math.abs(targetUnix - nearest)
+  for (const b of bars) {
+    const d = Math.abs(targetUnix - b.t)
+    if (d < bestDiff) {
+      nearest = b.t
+      bestDiff = d
+    }
+  }
+  return nearest
+}
+
+function fmtPrice(p: number, digits: number): string {
+  return p.toFixed(digits)
+}
+
 function priceLinesForTf(
   drawings: Drawing[],
   tf: string,
   preview: Drawing | null,
   entryDraft: { sl: number | null; tp: number | null },
+  trade: TradeForDisplay,
+  digits: number,
 ): PriceLine[] {
   const lines: PriceLine[] = drawings
     .filter(d => d.kind === 'line' && isDrawingVisibleOnTf(d, tf))
@@ -57,6 +91,40 @@ function priceLinesForTf(
   }
   if (entryDraft.tp != null) {
     lines.push({ id: -1002, price: entryDraft.tp, label: 'TP', color: '#58a6ff' })
+  }
+  // §5.5 Trade 由来の表示(エントリー後・決済後)
+  if (trade) {
+    lines.push({
+      id: -2001,
+      price: trade.entry_price,
+      label: `Entry @ ${fmtPrice(trade.entry_price, digits)}`,
+      color: '#e3b341',
+    })
+    if (trade.sl != null) {
+      lines.push({
+        id: -2002,
+        price: trade.sl,
+        label: `SL @ ${fmtPrice(trade.sl, digits)}`,
+        color: '#ff5555',
+      })
+    }
+    if (trade.tp != null) {
+      lines.push({
+        id: -2003,
+        price: trade.tp,
+        label: `TP @ ${fmtPrice(trade.tp, digits)}`,
+        color: '#58a6ff',
+      })
+    }
+    if (trade.exit_price != null) {
+      const exitColor = (trade.pips_pnl ?? 0) >= 0 ? '#26a69a' : '#ef5350'
+      lines.push({
+        id: -2004,
+        price: trade.exit_price,
+        label: `Exit @ ${fmtPrice(trade.exit_price, digits)}`,
+        color: exitColor,
+      })
+    }
   }
   return lines
 }
@@ -143,6 +211,48 @@ export function SessionPage({ sessionId, onBack }: Props) {
     reloadStack,
     setSession, setActiveTrade, setLatestTrade,
   })
+
+  // §5.5: phase に応じて表示対象 Trade を選ぶ(分析中は null = エントリー後/決済後の表示なし)
+  const displayTrade = phase === 'holding'
+    ? activeTrade
+    : (phase === 'reviewing' ? latestTrade : null)
+
+  // §5.5.4: エントリー TF に渡す三角マーカー(エントリー / 決済時刻)
+  const entryMarkers = useMemo<ChartMarker[]>(() => {
+    if (!displayTrade) return []
+    const entryBars = barsByTf[entryTf] ?? []
+    if (entryBars.length === 0) return []
+    const out: ChartMarker[] = []
+    const entryUnix = Math.floor(new Date(displayTrade.entry_time).getTime() / 1000)
+    const entryNearest = nearestBarTime(entryBars, entryUnix)
+    if (entryNearest != null) {
+      const isBuy = displayTrade.direction === 'buy'
+      out.push({
+        time: entryNearest,
+        position: isBuy ? 'belowBar' : 'aboveBar',
+        shape: isBuy ? 'arrowUp' : 'arrowDown',
+        color: isBuy ? '#26a69a' : '#ef5350',
+        text: `${isBuy ? 'BUY' : 'SELL'} ${displayTrade.entry_price}`,
+      })
+    }
+    if (displayTrade.exit_time != null && displayTrade.exit_price != null) {
+      const exitUnix = Math.floor(new Date(displayTrade.exit_time).getTime() / 1000)
+      const exitNearest = nearestBarTime(entryBars, exitUnix)
+      if (exitNearest != null) {
+        const isProfit = (displayTrade.pips_pnl ?? 0) >= 0
+        const isBuy = displayTrade.direction === 'buy'
+        // エントリーと反対向きの三角(決済 = ポジション解消の方向)
+        out.push({
+          time: exitNearest,
+          position: isBuy ? 'aboveBar' : 'belowBar',
+          shape: isBuy ? 'arrowDown' : 'arrowUp',
+          color: isProfit ? '#26a69a' : '#ef5350',
+          text: `Exit ${displayTrade.exit_price}`,
+        })
+      }
+    }
+    return out
+  }, [displayTrade, barsByTf, entryTf])
 
   // §5.4 経済指標: 設定読み込み + 表示期間内のイベント取得
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
@@ -481,7 +591,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 } : undefined}
                 onMouseDown={activeTf === tf ? interaction.handlers.onMouseDown : undefined}
                 onMouseUp={activeTf === tf ? interaction.handlers.onMouseUp : undefined}
-                priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft)}
+                priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft, displayTrade, session?.digits ?? 5)}
+                markers={tf === entryTf ? entryMarkers : undefined}
                 indicators={indicators}
               />
               <EventOverlay
