@@ -19,7 +19,6 @@ class SessionMeta:
     current_position: datetime
     mode: str                                  # 'training' | 'real'
     settled_at: datetime | None                # null = 進行中、値あり = 決着済み
-    time_filter: dict[str, Any] | None
     indicator_config_id: int | None = None
 
 

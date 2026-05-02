@@ -175,13 +175,6 @@ export type PostReviewResponse = {
   entry: EntryReview | null
 }
 
-export type SessionFilter = {
-  date_from?: string
-  date_to?: string
-  days?: number[]
-  sessions?: string[]
-}
-
 // 仕様書 §5.3/§5.5: 描画オブジェクト
 export type DrawingKind = 'line' | 'trendline' | 'fibonacci' | 'wave_label'
 

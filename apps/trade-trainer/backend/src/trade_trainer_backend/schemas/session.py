@@ -3,12 +3,9 @@ from pydantic import BaseModel
 
 
 class CreateSessionRequest(BaseModel):
-    # 仕様書 §1.2/§4.1/§6.1(統合フロー): 日時起点。銘柄はエントリー時に確定するためここでは指定しない。
-    date_from: datetime | None = None  # None = 過去5年の範囲でランダム選択
-    date_to: datetime | None = None    # None = 30日前まで
-    # 仕様書 §4.1: 時間フィルタ。指定された条件に合致する日時のみを抽選する。
-    days: list[int] | None = None      # 曜日フィルタ (0=月, 6=日)。空/None は全曜日
-    sessions: list[str] | None = None  # "tokyo"|"london"|"ny"。空/None は全時間帯
+    """仕様書 §4.1 Phase 1: ボディはフィールドを持たない(空 JSON `{}` で POST する)。
+    ランダム範囲は backend の history_min_days / history_max_days で固定。
+    """
 
 
 class AdvanceRequest(BaseModel):

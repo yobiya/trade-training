@@ -150,7 +150,6 @@ def meta_from_dict(data: dict[str, Any]) -> SessionMeta | None:
         current_position=current_position,                             # type: ignore[arg-type]
         mode=mode,                                                     # type: ignore[arg-type]
         settled_at=parse_iso_datetime(data.get("settled_at")),
-        time_filter=data.get("time_filter"),
         indicator_config_id=data.get("indicator_config_id"),
     )
 
@@ -164,7 +163,6 @@ def meta_to_dict(meta: SessionMeta) -> dict[str, Any]:
         "current_position": meta.current_position,
         "mode": meta.mode,
         "settled_at": meta.settled_at,
-        "time_filter": meta.time_filter,
         "indicator_config_id": meta.indicator_config_id,
     }
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, ApiError } from '../api/client'
 import type { SessionListItem } from '../api/client'
-import { DAYS_OF_WEEK, TRADING_SESSIONS } from '../constants'
 import { formatJST } from '../utils/datetime'
 
 type Props = {
@@ -14,15 +13,14 @@ type Props = {
  * セッションはファイル管理で進行中 / 決着済みの 2 状態(§4.2.1)。
  * 削除はアプリ側で行わず OS / Dropbox 上のディレクトリ操作のみ(§13)。
  * 集計機能(勝率・期待値・スタイル別成績等)は principles/no-aggregation により採用しない。
+ *
+ * 仕様書 §4.1 Phase 1: ランダム範囲は backend の history_min_days / history_max_days で
+ * 固定。提示時刻は JST 08:00 〜 翌 02:00 に限定(`_is_active_jst_hour` で実装)。期間 /
+ * 曜日 / セッション(東京・ロンドン・NY)を絞り込む UI は持たない。
  */
 export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [creating, setCreating] = useState(false)
-  const [showFilter, setShowFilter] = useState(false)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [days, setDays] = useState<number[]>([])
-  const [sessionFilter, setSessionFilter] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -38,24 +36,11 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
 
   useEffect(() => { void load() }, [load])
 
-  function toggleDay(v: number) {
-    setDays(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
-  }
-  function toggleSession(v: string) {
-    setSessionFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
-  }
-
   async function handleCreate() {
     setCreating(true)
     setError(null)
     try {
-      const filter = {
-        date_from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
-        date_to: dateTo ? new Date(dateTo).toISOString() : undefined,
-        days: days.length > 0 ? days : undefined,
-        sessions: sessionFilter.length > 0 ? sessionFilter : undefined,
-      }
-      const s = await api.sessions.create(filter)
+      const s = await api.sessions.create()
       onStartNew(s.id)
     } catch (e) {
       if (e instanceof ApiError) setError(e.message || 'エラーが発生しました')
@@ -81,48 +66,7 @@ export function SessionListPage({ onStartNew, onOpenSession, onLogout }: Props) 
         <button onClick={() => void handleCreate()} disabled={creating} className="create-btn">
           {creating ? '作成中...' : '新規セッション(日時を抽選)'}
         </button>
-        <button onClick={() => setShowFilter(v => !v)} className="filter-toggle">
-          時間フィルタ {showFilter ? '▲' : '▼'}
-        </button>
       </div>
-
-      {showFilter && (
-        <div className="time-filter">
-          <div className="filter-row">
-            <label>期間:</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-            <span>〜</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-          </div>
-          <div className="filter-row">
-            <label>曜日:</label>
-            <div className="chip-group">
-              {DAYS_OF_WEEK.map(d => (
-                <button
-                  key={d.v}
-                  type="button"
-                  className={`chip ${days.includes(d.v) ? 'active' : ''}`}
-                  onClick={() => toggleDay(d.v)}
-                >{d.label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="filter-row">
-            <label>時間帯:</label>
-            <div className="chip-group">
-              {TRADING_SESSIONS.map(s => (
-                <button
-                  key={s.v}
-                  type="button"
-                  className={`chip ${sessionFilter.includes(s.v) ? 'active' : ''}`}
-                  onClick={() => toggleSession(s.v)}
-                >{s.label}</button>
-              ))}
-            </div>
-          </div>
-          <p className="filter-hint">未指定の項目は「全て」扱い。曜日・時間帯は JST 基準。</p>
-        </div>
-      )}
 
       {error && <div className="error-banner">{error}</div>}
 

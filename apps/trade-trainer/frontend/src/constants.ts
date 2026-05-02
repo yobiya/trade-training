@@ -56,19 +56,6 @@ export const UPPER_TFS: Record<string, string[]> = {
   MN1: [],
 }
 
-// 曜日フィルタ(仕様書 §4.1 時間選定)。値は Monday=0 〜 Sunday=6
-export const DAYS_OF_WEEK: { v: number; label: string }[] = [
-  { v: 0, label: '月' }, { v: 1, label: '火' }, { v: 2, label: '水' },
-  { v: 3, label: '木' }, { v: 4, label: '金' }, { v: 5, label: '土' }, { v: 6, label: '日' },
-]
-
-// トレーディングセッション(仕様書 §2.11 JST 基準)。
-export const TRADING_SESSIONS: { v: string; label: string }[] = [
-  { v: 'tokyo', label: '東京 09-15' },
-  { v: 'london', label: 'ロンドン 16-25' },
-  { v: 'ny', label: 'NY 22-06' },
-]
-
 // 時間足ごとの描画色(仕様書 §5.3)。
 // 作成時の timeframe により描画色を固定し、どの時間足の視点で引かれたかを識別する。
 const TIMEFRAME_COLORS: Record<string, string> = {

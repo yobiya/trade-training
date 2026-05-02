@@ -19,7 +19,6 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from trade_trainer_backend.services.session_models import (
     Candidate,
@@ -144,7 +143,6 @@ def load(session_id: str) -> SessionAggregate | None:
 def create_session(
     presented_at: datetime,
     mode: str = "training",
-    time_filter: dict[str, Any] | None = None,
 ) -> SessionAggregate:
     """新規セッションのディレクトリと session.json を作成する。"""
     now = datetime.now(timezone.utc)
@@ -158,7 +156,6 @@ def create_session(
         current_position=pa,
         mode=mode,
         settled_at=None,
-        time_filter=time_filter,
     )
     root = io.resolve_root()
     root.mkdir(parents=True, exist_ok=True)

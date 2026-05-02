@@ -114,74 +114,42 @@ def _maybe_settle(session_id: str) -> SessionAggregate:
 
 
 # ============================================================================
-# 時間フィルタによるランダム抽選(§4.1)
+# 提示時刻のランダム抽選(§4.1 Phase 1)
 # ============================================================================
 
 _JST_OFFSET = timedelta(hours=9)
 
-# 仕様書 §2.11: セッション時間帯プリセット (JST 基準、夏時間固定なし)
-_SESSION_UTC_HOUR_RANGES: dict[str, tuple[int, int]] = {
-    "tokyo": (0, 6),
-    "london": (7, 16),
-    "ny": (13, 21),
-}
+
+def _is_active_jst_hour(dt_utc: datetime) -> bool:
+    """仕様書 §4.1 Phase 1: JST 08:00 〜 翌 02:00 の 18 時間枠のみ有効。
+    JST 02:00〜08:00(東京クローズ後・ロンドン前)は流動性が低く訓練価値が低いため除外。
+    """
+    jst_hour = (dt_utc + _JST_OFFSET).hour
+    return not (2 <= jst_hour < 8)
 
 
-def _matches_filters(
-    dt_utc: datetime,
-    days: list[int] | None,
-    sessions: list[str] | None,
-) -> bool:
-    jst = dt_utc + _JST_OFFSET
-    # 仕様書 §4.1 Phase 1 step 2: JST 08:00 〜 翌 02:00 の 18 時間枠に限定。
-    # JST 02:00〜08:00 は流動性が極端に低く訓練価値が低いため除外。
-    jst_hour = jst.hour
-    if 2 <= jst_hour < 8:
-        return False
-    if days:
-        if jst.weekday() not in days:
-            return False
-    if sessions:
-        utc_hour = dt_utc.hour
-        if not any(
-            _SESSION_UTC_HOUR_RANGES[s][0] <= utc_hour < _SESSION_UTC_HOUR_RANGES[s][1]
-            for s in sessions
-            if s in _SESSION_UTC_HOUR_RANGES
-        ):
-            return False
-    return True
+def _random_presented_at(settings: Settings) -> datetime:
+    """history_min_days 〜 history_max_days の範囲から JST 有効時間帯の日時を抽選。
 
-
-def _random_datetime_in_range(from_ts: int, to_ts: int) -> datetime:
-    offset = random.randint(0, to_ts - from_ts)
-    dt = datetime.fromtimestamp(from_ts + offset, tz=timezone.utc)
-    minutes = (dt.minute // 5) * 5
-    return dt.replace(minute=minutes, second=0, microsecond=0)
-
-
-def _random_presented_at(
-    settings: Settings,
-    days: list[int] | None = None,
-    sessions: list[str] | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-) -> datetime:
+    確率的には 5 分粒度で 18/24 ≒ 75% が有効時間帯のため、200 試行で
+    全失敗する確率は実質 0(0.25^200)。
+    """
     now = datetime.now(timezone.utc)
-    if date_from and date_to:
-        from_ts = int(date_from.timestamp())
-        to_ts = int(date_to.timestamp())
-    else:
-        from_ts = int((now - timedelta(days=settings.history_max_days)).timestamp())
-        to_ts = int((now - timedelta(days=settings.history_min_days)).timestamp())
-
+    from_ts = int((now - timedelta(days=settings.history_max_days)).timestamp())
+    to_ts = int((now - timedelta(days=settings.history_min_days)).timestamp())
     if to_ts <= from_ts:
-        raise bad_request("date_to must be after date_from")
+        raise bad_request("history range invalid: history_min_days must be less than history_max_days")
 
     for _ in range(200):
-        dt = _random_datetime_in_range(from_ts, to_ts)
-        if _matches_filters(dt, days, sessions):
+        offset = random.randint(0, to_ts - from_ts)
+        dt = datetime.fromtimestamp(from_ts + offset, tz=timezone.utc)
+        # 5 分粒度に丸める(チャートが M5 ベースのため)
+        dt = dt.replace(minute=(dt.minute // 5) * 5, second=0, microsecond=0)
+        if _is_active_jst_hour(dt):
             return dt
-    raise bad_request("指定された時間フィルタに合致する日時が見つかりませんでした。条件を緩めてください。")
+    # ここに到達するのは history range が極端に狭く全て JST 02:00-08:00 に重なる
+    # 場合のみ。実用上は発生しないが silent failure を避けるため明示エラー(I-11.1)
+    raise bad_request("有効な提示時刻を抽選できませんでした(history range を見直してください)")
 
 
 # ============================================================================
@@ -190,30 +158,13 @@ def _random_presented_at(
 
 @router.post("", response_model=SessionResponse, status_code=201)
 def create_session(
-    body: CreateSessionRequest,
+    body: CreateSessionRequest,  # noqa: ARG001 — 空 body の受付用に残す
     settings: Settings = Depends(get_settings),
 ) -> SessionResponse:
-    presented_at = _random_presented_at(
-        settings,
-        days=body.days,
-        sessions=body.sessions,
-        date_from=body.date_from,
-        date_to=body.date_to,
-    )
-
-    time_filter: dict | None = None
-    if body.days or body.sessions or body.date_from or body.date_to:
-        time_filter = {
-            "days": body.days,
-            "sessions": body.sessions,
-            "date_from": body.date_from.isoformat() if body.date_from else None,
-            "date_to": body.date_to.isoformat() if body.date_to else None,
-        }
-
+    presented_at = _random_presented_at(settings)
     agg = session_store.create_session(
         presented_at=presented_at,
         mode="training",
-        time_filter=time_filter,
     )
 
     # §7.2.3 横断メモテンプレを初期挿入(有効時のみ)

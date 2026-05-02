@@ -9,7 +9,6 @@ import type {
   EconomicEvent,
   PostReviewResponse,
   SessionCandidate,
-  SessionFilter,
   SessionListItem,
   SettingsResponse,
   TradeResponse,
@@ -54,10 +53,10 @@ export const api = {
   },
 
   sessions: {
-    create: (filter?: SessionFilter) =>
+    create: () =>
       request<TradeSession>('/sessions', {
         method: 'POST',
-        body: JSON.stringify(filter ?? {}),
+        body: JSON.stringify({}),
       }),
     list: (limit = 20, offset = 0) =>
       request<SessionListItem[]>(`/sessions?limit=${limit}&offset=${offset}`),

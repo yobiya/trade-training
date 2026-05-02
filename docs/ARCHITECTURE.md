@@ -609,7 +609,6 @@ deps.py                  ← DB session の Depends
   "current_position": "...",
   "mode": "training",
   "settled_at": null,
-  "time_filter": null,
   "indicator_config_id": null,
   "trade": { ... } | null,             // エントリー時のみ
   "final_decision": { "has_entry": ..., "skip_reason": ... } | null,
