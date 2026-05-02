@@ -7,7 +7,13 @@
 - **[`docs/WORKFLOW.md`](./docs/WORKFLOW.md)** — 仕様書 / 設計 / コードの三層を保つための作業手順。**例外なく従う**
 - [`docs/spec/README.md`](./docs/spec/README.md) — 仕様書インデックス(章 / 横断方針)
 - [`docs/CHANGELOG.md`](./docs/CHANGELOG.md) — 仕様書の変更履歴(ver 1.X 単位、append-only)
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — 設計ドキュメント(モジュール責務・状態所有・データフロー・横断不変条件)+ [`docs/architecture/drawing-tools.md`](./docs/architecture/drawing-tools.md)(描画モード状態機械)
+- 設計ドキュメント(層別に分割):
+  - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — トップレベル(全体図 / **frontend↔backend 役割境界** / 索引)
+  - [`docs/architecture/invariants.md`](./docs/architecture/invariants.md) — 横断不変条件 I-1〜I-12(着手前必読)
+  - [`docs/architecture/backend.md`](./docs/architecture/backend.md) — backend + market-data
+  - [`docs/architecture/frontend-overview.md`](./docs/architecture/frontend-overview.md) — frontend 全体構造(画面 / 状態 / hooks / フロー)
+  - [`docs/architecture/frontend-chart.md`](./docs/architecture/frontend-chart.md) — Chart 関連(**座標系 / LWC 境界 / TF 間 projection 規約**)
+  - [`docs/architecture/drawing-tools.md`](./docs/architecture/drawing-tools.md) — 描画モード状態機械
 
 ## タスク種別の判定
 
@@ -27,7 +33,7 @@ A 種のうち、以下のどれか 1 つでも当てはまるものは **コー
 - キャッシュ層(任意の粒度)の追加 / 削除
 - ライブラリ(lightweight-charts 等)の暗黙副作用と新機能が干渉する可能性がある
 
-具体的にやること: 関連する `docs/ARCHITECTURE.md` セクションを **先に**更新し、新 state と既存 state の干渉が文章で追える状態にする。これを飛ばさない。
+具体的にやること: 関連する設計ファイル(`docs/ARCHITECTURE.md` または `docs/architecture/*.md`)のセクションを **先に**更新し、新 state と既存 state の干渉が文章で追える状態にする。これを飛ばさない。
 
 ## やってはいけないこと(再掲)
 
@@ -35,5 +41,5 @@ A 種のうち、以下のどれか 1 つでも当てはまるものは **コー
 - ✗ 静的チェック(`npx tsc --noEmit` / `uv run python -c "import trade_trainer_backend.main"`)をスキップして「確認してください」とユーザーに投げる
 - ✗ 設計上の不変条件違反(警告ログ / assert 違反)を見て見ぬふりする
 - ✗ 仕様書本文や設計書本文に `ver 1.X で〜に変更` のような時系列マーカーを書く(変更履歴は `docs/CHANGELOG.md` に集約する)
-- ✗ 既存のモジュール状態 / lifecycle が絡む新機能を、ARCHITECTURE.md の該当節を更新せずに実装する(WORKFLOW §A-2.1 チェックリスト未通過のままコードに進まない)
+- ✗ 既存のモジュール状態 / lifecycle が絡む新機能を、設計ファイル(`ARCHITECTURE.md` または `architecture/*.md`)の該当節を更新せずに実装する(WORKFLOW §A-2.1 チェックリスト未通過のままコードに進まない)
 - ✗ バグ修正で局所対処(clamp / フォールバック / フラグ追加 等)を 3 回以上重ねる(2 回ダメなら設計見直しに戻る、WORKFLOW §B-1)

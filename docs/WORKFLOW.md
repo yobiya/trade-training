@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **仕様書** | `docs/spec/` | ユーザー要件 / 機能 / UI / API 形状 / データモデル(**現状の姿のみ**、時系列は書かない) | 仕様変更があったとき |
 | **変更履歴** | `docs/CHANGELOG.md` | 仕様変更の ver 番号と要約(時系列、append-only) | 仕様変更コミットと同じ単位で追記 |
-| **設計** | `docs/ARCHITECTURE.md` | モジュール構成・責務分担・状態の所有・ライフサイクル・データフロー・横断不変条件 | 設計に影響する変更があるとき(新規・変更・抽象化見直し) |
+| **設計** | `docs/ARCHITECTURE.md` + `docs/architecture/*.md` | モジュール構成・責務分担・状態の所有・ライフサイクル・データフロー・横断不変条件(層別に分割: backend / frontend-overview / frontend-chart / drawing-tools / invariants) | 設計に影響する変更があるとき(新規・変更・抽象化見直し) |
 | **コード** | `apps/`, `packages/` | 仕様 + 設計を実装したもの | 上記が整ってから |
 
 「コードだけ修正して仕様 / 設計と乖離する」状態を許容しない。乖離しているとバグの温床になる。
@@ -46,7 +46,15 @@
 - **既存のライフサイクル管理に新しい入力源を追加する**(`<X key={...}>` の remount 戦略・useEffect 依存配列・順序保証など)
 - **キャッシュ層の追加・削除**(state の所有が新たに発生するため必ず該当する)
 
-該当する場合は `docs/ARCHITECTURE.md` の該当セクションを更新する。トピックが大きく独立している場合のみ `docs/architecture/<topic>.md` に切り出す(例: `architecture/drawing-tools.md`)。
+該当する場合は `docs/ARCHITECTURE.md`(トップレベル: 全体図 / 役割境界 / 索引)または該当する層別ファイルを更新する:
+
+- backend / market-data の構造・API・ファイル構造変更 → `docs/architecture/backend.md`
+- frontend 全体構造・hooks・SessionPage 状態 → `docs/architecture/frontend-overview.md`
+- Chart / 座標変換 / overlay / lightweight-charts 境界 → `docs/architecture/frontend-chart.md`
+- 描画モード状態機械 → `docs/architecture/drawing-tools.md`
+- 横断不変条件(全層共通) → `docs/architecture/invariants.md`
+
+frontend / backend の役割境界(どこに置くか)を判定するときは [`ARCHITECTURE.md §3`](./ARCHITECTURE.md#3-frontend--backend-役割境界) のチェックリストに従う。
 
 設計ドキュメントには最低以下を含める:
 - **責務**: このモジュール / 構造が何を担うか
@@ -61,7 +69,7 @@
 
 - [ ] 新機能が触る state(React state / module-level state / ref / closure)を全部書き出した
 - [ ] 既存 state との干渉を確認した(同じキー / 同じ寿命 / 同じトリガーで上書きが起きないか)
-- [ ] 既存の lifecycle(`<X key={...}>` 等の remount 戦略・cleanup 順序・useEffect 発火順)に与える影響を ARCHITECTURE.md に書いた
+- [ ] 既存の lifecycle(`<X key={...}>` 等の remount 戦略・cleanup 順序・useEffect 発火順)に与える影響を該当する設計ファイル(`ARCHITECTURE.md` または `architecture/*.md`)に書いた
 - [ ] 想定される副作用の伝播経路を 1 本のフロー図 / 文章で追えるか確認した(「state A が変わると B が変わって C が再描画される」を口頭で説明できる状態)
 - [ ] ライブラリ(lightweight-charts 等)の **暗黙の副作用**(setData が visible range emit を起こす等)が新機能と干渉しないか検討した
 
@@ -79,7 +87,7 @@
 - 静的チェック: `npx tsc --noEmit`(frontend) / `uv run python -c "import trade_trainer_backend.main"`(backend)
 - 必要なら API スモーク: curl で endpoint を叩いて応答確認
 - ブラウザ確認: 該当画面で挙動チェック(`Ctrl+Shift+R` で強制リロード)
-- ログ・assert 違反が新たに出ていないか観測([§B I-10 observability](./ARCHITECTURE.md#i-10-observability-の最低ライン) 参照)
+- ログ・assert 違反が新たに出ていないか観測([invariants I-10 observability](./architecture/invariants.md#i-10-observability-の最低ライン) 参照)
 
 ---
 
@@ -106,7 +114,7 @@
 - 「データフロー上の前提が破れていた」(例: 「UTC で来るはず」が naive で来ていた)
 
 該当した場合:
-1. `docs/ARCHITECTURE.md` の該当セクション(または `docs/architecture/<topic>.md`)を更新する
+1. 該当する設計ファイル(`docs/ARCHITECTURE.md` トップレベル、または `docs/architecture/{backend,frontend-overview,frontend-chart,drawing-tools,invariants}.md`)を更新する
 2. 不変条件 / 責務境界を明文化してから修正に入る
 
 該当しなければ(局所的な typo / 値の打ち間違い / ライブラリの引数違い等)、設計見直しはスキップしてよい。
@@ -130,7 +138,7 @@
 - このドキュメントと、該当する仕様書 / 設計ドキュメントを先に開く
 - セッションの最初に「このタスクは A か B か」を明示する
 - A の場合は仕様書のどの章を、B の場合は設計のどの観点を見るか宣言してから進む
-- **エラー処理 / 失敗時挙動を伴う変更**(catch 追加・データ取得・ユーザー操作の結果反映等)では [`ARCHITECTURE.md` §B I-11](./ARCHITECTURE.md#i-11-エラー処理--失敗の可視化) の 6 項目を確認してから着手する
+- **エラー処理 / 失敗時挙動を伴う変更**(catch 追加・データ取得・ユーザー操作の結果反映等)では [`invariants.md I-11`](./architecture/invariants.md#i-11-エラー処理--失敗の可視化) の 6 項目を確認してから着手する
 
 ### C-2. 完了の定義
 
@@ -140,7 +148,7 @@
 2. 静的チェック(tsc / python import)が通る
 3. 該当機能のスモーク(API / ブラウザ)が通る
 4. 新たに観測されたエラーログ / warning が **設計上の不変条件違反でない** ことを確認した
-5. ユーザー入力起因の失敗パスが UI に通知されている([I-11.4](./ARCHITECTURE.md#i-114-ユーザー入力起因の失敗は-ui-に通知))。「空表示 + 通知無し」を残さない
+5. ユーザー入力起因の失敗パスが UI に通知されている([I-11.4](./architecture/invariants.md#i-114-ユーザー入力起因の失敗は-ui-に通知))。「空表示 + 通知無し」を残さない
 
 3 が手動でしか確認できない場合(UI 視覚確認等)は、ユーザーに具体的な確認手順を提示する。
 
@@ -151,7 +159,7 @@
 - ✗ プラン無しで複数ファイルにまたがる修正を始める
 - ✗ 静的チェックを飛ばしてユーザーに「確認してください」と言う
 - ✗ 仕様書本文や設計書本文に `ver 1.X で〜に変更` のような時系列マーカーを書く(変更履歴は `docs/CHANGELOG.md` に集約する)
-- ✗ **既存のモジュール状態 / lifecycle が絡む新機能を、ARCHITECTURE.md の該当節を更新せずに実装する**(§A-2.1 チェックリスト未通過のままコードに進まない)
+- ✗ **既存のモジュール状態 / lifecycle が絡む新機能を、設計ファイル(`ARCHITECTURE.md` または `architecture/*.md`)の該当節を更新せずに実装する**(§A-2.1 チェックリスト未通過のままコードに進まない)
 - ✗ **バグ修正で局所対処を 3 回以上重ねる**(2 回ダメなら設計見直しに戻る、§B-1 参照)
 
 ---
@@ -160,5 +168,11 @@
 
 - 仕様書: [`docs/spec/`](./spec/)
 - 変更履歴: [`docs/CHANGELOG.md`](./CHANGELOG.md)
-- 設計ドキュメント: [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) + [`docs/architecture/drawing-tools.md`](./architecture/drawing-tools.md)
+- 設計ドキュメント:
+  - [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) — トップレベル(全体図 / 役割境界 / 索引)
+  - [`docs/architecture/invariants.md`](./architecture/invariants.md) — 横断不変条件 I-1〜I-12
+  - [`docs/architecture/backend.md`](./architecture/backend.md) — backend + market-data
+  - [`docs/architecture/frontend-overview.md`](./architecture/frontend-overview.md) — frontend 全体構造
+  - [`docs/architecture/frontend-chart.md`](./architecture/frontend-chart.md) — Chart 関連(座標 / LWC 境界 / overlay)
+  - [`docs/architecture/drawing-tools.md`](./architecture/drawing-tools.md) — 描画モード状態機械
 - セットアップ: [`Setup.md`](./Setup.md)

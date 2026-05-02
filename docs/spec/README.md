@@ -58,5 +58,5 @@
 
 - セットアップ・起動手順: [../Setup.md](../Setup.md)
 - **作業手順(必読)**: [../WORKFLOW.md](../WORKFLOW.md)
-- **設計ドキュメント**: [../ARCHITECTURE.md](../ARCHITECTURE.md) — モジュール責務・状態所有・データフロー・横断不変条件
+- **設計ドキュメント**: [../ARCHITECTURE.md](../ARCHITECTURE.md) — トップレベル(全体図 / frontend↔backend 役割境界 / 索引)。詳細は層別ファイル: [backend.md](../architecture/backend.md), [frontend-overview.md](../architecture/frontend-overview.md), [frontend-chart.md](../architecture/frontend-chart.md), [drawing-tools.md](../architecture/drawing-tools.md), [invariants.md](../architecture/invariants.md)
 - **変更履歴**: [../CHANGELOG.md](../CHANGELOG.md) — 仕様書の主要な変更履歴(本仕様書には現状のみを記述する方針)
