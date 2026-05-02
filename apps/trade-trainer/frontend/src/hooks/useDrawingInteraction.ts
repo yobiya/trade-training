@@ -139,5 +139,6 @@ const noopChartApi: ChartApi = {
   yToPrice: () => null,
   timeToX: () => null,
   xToTime: () => null,
+  logicalToX: () => null,
   setScrollEnabled: () => {},
 }

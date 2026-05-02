@@ -7,6 +7,7 @@ import type { OhlcBar } from '../api/client'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { EventOverlay } from '../components/EventOverlay'
+import { LowerTfRangeOverlay } from '../components/LowerTfRangeOverlay'
 import { IndicatorPanel } from '../components/IndicatorPanel'
 import { MemoPanel } from '../components/MemoPanel'
 import { Modal } from '../components/Modal'
@@ -16,7 +17,7 @@ import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { SYMBOLS, TIMEFRAMES, getTimeframeColor } from '../constants'
+import { SYMBOLS, TIMEFRAMES, TIMEFRAME_MINUTES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { isDrawingVisibleOnTf } from '../drawing/visibility'
 import { useChartRefCache } from '../hooks/useChartRefCache'
@@ -567,7 +568,10 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
       <div className="training-body">
         <div className="chart-area chart-stack">
-          {visibleTfs.map(tf => (
+          {visibleTfs.map((tf, i) => {
+            // §5.1.6 直下 TF(visibleTfs 上で 1 つ下に並ぶ TF)。最下位 pane(i=0)は null。
+            const lowerTf = i > 0 ? visibleTfs[i - 1] : null
+            return (
             <div
               key={tf}
               className={`stacked-chart ${focusedTf === tf ? 'focused' : ''}`}
@@ -601,6 +605,17 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 markers={displayTrade && tf === (displayTrade.entry_tf || 'M5') ? entryMarkers : undefined}
                 indicators={indicators.filter(i => i.timeframe === tf)}
               />
+              {lowerTf && (
+                <LowerTfRangeOverlay
+                  upperHandle={chartHandles.get(tf) ?? null}
+                  upperBars={barsByTf[tf] ?? []}
+                  upperTfSec={(TIMEFRAME_MINUTES[tf] ?? 5) * 60}
+                  lowerHandle={chartHandles.get(lowerTf) ?? null}
+                  lowerBars={barsByTf[lowerTf] ?? []}
+                  lowerTfSec={(TIMEFRAME_MINUTES[lowerTf] ?? 5) * 60}
+                  lowerTf={lowerTf}
+                />
+              )}
               <EventOverlay
                 chartHandle={chartHandles.get(tf) ?? null}
                 events={events}
@@ -616,7 +631,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 hoveredId={focusedTf === tf ? interaction.hoveredId : null}
               />
             </div>
-          ))}
+          )
+          })}
           {visibleTfs.length === 0 && (
             <div className="empty-chart-hint">表示する時間足を選択してください</div>
           )}

@@ -268,4 +268,8 @@ lower の visible logical
 
 ### I-12.3 範囲外 logical はクランプしない
 
-`logicalToCoordinate(logical)` は `logical < 0` や `logical > lastIdx` でも線形外挿で px を返す。Overlay 側でクランプや「null だから諦める」ような処理を入れず、px 値を SVG に渡したうえで pane の clip に任せる。これによりブローカーのヒストリ制限で上位 TF のバーが少なく、下位 TF の時刻範囲が上位 TF のデータ範囲を超えるケース(W1 / MN1 等で頻発)も自然に処理される。
+`logicalToCoordinate(logical)` は `logical < 0` や `logical > lastIdx` でも線形外挿で px を返す(整数の場合)。Overlay 側でクランプや「null だから諦める」ような処理を入れず、px 値を SVG に渡したうえで pane の clip に任せる。これによりブローカーのヒストリ制限で上位 TF のバーが少なく、下位 TF の時刻範囲が上位 TF のデータ範囲を超えるケース(W1 / MN1 等で頻発)も自然に処理される。
+
+### I-12.4 `logicalToCoordinate` は fractional 引数を受け付けない
+
+LWC の `logicalToCoordinate` は **整数 logical のみ正しい px を返し、fractional(小数値)を渡すと 0 を返す**(範囲外でも整数なら線形外挿で px を返す)。TF 間 projection は時刻補間で fractional logical を生むため、整数 2 点(`floor(logical)` と `floor(logical) + 1`)で px を取って線形補間する自前ラッパで吸収する。詳細・実測値・対処コードは [`frontend-chart.md` §3.7](./frontend-chart.md#37-logicaltocoordinate-は-fractional-引数を受け付けない)。

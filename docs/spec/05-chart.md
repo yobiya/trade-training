@@ -59,7 +59,21 @@
   - 保有中・振り返り: フォーカスは自由に切替可能(チャートを見比べる / 描画したい TF を選ぶ)。advance も「フォーカス TF の N バー」単位で進む
   - **マーカー(エントリー / 決済の三角)** の表示対象 TF は `Trade.entry_tf`(エントリー時に固定された TF)であり、後からフォーカスを変えても移動しない([§5.5.4](#554-縦マーカーentry_tf-のチャートのみ))
 
-### 5.1.6 銘柄切替の応答キャッシュ(クライアント in-memory)
+### 5.1.6 下位 TF レンジ背景
+
+- 各 TF pane には「現在表示中の TF 集合のうち **自 TF より 1 つ下に並ぶ TF**」が見ている時間レンジを **半透明の縦帯** で重ねる。マルチ TF で「いま下位足のどこを見ているか」を上位足側から一目で把握するための補助表示
+- 「1 つ下」は固定インデックス(M5→M15→H1→…)ではなく **`visibleTfs` 上の隣接関係** で決まる。M5 を非表示にしている間は M15 が最下位となり、M15 pane に帯は出ない(連動データソースが欠落するため)
+- 帯の色は §5.3 の TF 色テーブルから **下位 TF の色** を取り、`fillOpacity = 0.08` 程度で適用する。例: 全 TF 表示なら H1 pane に M15 ティール(#56d4dd)、M5 を隠して H1 が直下なら H4 pane に H1 緑(#26a69a)
+- 表示中 TF の最下位 pane(M5 が表示中なら M5、隠していれば M15、…)には何も重ねない
+- ユーザー設定での ON/OFF は持たない(常時表示)
+- **時刻 mapping は logical 経由の純粋関数で行う**: lower の visible logical 範囲を bar 配列 + TF 秒数の線形補間で時刻に変換し(`logicalToTime`)、その時刻を upper の bar 配列 + TF 秒数で再び logical に変換し(`timeToLogical`)、最後に `logicalToCoordinate` で px に落とす一貫経路で帯の左右端を決める。ライブラリの `timeToCoordinate` は使わない(時刻が upper TF のバー境界に一致しないとき null を返す経路があり、フォールバック分岐が増えて TF 間で挙動が分かれる温床になる)
+- **両端の edge-snap 規則**: 「両 pane が共に末端を表示している」**AND** 条件のときだけ snap を発火し、それ以外は前項の時刻 mapping に任せる:
+  - 右端 snap: lower の visible logical 右端が `>= lower.lastIdx`(rightOffset whitespace 込みの末尾)**かつ** upper の visible logical 右端が `>= upper.lastIdx` のとき → 帯の右端を upper の visible 右端 logical へ snap
+  - 左端 snap: lower の visible logical 左端が `<= 0` **かつ** upper の visible logical 左端が `<= 0` のとき → 帯の左端を upper の visible 左端 logical へ snap
+- snap が必要な理由は **rightOffset の時間幅不一致** に限定される: lower / upper の rightOffset(各 4 バー)は同じ視覚オフセットだが TF 間隔が違うため時間幅は不一致(M15→H1 なら lower 60min vs upper 240min)。純粋な時刻 mapping だと「両 TF が最新を見ている」ときに band 右端が upper pane の右端まで届かない。両 pane が末端でない通常領域では時刻 mapping で正しく追従するため snap は不要
+- **データ範囲の不一致(broker のヒストリ制限)** は snap で吸収しない。upper TF のバー数が lower の時刻レンジに届かない場合、変換後の logical は負値や `lastIdx` 超過になるが、`logicalToCoordinate` の線形外挿(LWC 既定挙動)で px が返るため、帯が pane 外まで伸びる形で自然に処理される。SVG クリップで見た目正しい(過去設計で `timeToCoordinate` が null を返した経路で発生していた「pane 左端から過剰描画」の症状はこの経路では起きない)
+
+### 5.1.7 銘柄切替の応答キャッシュ(クライアント in-memory)
 
 - 銘柄切替の cold load(MT5 から 7 TF 直列フェッチで 700〜1,400 ms 程度)を体感ゼロにするため、`/chart-stack` の **レスポンス全体を `(symbol, current_position, 表示中 TF 集合)` をキーとしたモジュールスコープ Map にキャッシュ** する
 - 同タブ内で銘柄を行き来した時の 2 回目以降は **MT5 ラウンドトリップなし**(0 ms 級)で描画される

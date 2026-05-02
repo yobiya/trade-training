@@ -15,6 +15,10 @@ export interface ChartApi {
   yToPrice(y: number): number | null
   timeToX(time: number): number | null
   xToTime(x: number): number | null
+  /** §5.1.6 LowerTfRangeOverlay 用: logical index を px x に変換。
+   *  `timeScale.logicalToCoordinate` の薄いラッパ。範囲外 logical でも線形外挿で px を返す
+   *  (TF 間 projection の唯一の px 変換 API。詳細は invariants.md I-12)。 */
+  logicalToX(logical: number): number | null
   /** チャートのドラッグパンを有効/無効にする。Moving 状態中は false にして描画操作と干渉させない。 */
   setScrollEnabled(enabled: boolean): void
 }

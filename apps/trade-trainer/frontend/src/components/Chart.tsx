@@ -55,6 +55,13 @@ export type ChartHandle = {
    * `setCrosshairTime` で発火した programmatic な move は通知しない(feedback ループ防止)。
    */
   subscribeUserCrosshair: (cb: (time: number | null) => void) => () => void
+  /**
+   * §5.1.6 LowerTfRangeOverlay 用: 自 Chart の visible logical range を返す。
+   * `timeScale.getVisibleLogicalRange()` の薄いラッパ。`from <= 0` で過去 whitespace、
+   * `to >= bars.length - 1` で右側 rightOffset whitespace に到達している判定に使う。
+   * 詳細は frontend-chart.md §5.3 / invariants.md I-12。
+   */
+  getVisibleLogicalRange: () => { from: number; to: number } | null
 }
 
 type Props = {
@@ -206,6 +213,12 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         },
         timeToX: (time: number) => timeToPx(time),
         xToTime: (x: number) => pxToTime(x),
+        logicalToX: (logical: number) => {
+          const ts = chartRef.current?.timeScale()
+          if (!ts) return null
+          const x = ts.logicalToCoordinate(logical as Logical)
+          return x ?? null
+        },
         setScrollEnabled: (enabled: boolean) => {
           chartRef.current?.applyOptions({
             handleScroll: { pressedMouseMove: enabled, horzTouchDrag: enabled, vertTouchDrag: enabled },
@@ -266,6 +279,11 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       return () => {
         userCrosshairSubsRef.current.delete(cb)
       }
+    },
+    getVisibleLogicalRange() {
+      const range = chartRef.current?.timeScale().getVisibleLogicalRange()
+      if (!range) return null
+      return { from: range.from, to: range.to }
     },
   }), [])
 
