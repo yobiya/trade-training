@@ -19,7 +19,7 @@ import type {
   PointPx,
   UpdateDrawingPatch,
 } from '../drawing/types'
-import type { WaveValue } from '../drawing/tools/wave_label'
+import { isWaveValue, type WaveValue } from '../drawing/tools/wave_label'
 
 type Params = {
   drawings: Drawing[]
@@ -97,10 +97,27 @@ export function useDrawingInteraction({
     dispatch({ type: 'select-tool', tool, wave })
   }, [dispatch])
 
-  // ESC でキャンセル(状態に委譲)
+  // §5.3 波動ラベル ホットキー + ESC キャンセル(状態に委譲)。
+  // - `1`-`5` / `A`-`C`(`a`-`c` 小文字も許容)で波動ラベル配置モードへ直接遷移
+  //   (state.ts の select-tool は現状態に関わらず drawing-wave-label に切替える)。
+  // - 入力欄(input/textarea/contentEditable)フォーカス時はメモ入力を妨げないため捕捉しない。
+  // - 修飾キー(Ctrl/Meta/Alt)同時押しは捕捉しない(ブラウザ標準ショートカットを尊重)。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') dispatch({ type: 'escape' })
+      if (e.key === 'Escape') {
+        dispatch({ type: 'escape' })
+        return
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return
+      }
+      const candidate = e.key.toUpperCase()
+      if (isWaveValue(candidate)) {
+        e.preventDefault()
+        dispatch({ type: 'select-tool', tool: 'wave_label', wave: candidate })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

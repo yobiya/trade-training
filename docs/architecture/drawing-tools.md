@@ -162,6 +162,30 @@ drawing-line
 idle
 ```
 
+### 波動ラベルの連続配置(auto-advance)
+
+```
+idle
+  │  select-tool('wave_label', wave='1')   ← パネルクリック or `1`〜`5` ホットキー
+  ▼
+drawing-wave-label { wave: '1' }
+  │  click → ctx.createDrawing(...wave='1') → drawing-wave-label { wave: '2' }   ← 次の波へ自動進行
+  ▼
+drawing-wave-label { wave: '2' }
+  │  click → ctx.createDrawing(...wave='2') → drawing-wave-label { wave: '3' }
+  ▼
+  ... (3 → 4 → 5)
+  ▼
+drawing-wave-label { wave: '5' }
+  │  click → ctx.createDrawing(...wave='5') → idle    ← 推進波の終端で Idle
+  ▼
+idle
+```
+
+補正波 `A → B → C` も同じパターン。`C` 配置で Idle に戻る。途中で別の波に切替える場合はホットキー(`1`〜`5` / `A`〜`C`)で `select-tool` を再発行する(現状態に関わらず対応する `drawing-wave-label` 状態へ遷移、§6 dispatch の `select-tool` 処理に従う)。`ESC` で Idle に戻るのは他のツールと同じ。
+
+実装: `reduceDrawingWaveLabel` の click 後の戻り値が「次の波の `drawing-wave-label` 状態」または `idleState()`。`nextWave('1') = '2'`、`nextWave('5') = null`、`nextWave('C') = null` のような単純なテーブル。
+
 ### 水平線の移動
 
 ```

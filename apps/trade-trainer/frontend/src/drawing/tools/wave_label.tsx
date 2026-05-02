@@ -14,6 +14,23 @@ export function isWaveValue(v: unknown): v is WaveValue {
   return typeof v === 'string' && WAVE_VALUE_SET.has(v)
 }
 
+/**
+ * §5.3 波動ラベル auto-advance: 配置した波の次の波を返す。終端(推進波 5、補正波 C)では null。
+ * 推進波と補正波はチェーンを跨がない(`5` → null、`C` → null)。
+ */
+export function nextWave(wave: WaveValue): WaveValue | null {
+  switch (wave) {
+    case '1': return '2'
+    case '2': return '3'
+    case '3': return '4'
+    case '4': return '5'
+    case '5': return null
+    case 'A': return 'B'
+    case 'B': return 'C'
+    case 'C': return null
+  }
+}
+
 export type WaveLabelData = { t: number; price: number; wave: WaveValue }
 
 export function getWaveLabelData(drawing: Drawing): WaveLabelData | null {

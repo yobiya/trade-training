@@ -3,7 +3,7 @@ import { lineTool } from './tools/line'
 import { fibonacciTool, getFibPoints } from './tools/fibonacci'
 import { findHit } from './tools/registry'
 import { trendlineTool, getTrendlinePoints } from './tools/trendline'
-import { waveLabelTool, getWaveLabelData, type WaveValue } from './tools/wave_label'
+import { waveLabelTool, getWaveLabelData, nextWave, type WaveValue } from './tools/wave_label'
 import type {
   ChartApi,
   CreateDrawingBody,
@@ -349,7 +349,10 @@ function reduceDrawingWaveLabel(
       timeframe: ctx.activeTimeframe,
       visible_on_timeframes: waveLabelTool.defaultVisibleTfs,
     })
-    return idleState()
+    // §5.3 auto-advance: 次の波があれば配置モードを継続、終端(5 / C)は idle へ
+    const next = nextWave(state.wave)
+    if (next === null) return idleState()
+    return { kind: 'drawing-wave-label', wave: next, previewPoint: null }
   }
   if (event.type === 'mouse-move' && event.payload.point.time !== null) {
     return {
