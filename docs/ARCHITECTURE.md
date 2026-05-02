@@ -158,77 +158,160 @@ SessionPage(統合フロー、§6.1)
 
 ## §4 主要データフロー(俯瞰)
 
-詳細は各層の設計ファイル参照。ここでは **HTTP 境界をまたぐ主要 4 フロー** だけ俯瞰する。
+詳細は各層の設計ファイル参照。ここでは **HTTP 境界をまたぐ主要 4 フロー** をシーケンス図で俯瞰する。図は「router が service を呼ぶ」レベルの抽象度に揃え、実装の細部(変数名・loop 内の if 分岐等)は意図的に省く。
+
+各図の表記:
+- 実線矢印(`->>`): 同期呼び出し / リクエスト
+- 破線矢印(`-->>`): リターン / レスポンス
+- `alt` / `else`: 条件分岐
+- `loop`: 繰り返し
+- `Note`: 補足
 
 ### 4.1 チャート表示(GET `/sessions/{id}/chart-stack`)
 
-```
-ブラウザ(銘柄切替 / mount)
-   │  api.chart.stack(sessionId, symbol, { signal })   # frontend は AbortController で前回 fetch 中断
-   ▼
-[backend:routers/chart.py:chart_stack]
-   │  for tf in [M5, M15, H1, H4, D1, W1, MN1]:        # 直列ループ
-   │      raw = provider.fetch_ohlc(symbol, tf, ...)
-   │      confirmed = raw[index < bar_start(current_pos, tf)]
-   │      live = M5 ? raw[index >= boundary]
-   │             : aggregate_one_bar(prev_tf_df[index >= boundary], tf)
-   │      stacks.append({tf, confirmed + live})
-   │      prev_tf_df = full
-   ▼
-ChartStackResponse(symbol, current_position, stacks=[...])
-   │
-   ▼
-ブラウザ
-   │  chartStackCache.set(key, response)               # 同 (symbol, current_position, tfsKey) で 2 回目以降は同期完了
-   │  setBarsByTf(response)
-   │  各 Chart pane に bars prop が伝わる(Chart instance は永続化、§5.1.3)
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User (Browser)
+  participant FE as frontend (useCharts.fetchStack)
+  participant Cache as chartStackCache (in-memory LRU)
+  participant API as backend (routers/chart.py)
+  participant MD as market-data (provider)
+  participant MT as MT5
+
+  U->>FE: 銘柄切替 / mount
+  FE->>Cache: get(symbol, current_position, tfsKey)
+  alt cache hit
+    Cache-->>FE: ChartStackResponse
+    FE->>FE: setBarsByTf (HTTP 経路スキップ)
+  else cache miss
+    FE->>FE: 前回 AbortController.abort() / 新 controller 割当
+    FE->>API: GET /chart-stack?symbol={signal}
+    loop tf in [M5, M15, H1, H4, D1, W1, MN1] (直列)
+      API->>MD: provider.fetch_ohlc(symbol, tf, from_dt, current_pos)
+      MD->>MT: copy_rates_range
+      MT-->>MD: raw bars
+      MD-->>API: DataFrame
+      Note over API: confirmed = raw[index < boundary]<br/>live = M5 ? raw[index>=boundary]<br/>     : aggregate(prev_tf_df, tf)
+    end
+    API-->>FE: ChartStackResponse(stacks[])
+    FE->>Cache: set(key, response)
+    FE->>FE: setBarsByTf
+  end
 ```
 
 詳細: [`backend.md` §C.2](./architecture/backend.md#c2-取得フロー) / [`frontend-overview.md` §E](./architecture/frontend-overview.md#e-usecharts-の契約)
 
 ### 4.2 足進め(POST `/sessions/{id}/advance`)
 
-```
-ブラウザ(handleAdvance(n))
-   │  m5_bars = n × tfRatioToM5(focusedTf)             # M5=1 / M15=3 / H1=12 / ...
-   │  POST /sessions/{id}/advance?bars=<m5_bars>&symbol=USDJPY
-   ▼
-[backend] new_pos = current_pos + 5min × bars
-   │  保有中なら _check_sl_tp で auto-close 判定(M5 単位ループ)
-   │  session_store.save_meta + (任意で)save_trade
-   ▼
-AdvanceResponse(new_bars, current_position, trade_auto_closed, ...)
-   │
-   ▼
-ブラウザ
-   │  setSession(api.sessions.get)                     # current_position 反映
-   │  reloadStack()                                     # cache バイパスで chart-stack を再取得
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User (Browser)
+  participant FE as frontend (handleAdvance)
+  participant API as backend (routers/chart.py:advance_session)
+  participant SS as session_store
+  participant MD as market-data
+  participant MT as MT5
+
+  U->>FE: ▶ +N 本
+  Note over FE: m5_bars = N × tfRatioToM5(focusedTf)<br/>(M5=1 / M15=3 / H1=12 / ...)
+  FE->>API: POST /advance?bars={m5_bars}&symbol
+  API->>SS: load(session_id)
+  SS-->>API: SessionAggregate
+  Note over API: new_pos = current_pos + 5min × m5_bars
+  alt active trade あり (advance_symbol)
+    API->>MD: get_ohlc(M5, current_pos+5min, new_pos)
+    MD->>MT: copy_rates_range
+    MT-->>MD: raw
+    MD-->>API: DataFrame (M5 バー)
+    Note over API: _check_sl_tp(trade, M5 バー単位)
+    alt SL/TP hit
+      API->>SS: save_trade(trade.exit_*)
+    end
+  end
+  API->>SS: save_meta(current_position = new_pos)
+  API-->>FE: AdvanceResponse(new_bars, current_position, trade_auto_closed)
+  alt trade_auto_closed
+    FE->>API: GET /trades/latest
+    API-->>FE: latestTrade
+  end
+  FE->>API: GET /sessions/{id}
+  API-->>FE: session (current_position 反映)
+  FE->>FE: reloadStack() (cache バイパスで §4.1 を再実行)
 ```
 
-「+1 本」= focus TF の 1 バー(仕様 §5.1.1)。frontend が focus TF → M5 比率を掛けて `bars` を計算する。詳細: [`backend.md` §D.2](./architecture/backend.md#d2-post-sessionsidadvance-routerschartpyadvance_session) / [`frontend-overview.md` §F.2](./architecture/frontend-overview.md#f2-handleadvance)
+「+1 本」= focus TF の 1 バー(仕様 §5.1.1)。詳細: [`backend.md` §D.2](./architecture/backend.md#d2-post-sessionsidadvance-routerschartpyadvance_session) / [`frontend-overview.md` §F.2](./architecture/frontend-overview.md#f2-handleadvance)
 
 ### 4.3 振り返り(GET `/sessions/{id}/post-review`)
 
-```
-[backend] agg = session_store.load
-   │  for c in candidates: evaluate_symbol(presented_at, r_unit_pips=None)  # pips のみ
-   │  if trade: evaluate_entry(trade)                                        # SL ベース R 表示維持
-   ▼
-PostReviewResponse(candidates[], skip, entry)
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as frontend (PostReviewPanel)
+  participant API as backend (routers/sessions.py:get_post_review)
+  participant SS as session_store
+  participant PE as post_eval
+
+  FE->>API: GET /post-review
+  API->>SS: load(session_id)
+  SS-->>API: SessionAggregate (candidates, trade?, final_decision?)
+  loop c in candidates (c.symbol != trade.symbol)
+    API->>PE: evaluate_symbol(c.symbol, presented_at, r_unit_pips=None)
+    Note over PE: 見送り・候補は SL 未確定で R 換算不可<br/>→ pips のみで評価
+    PE-->>API: SymbolReview (pips のみ)
+  end
+  alt trade あり
+    API->>PE: resolve_trade_r_unit_pips(trade)
+    PE-->>API: r_unit_pips (SL ベース)
+    API->>PE: evaluate_symbol(trade.symbol, presented_at, r_unit_pips)
+    PE-->>API: SymbolReview (R + pips)
+    API->>PE: evaluate_entry(trade)
+    PE-->>API: EntryReview (MFE / MAE / r_pnl)
+  else 見送り(skip_reason あり)
+    Note over API: SkipReview を build
+  end
+  API-->>FE: PostReviewResponse(candidates[], skip, entry)
 ```
 
 詳細: [`backend.md` §D.5](./architecture/backend.md#d5-get-sessionsidpost-review-routerssessionspyget_post_review)
 
 ### 4.4 AI 分析(POST `/sessions/{id}/ai-analysis/run`)
 
-```
-[backend] payload = ai_input_builder.build_ai_analysis_input(sessionId, db, mode)
-   │  payload_hash = compute(payload + image_data_url 先頭 64B)
-   │  if cached(hash): return 既存レポート
-   │  else: ai_client.run_analysis(payload, images, model, max_tokens, mock?)
-   │        ai_storage.save_run(payload_hash, report_md, tokens, ...)
-   ▼
-AIRunResponse(entry, report_md, cached)
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as frontend (AiAnalysisPanel)
+  participant API as backend (routers/ai_analysis.py:run_ai_analysis)
+  participant Build as ai_input_builder
+  participant Store as ai_storage
+  participant Client as ai_client
+  participant Anthropic as Anthropic API
+
+  FE->>API: POST /ai-analysis/run
+  API->>Build: build_ai_analysis_input(session_id, db, mode)
+  Note over Build: I-9 ガード(損益・勝敗・<br/>機械判定ラベル等を除外)
+  Build-->>API: payload (DecisionMeta / Memo / Drawing / ...)
+  API->>Store: compute_payload_hash(payload + image_data_url[:64])
+  Store-->>API: payload_hash
+  API->>Store: find_cached_entry(session_id, payload_hash)
+  alt cached
+    Store-->>API: 既存 entry (report_md)
+    API-->>FE: AIRunResponse(cached=true)
+  else cache miss
+    Store-->>API: null
+    API->>Client: run_analysis(payload, images, model, max_tokens, mock?)
+    alt mock=true
+      Note over Client: モック応答を返す
+    else
+      Client->>Anthropic: Messages API
+      Anthropic-->>Client: response (report_md, tokens)
+    end
+    Client-->>API: result
+    API->>Store: save_run(session_id, payload_hash, report_md, tokens, ...)
+    Store-->>API: entry
+    API-->>FE: AIRunResponse(cached=false)
+  end
 ```
 
 詳細: [`backend.md` §D.6](./architecture/backend.md#d6-post-sessionsidai-analysisrun-routersai_analysispyrun_ai_analysis)
