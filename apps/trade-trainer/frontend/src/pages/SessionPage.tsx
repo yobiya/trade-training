@@ -581,10 +581,11 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 </div>
               )}
               <Chart
-                key={`${tf}-${currentSymbol}`}
+                key={tf}
                 ref={setChartRef(tf)}
                 bars={barsByTf[tf] ?? []}
                 timeframe={tf}
+                symbol={currentSymbol}
                 digits={session?.digits}
                 cursor={focusedTf === tf ? (trade.entryPlacing ? 'crosshair' : interaction.cursor) : undefined}
                 onNeedMoreHistory={(earliest) => void loadMoreHistory(tf, earliest)}

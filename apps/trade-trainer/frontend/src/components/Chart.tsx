@@ -12,7 +12,6 @@ import type {
   Time,
 } from 'lightweight-charts'
 import type { OhlcBar } from '../api/client'
-import { getVisibleWidth, setVisibleWidth } from '../chart/visibleBarsMemory'
 import { DEFAULT_VISIBLE_BARS, TIMEFRAME_MINUTES } from '../constants'
 import type { ChartApi, PointPx } from '../drawing/types'
 import { INDICATORS } from '../indicators/registry'
@@ -61,6 +60,8 @@ export type ChartHandle = {
 type Props = {
   bars: OhlcBar[]
   timeframe: string
+  /** §5.1.3 (ver 1.72): 銘柄。symbol が変わったら setData + width preserve + 右端揃えで再 set する */
+  symbol: string
   cursor?: string
   /** 価格表示の小数桁数(MT5 symbol_info.digits)。 */
   digits?: number
@@ -91,13 +92,28 @@ const LOAD_MORE_THRESHOLD = 5
 const RIGHT_OFFSET = 4
 
 /**
+ * §5.1.3: 指定 width で右端揃えの visible logical range を適用する。
+ * バー数が width 未満の TF(broker ヒストリ不足等)では `fitContent()` でフォールバック。
+ */
+function applyVisibleRange(chart: IChartApi, barsLength: number, width: number): void {
+  if (barsLength <= 0) return
+  if (barsLength < width) {
+    chart.timeScale().fitContent()
+    return
+  }
+  const to = barsLength - 1 + RIGHT_OFFSET
+  const from = to - width
+  chart.timeScale().setVisibleLogicalRange({ from, to })
+}
+
+/**
  * 純粋なチャート描画コンポーネント。ツール固有のロジックは持たない。
  * - ろうそく足 + priceLines をレンダ
  * - クリック・マウス移動・押下・離上 を上位へ中継
  * - 座標変換 API を ref 経由で公開
  */
 export const Chart = forwardRef<ChartHandle, Props>(function Chart({
-  bars, timeframe, cursor, digits, onNeedMoreHistory,
+  bars, timeframe, symbol, cursor, digits, onNeedMoreHistory,
   onChartClick, onMouseMove, onMouseDown, onMouseUp,
   priceLines, markers, indicators,
 }, ref) {
@@ -118,10 +134,10 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   const barsRef = useRef<OhlcBar[]>(bars)
   /** クロスヘア同期: ユーザー操作だけを通知する subscriber 集合 */
   const userCrosshairSubsRef = useRef<Set<(t: number | null) => void>>(new Set())
-  /** §5.1.3: rangeHandler から現在の TF を参照するための ref */
+  /** §5.1.3: pxToTime / timeToPx 等の helper から現在の TF を参照するための ref */
   const tfRef = useRef<string>(timeframe)
-  /** 初回 setVisibleLogicalRange より前の rangeHandler 通知を memory に書き込まない */
-  const initialRangeAppliedRef = useRef(false)
+  /** §5.1.3 (ver 1.72): 銘柄切替検知用。null の間は「まだ symbol を見ていない」状態 */
+  const prevSymbolRef = useRef<string | null>(null)
 
   useEffect(() => { onNeedMoreRef.current = onNeedMoreHistory }, [onNeedMoreHistory])
   useEffect(() => { onChartClickRef.current = onChartClick }, [onChartClick])
@@ -281,15 +297,15 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     // 可視範囲が左端付近に近づいたら追加 history を要求(loadMoreHistory)。
     // logical range の `from` がデータ先頭バー(index=0)に近づくと負値になるので、
     // 一定閾値より下回ったタイミングで onNeedMoreHistory を呼ぶ。
+    // ※ §5.1.3 (ver 1.72): rangeHandler はもう memory への書込を行わない。
+    //   過去 ver では setVisibleWidth で TF 別 width を保存していたが、
+    //   lightweight-charts が setData 直後に発火する自動 emit で memory が
+    //   汚染されるバグの温床だったため撤廃。width は Chart instance 内に閉じる。
     const rangeHandler = (range: LogicalRange | null) => {
       if (!range) return
       if (range.from < LOAD_MORE_THRESHOLD) {
         const oldest = barsRef.current[0]
         if (oldest) onNeedMoreRef.current?.(oldest.t)
-      }
-      // §5.1.3: ユーザー操作による zoom / pan の幅を TF メモリに反映
-      if (initialRangeAppliedRef.current) {
-        setVisibleWidth(tfRef.current, range.to - range.from)
       }
     }
     chart.timeScale().subscribeVisibleLogicalRangeChange(rangeHandler)
@@ -383,34 +399,49 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
       chartRef.current = null
       seriesRef.current = null
       fittedForTfRef.current = null
-      initialRangeAppliedRef.current = false
+      prevSymbolRef.current = null
       priceLineHandlesRef.current.clear()
       indicatorSeriesRef.current.clear()
       rsiPaneConfiguredRef.current = false
     }
   }, [])
 
-  // [描画] bars を反映する。
-  // 銘柄切替は SessionPage 側で `<Chart key={`${tf}-${symbol}`}>` による remount で扱うため、
-  // 初回 setData 時にだけ可視範囲を「右端 = 最新バー、幅 = TF メモリ(or 既定値)」で設定する。
-  // 以降の bars 更新(advance / loadMoreHistory)はユーザーの zoom 状態を維持する。
+  // [描画] §5.1.3 (ver 1.72): Chart instance は TF ごとに 1 つ永続化される。
+  // - 初回 mount: 既定 width で右端揃え
+  // - symbol 変化: 直前の visible range の width を保持 → setData → 新 bars の右端に揃えて再 set
+  // - 同 symbol の bars 変化(advance / loadMoreHistory): visible range は触らない(LWC が保持)
   useEffect(() => {
     const series = seriesRef.current
     const chart = chartRef.current
     barsRef.current = bars
     if (!series || !chart || bars.length === 0) return
-    series.setData(bars.map(toCandle))
-    if (fittedForTfRef.current !== timeframe) {
-      // §5.1.3: 全 TF でバー幅 / 表示密度を揃えるため、可視 logical 幅は常に `width` 固定
-      // (バー数が `width` 未満の TF では `from` が負値となり、左に空白領域が表示される)。
-      const width = getVisibleWidth(timeframe, DEFAULT_VISIBLE_BARS)
-      const to = bars.length - 1 + RIGHT_OFFSET
-      const from = to - width
-      chart.timeScale().setVisibleLogicalRange({ from, to })
-      fittedForTfRef.current = timeframe
-      initialRangeAppliedRef.current = true
+
+    const isFirstMountForTf = fittedForTfRef.current !== timeframe
+    const symbolChanged =
+      !isFirstMountForTf
+      && prevSymbolRef.current !== null
+      && prevSymbolRef.current !== symbol
+
+    // symbol 変化時、setData 前に width を取得しておく(setData 後は LWC が visible range を
+    // 保持するが、その値を使って新 bars の右端に揃え直す必要があるため事前に控える)
+    let preservedWidth: number | null = null
+    if (symbolChanged) {
+      const r = chart.timeScale().getVisibleLogicalRange()
+      if (r) preservedWidth = r.to - r.from
     }
-  }, [bars, timeframe])
+
+    series.setData(bars.map(toCandle))
+
+    if (isFirstMountForTf) {
+      applyVisibleRange(chart, bars.length, DEFAULT_VISIBLE_BARS)
+      fittedForTfRef.current = timeframe
+    } else if (symbolChanged && preservedWidth != null) {
+      applyVisibleRange(chart, bars.length, preservedWidth)
+    }
+    // 同 symbol の bars 変化: 何もしない(LWC が visible range を維持する)
+
+    prevSymbolRef.current = symbol
+  }, [bars, timeframe, symbol])
 
   // 価格スケール・priceLine ラベルの精度を digits に合わせる
   useEffect(() => {

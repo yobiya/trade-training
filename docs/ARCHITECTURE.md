@@ -1053,14 +1053,22 @@ MemoPanel:
 | ハンドラ ref 更新(複数) | onChartClick / onMouseMove 等を ref に最新値を入れる | 各ハンドラ |
 | メイン初期化(L149-276 級) | チャート生成 / 各種購読 / cleanup | `[]`(マウント時のみ) |
 | クロスヘア同期 | `ChartHandle.setCrosshairTime` から呼ばれて近接バー検索 → setCrosshairPosition(命令的、useEffect 不要) | — |
-| **描画**(bars 反映) | `series.setData(bars)` または右端伸長時は `series.update()`。初回(tfChanged 経路)は `fitContent` を走らせる | `[bars, timeframe]` |
+| **描画**(bars / symbol 反映) | `series.setData(bars)`。初回(tfChanged 経路)は既定 width で右端揃え `setVisibleLogicalRange`。`symbol` prop が変わった時は **直前の visible range の width を取得** → setData → 新 bars の右端に揃えて再 set。同じ symbol 内の bars 変化(advance / loadMoreHistory)は visible range を触らず LWC に維持させる | `[bars, timeframe, symbol]` |
 | 価格精度 | `priceFormat` を digits に追従 | `[digits]` |
 | priceLines 差分更新 | 削除→追加で priceLines を反映 | `[priceLines]` |
 | インジケーター差分更新 | 種別ごとに addLineSeries / removeSeries | `[indicators, bars]` |
 
-**設計原則**: 銘柄切替は SessionPage 側で `<Chart key={`${tf}-${symbol}`}>` の **React remount** で扱う。lightweight-charts の series/timeScale/各種 ref が一度にリセットされるため、Chart 内で `bars` と `symbol` の到着順序差から intent を推測する必要がない(過去に差分推測ロジックがこの順序差バグの温床になった経験から、明示的に remount でリセットする方式を採る)。Chart は「同一インスタンス内のバー差分反映」だけを担う。
+**設計原則**: Chart instance は **TF ごとに 1 つだけ永続化** する。SessionPage 側の key は `<Chart key={tf}>`(symbol を含めない)。銘柄切替は `symbol` prop の変化として扱い、Chart 内部で setData + width preserve のロジックを走らせる。
 
-トレードオフ: 銘柄切替時にチャートのズーム / パン位置がリセットされる(初回 fitContent からやり直し)。同銘柄内では維持される。
+これは過去の `<Chart key={`${tf}-${symbol}`}>` remount 戦略から切り替えたもの。remount 戦略は「bars と symbol の到着順序差から intent を推測する複雑さ」を避ける目的で採用されたが、後に追加した `visibleBarsMemory`(モジュールスコープの TF キー Map)と組み合わさったとき、毎回の remount で `fittedForTfRef` がリセット → `setVisibleLogicalRange` 再発火 → ライブラリの自動 emit で memory を汚染、というバグの温床になった。
+
+新方式の不変条件:
+- Chart instance の生存中、visible range は **明示的に書き換えた時だけ** 変わる(`setVisibleLogicalRange` を呼ぶのは「初回 mount」と「symbol 変化時」のみ)
+- `subscribeVisibleLogicalRangeChange` のハンドラは `loadMoreHistory` のトリガーにだけ使い、何かの memory に書き戻したりしない(ライブラリの自動 emit が状態を汚染する経路を完全に断つ)
+- symbol 変化時は「直前の visible range の `to - from` を取得 → setData → 新 bars の右端に揃えて `setVisibleLogicalRange`」で width を保持。bars が width 未満の TF は `fitContent()` フォールバック
+- 同 symbol 内の bars 変化(advance / loadMoreHistory)では visible range を触らない。LWC が setData 後も既存の visible range を維持する仕様に依存
+
+トレードオフ: bars が大きく形状の違う symbol へ切り替えた時、width だけ保持するため「直前と同じ位置にいたバー」は表示されない可能性がある(右端は新 bars の最終バーに揃うため)。これは仕様として受け入れる。
 
 ハンドラは ref 経由で常に最新値を呼ぶ(マウント時の購読関数は閉包なので)。
 
@@ -1090,7 +1098,7 @@ ChartHandle = {
 
 ## E.10 既知の複雑さ
 
-- **`visibleBarsMemory.ts` の module-level Map**: TF ごとの visible logical width をセッション内で保持するためにモジュールスコープの可変 state を採用。ページ離脱で破棄、Chart unmount/remount(銘柄切替時に `<Chart key={tf-symbol}>` が再生成される)を跨いでも生存する必要があるため。React state では `<Chart>` 単位にスコープが切れて目的を果たせないので、意図的にモジュール変数を選択している
+(`visibleBarsMemory.ts` は ver 1.72 で撤廃。Chart instance の永続化により、visible range を Chart 内に閉じ込められるようになった結果、モジュールスコープの可変 state を持つ必要がなくなった。詳細は §E.7.2 参照)
 
 ### 残課題(将来の別タスク)
 

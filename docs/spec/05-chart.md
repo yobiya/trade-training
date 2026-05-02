@@ -38,10 +38,12 @@
 - 実装では lightweight-charts の `handleScale.mouseWheel` を無効化し、上位 DOM で `ctrlKey` 判定付きの wheel ハンドラを自前実装する
 
 #### 表示本数の維持
-- 銘柄切替時に表示本数(可視範囲のバー数)が毎回変わらないよう、**TF ごとに「直近の表示幅(visible logical range の `to - from`)」をセッション内メモリで保持**する
-- 銘柄切替・初回表示・初期マウントは「右端を最新バーに合わせ、メモリ上の幅で `setVisibleLogicalRange`」する。`fitContent()` の自動全件表示はしない
-- ユーザーが Ctrl+ホイール / 時間軸ドラッグで幅を変えた値はそのまま次の銘柄に引き継がれる(同 TF 内)
-- 既定値は **全 TF 共通の `DEFAULT_VISIBLE_BARS = 150`**。縦積みマルチ TF でローソク幅 / 表示密度が揃うようにするため、TF 毎に変えない。メモリ未確定時のフォールバックとして使用
+- Chart instance は **TF ごとに 1 つだけ永続化** する(銘柄切替で remount しない)。これにより visible range は Chart instance 内の lightweight-charts の state として自然に保持される
+- 銘柄切替時は **直前の visible range の `to - from` を width として取得 → 新銘柄の bars に setData → 右端を最新バーに合わせて `setVisibleLogicalRange({from: bars.length-1+RIGHT_OFFSET-width, to: bars.length-1+RIGHT_OFFSET})`** とする。これで「同 TF で同じ表示本数 / 表示密度」がシンボル間で保たれる
+- 同 symbol 内の bars 変化(advance / loadMoreHistory)では visible range を触らず、ユーザーの zoom / pan 状態を維持する
+- 初回マウント時のみ既定 width(`DEFAULT_VISIBLE_BARS = 150`)で右端揃えする
+- `bars.length < width` の TF(broker のヒストリ不足等)では `fitContent()` でフォールバック表示する
+- 過去の「`visibleBarsMemory.ts` (TF キーのモジュールスコープ Map)で width を共有する」設計は撤廃した。ライブラリの自動 emit が memory を汚染するパスがあったため
 
 ### 5.1.4 その他
 - **時刻表示は JST**: 時間軸ラベル、クロスヘア、ツールチップ全て JST 表示(内部データは UTC 保持、表示時のみ変換)
