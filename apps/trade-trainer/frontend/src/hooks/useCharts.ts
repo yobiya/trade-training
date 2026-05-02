@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { OhlcBar } from '../api/client'
+import { getCachedStack, setCachedStack } from '../chart/chartStackCache'
 import { useNotify } from './useNotify'
 
 export type ChartsApi = {
@@ -28,6 +29,8 @@ export function useCharts(
   symbol: string | null | undefined,
   timeframes: string[],
   focusedTf: string,
+  /** §5.1.6: キャッシュキー要素。advance 等で position が変わると別キーになる */
+  currentPosition: string | null,
 ): ChartsApi {
   const { notify } = useNotify()
   const [barsByTf, setBarsByTf] = useState<Record<string, OhlcBar[]>>({})
@@ -36,6 +39,12 @@ export function useCharts(
   /** loadMoreHistory の二重発火防止 + 「これ以上過去がない」判定 */
   const historyLoadingRef = useRef<Record<string, boolean>>({})
   const historyExhaustedRef = useRef<Record<string, boolean>>({})
+  /**
+   * §5.1.6: `currentPosition` を ref で参照することで `fetchStack` の useCallback identity を
+   * 不変に保つ(deps に入れると advance のたびに再 firing → bars クリア flicker)。
+   */
+  const currentPosRef = useRef<string | null>(currentPosition)
+  useEffect(() => { currentPosRef.current = currentPosition }, [currentPosition])
 
   const focusedBars = barsByTf[focusedTf] ?? []
   const currentPrice = focusedBars.length > 0 ? focusedBars[focusedBars.length - 1].c : null
@@ -43,8 +52,24 @@ export function useCharts(
   const tfsKey = [...timeframes].sort().join(',')
   const effectiveSymbol = symbol || ''
 
-  const fetchStack = useCallback(async (reqId: number): Promise<void> => {
+  const fetchStack = useCallback(async (reqId: number, useCache = true): Promise<void> => {
     if (!effectiveSymbol) return
+    const pos = currentPosRef.current
+    // §5.1.6: キャッシュヒット時はネットワーク往復を完全にスキップ
+    // reloadStack(advance 直後)経路は useCache=false で必ずバイパスする
+    // (currentPosRef がまだ古い値を指したまま動くため、古いキーで誤ヒットしないように)
+    if (useCache) {
+      const cached = getCachedStack(effectiveSymbol, pos, tfsKey)
+      if (cached) {
+        if (reqId !== requestIdRef.current) return
+        const next: Record<string, OhlcBar[]> = {}
+        for (const entry of cached.stacks) next[entry.timeframe] = entry.bars
+        setBarsByTf(next)
+        const tfs = tfsKey.split(',').filter(Boolean)
+        setLoadingByTf(Object.fromEntries(tfs.map(tf => [tf, false])))
+        return
+      }
+    }
     try {
       const data = await api.chart.stack(sessionId, effectiveSymbol)
       if (reqId !== requestIdRef.current) return // stale: 別の銘柄/TF 切替が走った
@@ -55,6 +80,12 @@ export function useCharts(
       setBarsByTf(next)
       const tfs = tfsKey.split(',').filter(Boolean)
       setLoadingByTf(Object.fromEntries(tfs.map(tf => [tf, false])))
+      // §5.1.6: useCache=false 経路は cache 書込もスキップ。取得結果は backend の **新**
+      // current_position に対応するが、currentPosRef は **古** position を指しているため、
+      // 書き込むと誤キーで保存される。
+      if (useCache) {
+        setCachedStack(effectiveSymbol, pos, tfsKey, { stacks: data.stacks })
+      }
     } catch (err) {
       console.warn('[useCharts] chart-stack fetch failed', { sessionId, symbol: effectiveSymbol, err })
       if (reqId !== requestIdRef.current) return
@@ -88,7 +119,9 @@ export function useCharts(
     historyExhaustedRef.current = {}
     const tfs = tfsKey.split(',').filter(Boolean)
     setLoadingByTf(Object.fromEntries(tfs.map(tf => [tf, true])))
-    await fetchStack(reqId)
+    // §5.1.6: 強制再取得用なのでキャッシュをバイパス(advance 直後で position が
+    // まだ更新前の状態で呼ばれるため、古いキャッシュキーで HIT させない)
+    await fetchStack(reqId, false)
   }, [fetchStack, tfsKey, effectiveSymbol])
 
   /** 過去バー追加取得。Chart の左端到達時に呼ばれる。 */

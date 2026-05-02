@@ -194,6 +194,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
   const { barsByTf, loadingByTf, currentPrice, reloadStack, loadMoreHistory } = useCharts(
     sessionId, currentSymbol, visibleTfs, focusedTf,
+    session?.current_position ?? null,
   )
   const { drawings, add: addDrawing, update: updateDrawing, remove: removeDrawing } =
     useDrawings(sessionId, currentSymbol)

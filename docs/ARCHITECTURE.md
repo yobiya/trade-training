@@ -1098,7 +1098,8 @@ ChartHandle = {
 
 ## E.10 既知の複雑さ
 
-(`visibleBarsMemory.ts` は ver 1.72 で撤廃。Chart instance の永続化により、visible range を Chart 内に閉じ込められるようになった結果、モジュールスコープの可変 state を持つ必要がなくなった。詳細は §E.7.2 参照)
+- **`chartStackCache.ts` の module-level LRU**(§5.1.6): `(symbol, current_position, tfsKey)` をキーに `/chart-stack` レスポンス全体をクライアント in-memory にキャッシュ。`useCharts` が銘柄切替で再マウントされても生存させたいのでモジュールスコープを選択。最大 50 エントリの簡易 LRU、タブクローズで破棄。`useCharts.fetchStack` の冒頭で参照、ヒット時はネットワーク往復をスキップ。`reloadStack`(advance 直後)経路は cache バイパス(古い `currentPosition` を指したまま fetchStack が走る race を回避)
+- (`visibleBarsMemory.ts` は ver 1.72 で撤廃。Chart instance の永続化により、visible range を Chart 内に閉じ込められるようになった結果、モジュールスコープの可変 state を持つ必要がなくなった。詳細は §E.7.2 参照)
 
 ### 残課題(将来の別タスク)
 
