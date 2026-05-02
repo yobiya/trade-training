@@ -36,6 +36,13 @@ export function useCharts(
   const [barsByTf, setBarsByTf] = useState<Record<string, OhlcBar[]>>({})
   const [loadingByTf, setLoadingByTf] = useState<Record<string, boolean>>({})
   const requestIdRef = useRef(0)
+  /**
+   * §5.1.6: in-flight な `/chart-stack` HTTP request を中断するための AbortController。
+   * 銘柄切替・unmount で前回 controller を `abort()` し、新規割当する。requestIdRef が
+   * 「結果を state に反映しない」役なのに対し、こちらは「HTTP request 自体を backend に
+   * 到達する前に止める」役。連続銘柄切替時に MT5 IPC が滞留する事態を防ぐ。
+   */
+  const abortControllerRef = useRef<AbortController | null>(null)
   /** loadMoreHistory の二重発火防止 + 「これ以上過去がない」判定 */
   const historyLoadingRef = useRef<Record<string, boolean>>({})
   const historyExhaustedRef = useRef<Record<string, boolean>>({})
@@ -70,8 +77,14 @@ export function useCharts(
         return
       }
     }
+    // §5.1.6: 進行中 fetch を中断してから新規発行する。これにより同時 in-flight な
+    // `/chart-stack` は最大 1 件になる。requestIdRef は「古い結果を捨てる」役なのに対し、
+    // controller は HTTP request 自体を backend に到達する前に止める役(役割が補完的)。
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
     try {
-      const data = await api.chart.stack(sessionId, effectiveSymbol)
+      const data = await api.chart.stack(sessionId, effectiveSymbol, { signal: controller.signal })
       if (reqId !== requestIdRef.current) return // stale: 別の銘柄/TF 切替が走った
       const next: Record<string, OhlcBar[]> = {}
       for (const entry of data.stacks) {
@@ -81,12 +94,16 @@ export function useCharts(
       const tfs = tfsKey.split(',').filter(Boolean)
       setLoadingByTf(Object.fromEntries(tfs.map(tf => [tf, false])))
       // §5.1.6: useCache=false 経路は cache 書込もスキップ。取得結果は backend の **新**
-      // current_position に対応するが、currentPosRef は **古** position を指しているため、
+      // current_position に対応するが、currentPosRef は **古** position を指したまま、
       // 書き込むと誤キーで保存される。
       if (useCache) {
         setCachedStack(effectiveSymbol, pos, tfsKey, { stacks: data.stacks })
       }
     } catch (err) {
+      // §5.1.6: AbortError はユーザー操作起因の意図的中断 → silent return(notify せず、
+      // state も更新しない。loadingByTf は次の useEffect で true → fetch 完了で false の
+      // 流れに乗るため、ここで触る必要はない)
+      if (controller.signal.aborted) return
       console.warn('[useCharts] chart-stack fetch failed', { sessionId, symbol: effectiveSymbol, err })
       if (reqId !== requestIdRef.current) return
       // I-11.4: ユーザー入力起因(銘柄切替 / 初期表示)の失敗 → notify
@@ -111,6 +128,13 @@ export function useCharts(
     setLoadingByTf(Object.fromEntries(tfs.map(tf => [tf, true])))
     void fetchStack(reqId)
   }, [fetchStack, tfsKey, effectiveSymbol])
+
+  // unmount 時に in-flight な fetch を残さない(§5.1.6)
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort()
+    }
+  }, [])
 
   const reloadStack = useCallback(async () => {
     if (!effectiveSymbol) return

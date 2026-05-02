@@ -97,11 +97,17 @@ export const api = {
   },
 
   chart: {
-    /** 全 TF を 1 リクエストで取得(chart-stack エンドポイント、設計 §C.3)。 */
-    stack: (sessionId: string, symbol?: string) => {
+    /** 全 TF を 1 リクエストで取得(chart-stack エンドポイント、設計 §C.3)。
+     *
+     * `opts.signal` を渡すと、銘柄切替などで in-flight request を中断できる(§5.1.6)。
+     */
+    stack: (sessionId: string, symbol?: string, opts?: { signal?: AbortSignal }) => {
       const params = new URLSearchParams()
       if (symbol) params.set('symbol', symbol)
-      return request<ChartStackResponse>(`/sessions/${sessionId}/chart-stack?${params.toString()}`)
+      return request<ChartStackResponse>(
+        `/sessions/${sessionId}/chart-stack?${params.toString()}`,
+        opts?.signal ? { signal: opts.signal } : undefined,
+      )
     },
     /** 指定 TF の過去バーを `before` より前から N 本追加取得する(loadMoreHistory 用)。 */
     history: (sessionId: string, timeframe: string, beforeUnix: number, bars: number, symbol?: string) => {

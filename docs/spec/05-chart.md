@@ -69,6 +69,7 @@
 - キャッシュ最大 50 エントリ(28 銘柄 × 数 position の往来をカバー)、超過時は LRU で最古を破棄
 - 粒度はレスポンス単位(whole-response)。バー単位の per-bar キャッシュは断片化リスクがあるため不採用
 - **§5.1.3 の Chart instance 永続化が前提**:銘柄切替で Chart は remount せず、cache hit/miss で bars prop が変わるだけ。visible range は Chart 内で保持されるため、cache を入れても表示位置が壊れない
+- **連続切替時の進行中 fetch 中断**: 銘柄を高速で連続切替した際、進行中の `/chart-stack` リクエストを `AbortController` で中断する。frontend は同時に in-flight な fetch を 1 件だけ持ち、新しい銘柄に切り替わった瞬間に古い fetch を abort して新規発行する。これにより MT5 IPC が内部シリアライズで連鎖待機を起こす(古い銘柄の fetch が backend thread pool に滞留して新銘柄の fetch を待たせる)事態を防ぐ
 
 ## 5.2 インジケーター(自前実装)
 - SMA(単純移動平均、既定 period=20)

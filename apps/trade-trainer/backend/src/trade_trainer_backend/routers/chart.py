@@ -1,5 +1,6 @@
 """チャート取得 / 足送りエンドポイント(chart-stack 単一エンドポイント、設計 §C.3)。"""
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -137,6 +138,7 @@ def chart_stack(session_id: str, symbol: str | None = None) -> ChartStackRespons
 
     stacks: list[ChartStackEntry] = []
     prev_tf_df: pd.DataFrame | None = None
+    total_start = time.monotonic()
 
     for tf in _TF_ORDER:
         bars_count = _BARS_BY_TF[tf]
@@ -145,6 +147,7 @@ def chart_stack(session_id: str, symbol: str | None = None) -> ChartStackRespons
         from_dt = current_pos - timedelta(minutes=fetch_minutes)
         boundary = _bar_start_for_tf(current_pos, tf)
 
+        tf_start = time.monotonic()
         log.debug("[chart-stack] fetch sym=%s tf=%s from=%s to=%s", sym, tf, from_dt, current_pos)
         try:
             raw = get_ohlc(sym, tf, from_dt, current_pos)
@@ -179,9 +182,20 @@ def chart_stack(session_id: str, symbol: str | None = None) -> ChartStackRespons
             full = full[~full.index.duplicated(keep="last")].sort_index()
             full = full.tail(bars_count)
 
-        stacks.append(ChartStackEntry(timeframe=tf, bars=_df_to_bars(full)))
+        bars_list = _df_to_bars(full)
+        # §B I-10 observability: TF ごとの所要時間と本数を残す。連続銘柄切替で
+        # MT5 IPC が滞留するシナリオの切り分けにも使う(設計 §E.10 / 仕様 §5.1.6)
+        log.info(
+            "[chart-stack] sym=%s tf=%s elapsed_ms=%d rows=%d",
+            sym, tf, int((time.monotonic() - tf_start) * 1000), len(bars_list),
+        )
+        stacks.append(ChartStackEntry(timeframe=tf, bars=bars_list))
         prev_tf_df = full if not full.empty else None
 
+    log.info(
+        "[chart-stack] sym=%s total_elapsed_ms=%d",
+        sym, int((time.monotonic() - total_start) * 1000),
+    )
     return ChartStackResponse(
         symbol=sym,
         current_position=current_pos,

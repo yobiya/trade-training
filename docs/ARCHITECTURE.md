@@ -936,22 +936,35 @@ function useNotify(): {
 ## E.5 `useCharts` の契約
 
 ```ts
-useCharts(sessionId, symbol, timeframes, entryTf): {
-  barsByTf: Record<string, OhlcBar[]>,    // TF 別バー配列。timestamp 昇順
-  currentPrice: number | null,             // entryTf の最新 close
-  reloadAll: () => Promise<void>,          // 銘柄/TF 集合切替時の全 TF 再取得
-  loadMoreHistory: (tf, earliest) => Promise<void>,  // 過去バー追加取得(左端到達時)
-  mergeM5Bars: (newBars) => void,          // advance 後の楽観的 M5 マージ
-  refreshTails: (tfBars) => Promise<void>, // advance 後の per-TF 末尾再取得
+useCharts(sessionId, symbol, timeframes, focusedTf, currentPosition): {
+  barsByTf: Record<string, OhlcBar[]>,        // TF 別バー配列。timestamp 昇順
+  loadingByTf: Record<string, boolean>,       // TF 別 loading フラグ
+  currentPrice: number | null,                // focusedTf の最新 close
+  reloadStack: () => Promise<void>,           // advance 直後の強制再取得(キャッシュバイパス)
+  loadMoreHistory: (tf, earliestUnix) => Promise<void>,  // 左端到達時の過去バー prepend
 }
 ```
 
+内部 state(hook lifetime):
+
+| State | 種類 | 用途 |
+|---|---|---|
+| `barsByTf` | `useState` | TF 別バー配列 |
+| `loadingByTf` | `useState` | TF 別 loading フラグ |
+| `requestIdRef` | `useRef` | stale **結果** を捨てるカウンター |
+| `abortControllerRef` | `useRef` | in-flight `/chart-stack` HTTP request を中断 |
+| `historyLoadingRef` | `useRef` | `loadMoreHistory` の二重発火防止 |
+| `historyExhaustedRef` | `useRef` | `loadMoreHistory` の履歴尽き判定 |
+| `currentPosRef` | `useRef` | `currentPosition` の安定参照(cache キー用) |
+
 不変条件:
-- `barsByTf[tf]` は **timestamp 昇順** で **重複なし**(`mergeBarsTail` が保証)
-- `requestIdRef` で stale 検知:銘柄 / TF 集合切替時に `++requestId` し、古い in-flight 結果を捨てる
-- 失敗時は `console.warn` で残す(silent failure を作らない、[§B I-10](#i-10-observability-の最低ライン))
-- `mergeM5Bars` は M5 のみを更新。他 TF は影響しない
-- `refreshTails(tfBars)` は per-TF で `bars` 数を指定可能(M5 は `n+2` 程度、上位は 2 が標準)
+- `barsByTf[tf]` は **timestamp 昇順** で **重複なし**(`loadMoreHistory` の merge は Map で保証)
+- `requestIdRef` で stale **結果** を検知:銘柄 / TF 集合切替時に `++requestId` し、古い in-flight 結果を `setBarsByTf` 反映前に捨てる
+- `abortControllerRef` で stale **HTTP request** を中断:銘柄切替・unmount で前回の controller を `abort()` し、新規 `AbortController` を割り当てて signal を `request<T>` に渡す。同時 in-flight な `/chart-stack` は最大 1 件
+- `AbortError` は `catch` 内で silent return(notify せず、state も更新しない。ユーザー操作起因の意図的中断のため)
+- 失敗時は `console.warn` で残す(silent failure を作らない、[§B I-10](#i-10-observability-の最低ライン))。ユーザー入力起因のエラーは `notify` で UI に出す([§B I-11.4](#i-114-ユーザー入力起因の失敗は-ui-に通知))
+- `reloadStack` は cache をバイパスする(advance 直後の `currentPosition` race を回避、§5.1.6)
+- cache hit 時は同期完了し HTTP 経路を通らない → abort 機構と独立
 
 ## E.6 主要フロー
 
@@ -960,11 +973,17 @@ useCharts(sessionId, symbol, timeframes, entryTf): {
 ```
 SessionPage mount
   ↓ useEffect: api.sessions.get / api.trades.getActive / api.trades.getLatest
-  ↓ useCharts: setBarsByTf({})、各 TF を fetchOne で並列取得
-  ↓ 各 TF が返ったものから Chart に setData → fitContent(初回のみ)
+  ↓ useCharts: chartStackCache を参照(§5.1.6)
+      hit  → 同期で setBarsByTf、HTTP 経路をスキップ
+      miss → abortControllerRef.current?.abort() で前回 fetch を中断
+              → 新規 AbortController を割当 → api.chart.stack(signal) を発行
+              → 全 TF の bars がまとめて返る → setBarsByTf + cache に保存
+  ↓ 各 TF の Chart は bars prop を受け取り setData(Chart instance は永続化、§5.1.3)
   ↓ useEconomicEvents: 表示 range が決まったら events を取得 → EventOverlay
   ↓ useDrawings: symbol に紐づく描画を取得 → DrawingOverlay + priceLines
 ```
+
+銘柄切替も同経路を辿る。連続切替時は **古い銘柄の `/chart-stack` request が AbortController で中断される** ため、backend に到達する request は「現在見ている銘柄の 1 件」だけになり、MT5 IPC の連鎖待機が起きない(§5.1.6)。
 
 ### E.6.2 handleAdvance
 
@@ -1099,6 +1118,7 @@ ChartHandle = {
 ## E.10 既知の複雑さ
 
 - **`chartStackCache.ts` の module-level LRU**(§5.1.6): `(symbol, current_position, tfsKey)` をキーに `/chart-stack` レスポンス全体をクライアント in-memory にキャッシュ。`useCharts` が銘柄切替で再マウントされても生存させたいのでモジュールスコープを選択。最大 50 エントリの簡易 LRU、タブクローズで破棄。`useCharts.fetchStack` の冒頭で参照、ヒット時はネットワーク往復をスキップ。`reloadStack`(advance 直後)経路は cache バイパス(古い `currentPosition` を指したまま fetchStack が走る race を回避)
+- **`useCharts.abortControllerRef` の AbortController 管理**(§5.1.6 / §E.5): 銘柄切替・unmount で進行中の `/chart-stack` HTTP request を `AbortController.abort()` で中断する。連続切替時に backend thread pool に古い銘柄の request が滞留し、MT5 IPC 内部シリアライズで連鎖待機する事態を防ぐ。`requestIdRef`(stale 結果検知)とは役割が補完的(controller は HTTP レベルで止め、reqId は完了結果の state 反映を防ぐ)。cache hit 時は同期完了するため abort 経路を通らない
 - (`visibleBarsMemory.ts` は ver 1.72 で撤廃。Chart instance の永続化により、visible range を Chart 内に閉じ込められるようになった結果、モジュールスコープの可変 state を持つ必要がなくなった。詳細は §E.7.2 参照)
 
 ### 残課題(将来の別タスク)
