@@ -16,6 +16,7 @@
 - [§F 主要フロー](#f-主要フロー)
 - [§G API クライアント](#g-api-クライアント)
 - [§H 既知の複雑さと落とし穴](#h-既知の複雑さと落とし穴)
+- [§I テスト戦略と検証粒度](#i-テスト戦略と検証粒度)
 
 ---
 
@@ -332,9 +333,9 @@ MemoPanel:
 ### H.4 残課題(将来の別タスク)
 
 - **Chart.tsx 責務分割**: 460+ 行 / useEffect 8 個。座標変換 / series 管理 / イベント中継 / クロスヘア / スクリーンショットを内部 private hook に分解する余地あり。詳細は [`frontend-chart.md`](./frontend-chart.md)
-- **`drawing/state.ts` 515 行を tool 別 reducer に分割**: 設計自体は良好(state machine)、ファイルサイズだけが課題。次の描画機能追加時に着手
+- **`drawing/state.ts` 599 行を tool 別 reducer に分割**: 設計自体は良好(state machine)、ファイルサイズだけが課題。次の描画機能追加時に着手
 - **`index.css` 1,274 行のモジュール化**: CSS Modules / Tailwind 移行は別タスク
-- **テスト導入(Vitest / Pytest)**: Phase D として別タスク
+- **テスト整備(Vitest)**: テスト戦略は [§I](#i-テスト戦略と検証粒度) に集約。実体ファイル整備は別タスク
 
 ### H.5 一般的な落とし穴
 
@@ -344,3 +345,64 @@ MemoPanel:
 | 「TF 間で価格が違う」 | 同上 | 同上 |
 | 「クロスヘアが他チャートで Value is null」 | `setCrosshairPosition` に対象 series に存在しない time を渡している | bars 内の最寄り timestamp を使う(現状実装済) |
 | 「advance ボタンが無反応」 | `advancing` が true で stuck、または refreshTails が silent fail | DevTools Console を確認、必要なら hard reload |
+
+---
+
+## §I テスト戦略と検証粒度
+
+frontend のロジックは **3 階層** に分けて検証する。各階層で最低コストの手段を選び、UI 統合検証(Playwright)を最後の通し確認に絞る方針([WORKFLOW.md §C](../WORKFLOW.md#c-検証粒度の使い分け) と整合)。
+
+### I.1 Tier 1: 純関数(vitest が最も ROI 高い)
+
+frontend 側で **I/O も外部状態も持たない関数群**。バグの大半はここで再現可能で、Playwright で座標計算しながら検証するよりも 1 桁速い。
+
+| ファイル | 検証対象 | 行数 | 理由 |
+|---|---|---|---|
+| `drawing/state.ts` | `dispatchEvent` + 各 reducer (`reduceIdle` / `reduceMovingTradeLine` 等) + selector 群 (`cursorOf` / `tradeLinePreviewOf` 等) | 599 | SL/TP drag、波動 auto-advance、weekend skip、hit-test 競合(SL 優先)等のロジック集中 |
+| `drawing/tools/*.tsx` | 各 ToolMetadata の `hitTest` / `getXxxData` 関数、`nextWave`、`isWaveValue` | — | 描画 hit-test の境界条件 |
+| `drawing/visibility.ts` | `isDrawingVisibleOnTf` | 13 | TF 可視性の規則 |
+| `indicators/calculations.ts` | `calcSMA` / `calcEMA` / `calcRSI` | 70 | インジケーター計算式の正確性 |
+| `chart/chartStackCache.ts` | `getCachedStack` / `setCachedStack` の LRU 動作 | 60 | eviction / 再挿入順 / null current_pos の扱い |
+| `utils/datetime.ts` | `formatJST` / `formatJSTDate` | 13 | TZ 変換の正確性 |
+
+backend 側でも同様のレイヤ(`_bar_start_for_tf`、`_calculate_pips`、`resample_ohlc` の規約等)が pytest 対象になる。
+
+### I.2 Tier 2: hook / API I/O(curl + 必要に応じて React Testing Library)
+
+**state 管理 + I/O が混ざる層**。テスト戦略:
+1. **backend エンドポイント**は `curl` で叩いて直接確認(レスポンス値 / ステータスコード)
+2. **frontend hook の動作**は基本的にテスト化しない(curl で backend 確認 → frontend 側のバグなら Tier 1 に切り出して単体検証)
+3. 例外として **副作用が重要なロジック**(`useCharts` の cache + abort 整合性など)は React Testing Library での hook test を検討
+
+| 対象 | 推奨手段 | 備考 |
+|---|---|---|
+| `api/client.ts` の URL 構築 / signal 配線 | 必要時のみ単体抽出 | 現状は inline、テスト化要なら抽出可 |
+| `hooks/useCharts.ts` cache / abort | hook test 候補 | requestId / abortController / cache の 3 状態整合性が複雑 |
+| `hooks/useDrawings.ts` / `useTradeFlow.ts` / `useSessionFetch.ts` | curl で backend 確認 | 単純な API 叩き + state 反映のみ |
+| `hooks/useDrawingInteraction.ts` | Tier 1 に集約済み | propagator のみ(ロジックは `state.ts`) |
+
+### I.3 Tier 3: UI 統合(Playwright を最後の通し確認だけ)
+
+**canvas / SVG / マウス入力 / 全体フロー**。ここでしか検証できないものに限って Playwright を使う:
+- canvas / SVG の座標が実描画で正しいか
+- ライブラリ(lightweight-charts)の暗黙副作用と統合した結果
+- ユーザー視点の主要フロー(エントリー → 保有 → drag SL → advance → 決済)の通し動作
+
+**Playwright を使うときのコツ**(過去経験):
+- `priceToY` 等の座標 API を直接叩いて y を取得する(視認推定は誤差が出る)
+- focus TF を明示的にクリックで確定してから操作する
+- drag は `page.mouse.move` を 5 px 刻みで段階発火
+- カーソル変化(`ns-resize` 等)で hit-test 成功を検知する
+- backend 状態は curl で別途確認(UI と API の両方を検証)
+
+### I.4 過去事例の階層分類
+
+| 機能 | Tier 1 | Tier 2 | Tier 3 |
+|---|---|---|---|
+| ver 1.78 chart-stack 最新 N バー保証 | — | curl で各 TF の bars 数確認 | (任意) |
+| ver 1.79 advance 境界アライメント | `_bar_start_for_tf` 単体 | curl で current_position 遷移確認 | (任意) |
+| ver 1.80 SL/TP drag | `findTradeLineHit` / `reduceMovingTradeLine` 単体 | curl で `PATCH /trade` 確認 | drag → mouseup → priceLine 再描画の通し |
+| ver 1.77 波動 auto-advance | `nextWave` / `reduceDrawingWaveLabel` 単体 | — | キーホットキー統合 |
+| ver 1.76 LowerTfRangeOverlay | `logicalToTime` / `timeToLogical` 単体 | — | px 計算と SVG 配置 |
+
+**新機能 / バグ修正の着手前に**、上表を参考にして「どの Tier で検証できるか」を 30 秒で判定してから作業に入る。詰まり始めたら 1 段下に戻って原因を狭める。

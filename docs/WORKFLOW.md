@@ -84,10 +84,13 @@ frontend / backend の役割境界(どこに置くか)を判定するときは [
 
 ### A-4. 検証
 
-- 静的チェック: `npx tsc --noEmit`(frontend) / `uv run python -c "import trade_trainer_backend.main"`(backend)
-- 必要なら API スモーク: curl で endpoint を叩いて応答確認
-- ブラウザ確認: 該当画面で挙動チェック(`Ctrl+Shift+R` で強制リロード)
-- ログ・assert 違反が新たに出ていないか観測([invariants I-10 observability](./architecture/invariants.md#i-10-observability-の最低ライン) 参照)
+検証は **3 階層** に分けて、対象ロジックの性質に合った最低コストの手段を選ぶ([§C 検証粒度の使い分け](#c-検証粒度の使い分け))。階層を飛ばすと(例: Tier 1 で済むことを Tier 3 で確認しようとする)時間が多大にかかる。
+
+- **静的チェック(全変更)**: `npx tsc --noEmit`(frontend) / `uv run python -c "import trade_trainer_backend.main"`(backend)
+- **Tier 1 純関数**: 該当する純関数を変更したら **vitest / pytest で単体テスト**(将来整備、現状は手動 REPL 検証可)
+- **Tier 2 backend エンドポイント**: 変更した API は `curl` で endpoint を叩いて応答確認
+- **Tier 3 UI 統合**: 主要フローの最後の通し確認だけ Playwright / ブラウザ手動(`Ctrl+Shift+R` で強制リロード)
+- **observability**: ログ・assert 違反が新たに出ていないか観測([invariants I-10 observability](./architecture/invariants.md#i-10-observability-の最低ライン) 参照)
 
 ---
 
@@ -126,21 +129,111 @@ frontend / backend の役割境界(どこに置くか)を判定するときは [
 ### B-4. 検証
 
 - 修正前に再現していた事象が解消したことを確認
-- A-4 と同じ静的チェック / API スモーク / ブラウザ確認
+- [§C 検証粒度の使い分け](#c-検証粒度の使い分け) に従い、変更箇所に応じた階層で検証する
 - 関連箇所(同じデータフロー上の他の TF / 他のフェーズ等)で副作用が出ていないか確認
 
 ---
 
-## C. 共通の守るべき手順
+## C. 検証粒度の使い分け
 
-### C-1. 着手時
+UI 統合検証(Playwright / ブラウザ手動)を最終段に絞り、**変更ロジックの性質ごとに最も安いツール**で検証する。Tier を飛ばすと時間が多大にかかる(過去の Playwright 調査で SL 線の y 座標を求めるのに 5 往復した経験あり)。
+
+### C-1. 検証着手前の判断フロー
+
+```
+変更したのは:
+  ├─ 純関数(I/O 無し、引数 → 戻り値が deterministic)
+  │   └→ Tier 1: vitest / pytest で単体検証(なければ手動 REPL)
+  │
+  ├─ backend エンドポイント / DB / market-data
+  │   └→ Tier 2: curl で API スモーク(レスポンス値 / ステータスコード確認)
+  │
+  ├─ React state / hook の I/O 配線
+  │   └→ Tier 2: curl で backend 確認 + 必要なら React Testing Library
+  │
+  └─ canvas / SVG / マウス入力 / 全体フロー(エントリー → 保有 → 振り返り)
+      └→ Tier 3: Playwright(MCP)/ ブラウザ手動。最低限の統合確認だけ
+```
+
+**詰まり始めたら 1 段下に戻る**。Tier 3 で原因が特定できないバグは、ほぼ必ず Tier 1 のロジック問題か Tier 2 の I/O 問題に分解できる。
+
+### C-2. Tier 1: 純関数(vitest / pytest)
+
+**対象**: 引数 → 戻り値が deterministic で、I/O も外部状態も持たない関数。frontend 側では:
+
+- `drawing/state.ts` の `dispatchEvent` + 各 reducer + selector 群(599 行・最も ROI が高い)
+- `drawing/tools/*.tsx` の `hitTest` / `getXxxData` 関数
+- `drawing/visibility.ts` の `isDrawingVisibleOnTf`
+- `indicators/calculations.ts`(SMA / EMA / RSI)
+- `chart/chartStackCache.ts` の LRU 動作
+- `utils/datetime.ts`
+
+**ROI が高い理由**: ロジックの複雑さがリッチ(SL/TP drag の hit-test 競合、波動 auto-advance、weekend skip、cache LRU eviction 等)で、**バグの大半はここで再現可能**。Playwright での座標計算 / drag シミュレーションを通すよりも 1 桁速く検証できる。
+
+backend 側の純関数(`_bar_start_for_tf`、`_calculate_pips`、`resample_ohlc` の規約等)も同様に pytest で検証する。
+
+### C-3. Tier 2: backend / hook の I/O(curl + React Testing Library)
+
+**対象**: HTTP 境界 / DB / market-data / hook の state 反映。
+
+**curl で backend を叩く例**:
+```bash
+# advance の境界アライメント検証(ver 1.79)
+curl -X POST "http://127.0.0.1:8001/api/sessions/{id}/advance?bars=1&focused_tf=H1&symbol=GBPJPY"
+
+# SL/TP 部分更新検証(ver 1.80)
+curl -X PATCH "http://127.0.0.1:8001/api/sessions/{id}/trade" -H "Content-Type: application/json" -d '{"sl": 198.5}'
+
+# レスポンス値を見て期待値と一致するかを確認
+```
+
+**hook test の判断**: hook test(React Testing Library)は保守コストが高いので、まず **curl で backend を確認 → frontend 側のバグなら Tier 1 に切り出して単体検証** の戦略を優先する。`useCharts` の cache + abort 整合性のような副作用ロジックだけ例外的に hook test を検討する。
+
+### C-4. Tier 3: UI 統合(Playwright / ブラウザ手動)
+
+**対象**: canvas 描画 / SVG 配置 / マウス入力 / 全体フロー(エントリー → 保有 → drag SL → advance → 決済)。
+
+**Tier 3 を選ぶときの判断**:
+- canvas / SVG の座標が正しいかを実際の描画で確認したい
+- ライブラリ(lightweight-charts)の暗黙副作用と統合した結果を見たい
+- ユーザー視点の主要フローが通しで動くかの最終確認
+
+**避けるべき使い方**:
+- 純関数のロジック検証(Tier 1 で済む)
+- backend の API レスポンス値検証(curl で済む)
+- 「とりあえず実物で見てみる」の場当たり利用(座標を求めるだけで何往復もする原因)
+
+**Playwright を使う場合のコツ**(過去の経験から):
+- `priceToY` 等の座標 API を直接叩いて y を取得する(視認による推定は誤差が出る)
+- focus TF を明示的にクリックで確定してから操作する
+- drag は `page.mouse.move` を 5 px 刻みで段階発火させる
+- カーソル変化(`ns-resize` 等)で hit-test 成功を検知する
+- backend 状態は curl で別途確認(UI と API の両方を検証)
+
+### C-5. 過去事例の階層分類
+
+| 機能 | Tier 1 で検証可能 | Tier 2 で検証可能 | Tier 3 が必要 |
+|---|---|---|---|
+| ver 1.78 chart-stack の最新 N バー保証 | — | ✓(curl で各 TF の bars 数確認) | (任意) |
+| ver 1.79 advance 境界アライメント | _bar_start_for_tf の単体 | ✓(curl で current_position の遷移確認) | (任意) |
+| ver 1.80 SL/TP drag | state.ts の `findTradeLineHit` / `reduceMovingTradeLine` | ✓(curl で PATCH /trade 確認) | drag 操作の通し検証 |
+| ver 1.77 波動 auto-advance | `nextWave` / `reduceDrawingWaveLabel` | — | キーホットキー統合 |
+| ver 1.76 LowerTfRangeOverlay | `logicalToTime` / `timeToLogical`(純関数) | — | px 計算と SVG 配置 |
+
+ver 1.80 のとき、SL/TP drag のロジック自体は Tier 1(`findTradeLineHit` の単体検証)で済む。Tier 3 で確認が必要なのは「drag 操作 → mouseup → PATCH 発火 → priceLine 再描画」の通しのみ。今後はこの分割を着手前に決める。
+
+---
+
+## D. 共通の守るべき手順
+
+### D-1. 着手時
 
 - このドキュメントと、該当する仕様書 / 設計ドキュメントを先に開く
 - セッションの最初に「このタスクは A か B か」を明示する
 - A の場合は仕様書のどの章を、B の場合は設計のどの観点を見るか宣言してから進む
 - **エラー処理 / 失敗時挙動を伴う変更**(catch 追加・データ取得・ユーザー操作の結果反映等)では [`invariants.md I-11`](./architecture/invariants.md#i-11-エラー処理--失敗の可視化) の 6 項目を確認してから着手する
 
-### C-2. 完了の定義
+### D-2. 完了の定義
 
 完了 = 以下のすべて:
 
@@ -152,7 +245,7 @@ frontend / backend の役割境界(どこに置くか)を判定するときは [
 
 3 が手動でしか確認できない場合(UI 視覚確認等)は、ユーザーに具体的な確認手順を提示する。
 
-### C-3. やってはいけないこと
+### D-3. やってはいけないこと
 
 - ✗ コードだけ直して仕様書 / 設計を後回しにする
 - ✗ 「とりあえず動いたから OK」で終わらせる(設計上の不変条件違反を放置しない)
