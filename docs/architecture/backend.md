@@ -219,7 +219,7 @@ return ChartStackResponse(symbol, current_position, stacks)
 - **下位 TF 連鎖集約**: 上位 TF の最新バーは前段で確定したフル DataFrame(confirmed + live)から `[boundary, current_position]` 範囲を `resample_ohlc` で 1 行に集約する。これにより `current_position` 以降の broker データが混入しない(未来漏れ防止)
 - **broker の in-progress バーは捨てる**: `raw[raw.index < boundary]` で boundary より前の確定済みのみ採用
 - **キャッシュなし**: `ohlc` テーブルは本フローからは読み書きしない(将来再導入候補)。MT5 ターミナル側キャッシュで 2 回目以降は十分速い
-- **`FACTOR = 1.5`**: bars × tf_minutes に掛ける単純係数(週末・祝日吸収のため)。TF 別に分岐させない
+- **`FACTOR = 10`**: bars × tf_minutes に掛ける単純係数。FX 市場の最大連続クローズ(週末 ~65h + 平日連休) を吸収するため、最下位 TF (M5) で 200 × 5 × 10 = 100h ≧ 65h を確保する。TF 別に分岐させない方針は維持(上位 TF では窓が過剰になるが MT5 はヒストリ外を空で返すだけのため副作用なし)。仕様 §5.1.1「最新 N バー保証」を時間窓ベースで実用上満たす値。過去設計の `FACTOR = 1.5` は週末に M5 の 25h 窓が完全に飲まれて空配列を返す不具合があった
 
 #### C.2.2 末尾の安全策
 
@@ -283,7 +283,7 @@ DataFrame の規約:
 1. session_store.load(id)         # 404 if not found
 2. to_dt = current_position
 3. for tf in TF_ORDER (直列):
-     fetch_minutes = bars * tf_minutes * 1.5
+     fetch_minutes = bars * tf_minutes * 10        # FACTOR=10、§C.2.2 参照
      from_dt = to_dt - timedelta(minutes=fetch_minutes)
      raw = provider.fetch_ohlc(symbol, tf, from_dt, to_dt)
      confirmed = raw[index < bar_start(to_dt, tf)]
@@ -300,24 +300,35 @@ DataFrame の規約:
 
 `bars` パラメータは **M5 換算本数**(frontend が entry TF → M5 比率を掛けて算出する。仕様 §5.1.1)。
 
+仕様 §5.1.1「+N 本 = 実バー N 本分」に従い、**`current_position` を実在する M5 バーが N 本分経過する時刻まで進める**(時刻加算ではない)。市場クローズ期間に位置していると、自動的に次の取引バーへスキップされる(土曜 H1 +1本 → M5 換算 12 本 → 月曜開場後の M5 12 本目時刻まで進む)。
+
 ```
 1. session_store.load(id)
-2. new_pos = current_pos + 5min × bars
-3. trade = active trade (if any)
-4. advance_symbol = trade.symbol or query param symbol
-5. if advance_symbol:
-     new_m5 = market_data.get_ohlc(advance_symbol, 'M5', current_pos+5min, new_pos)
-     if trade and not new_m5.empty:
-       hit = _check_sl_tp(trade, new_m5)  # 各 M5 バーで high>=tp, low<=sl 判定
+2. trade = active trade (if any)
+3. advance_symbol = trade.symbol or query param symbol
+4. if advance_symbol:
+     # 実 M5 バー N 本を確実に拾える時間幅 = 最大連続クローズ + N 本分の M5 時間
+     # (bars が小さくても週末跨ぎで月曜開場後のバーに到達できる、§C.2.2 と方針整合)
+     fetch_window = timedelta(hours=100) + timedelta(minutes=bars * 5)
+     m5 = market_data.get_ohlc(advance_symbol, 'M5', current_pos + 5min, current_pos + fetch_window)
+     if len(m5) >= bars:
+       new_pos = m5.index[bars - 1] + timedelta(minutes=5)  # bars 本目の M5 バー終了時刻
+     else:
+       new_pos = current_pos + (5min × bars)                # 取れない場合のフォールバック(notify対象)
+     if trade and len(m5) > 0:
+       hit = _check_sl_tp(trade, m5.head(bars))
        if hit:
          update trade.exit_*
          session_store.save_trade(...)
-6. agg.meta.current_position = new_pos
+   else:
+     new_pos = current_pos + (5min × bars)                  # 銘柄未確定(分析中で symbol query なし) — 将来対象外想定
+5. agg.meta.current_position = new_pos
    session_store.save_meta(...)
-7. return AdvanceResponse(new_bars, current_position, trade_auto_closed, ...)
+6. return AdvanceResponse(current_position, trade_auto_closed, ...)
 ```
 
-frontend は `new_bars` で M5 を即時マージ + 各上位 TF を `bars=2` で末尾再取得(詳細は [`frontend-overview.md` § handleAdvance](./frontend-overview.md#handleadvance))。
+- **「N 本未満しか取れなかった」**(MT5 ヒストリ末尾 + 連休継続等のレア): `current_position` はフォールバックで時刻加算される。frontend に `bars_advanced < bars_requested` を伝えて `notify('進めましたが新しい M5 データが取得できませんでした')` で I-11.4 を満たす(将来追加。現状は `current_position` の値で frontend が判定)
+- **frontend は `chart-stack` を再呼び出しして全 TF を同期取得**(`new_bars` レスポンスは持たない、§5.1.1)
 
 ### D.3 POST `/sessions/{id}/skip` (`routers/sessions.py:skip_session`)
 

@@ -28,8 +28,16 @@ _TF_ORDER = ["M5", "M15", "H1", "H4", "D1", "W1", "MN1"]
 _BARS_BY_TF: dict[str, int] = {
     "M5": 200, "M15": 200, "H1": 200, "H4": 200, "D1": 200, "W1": 200, "MN1": 200,
 }
-# bars × tf_minutes に掛ける単純係数(週末・祝日吸収)。TF 別の細工は不要
-_FACTOR = 1.5
+# bars × tf_minutes に掛ける単純係数(週末・祝日吸収)。TF 別の細工は不要。
+# FX 市場の最大連続クローズ(週末 ~65h + 平日連休余裕)を吸収するため、最下位 TF (M5) で
+# 200 × 5 × 10 = 100h を確保する(設計 backend.md §C.2.2)。過去の 1.5 では M5 の 25h 窓が
+# 週末に飲まれて 0 bars を返す不具合があった。
+_FACTOR = 10
+
+# advance の fetch window 用: FX 市場の最大連続クローズ(週末 ~65h + 平日連休余裕)を吸収する
+# 最低保証時間。`bars × 5min × FACTOR` だと小さい bars(例 H1 +1 本 = M5 換算 12 本で 10h)では
+# 週末を跨げないため、これに `bars × 5min` を加えて目的バー本数を確実に拾えるようにする。
+_ADVANCE_MAX_CLOSURE_HOURS = 100
 
 
 def _df_to_bars(df: pd.DataFrame) -> list[OhlcBar]:
@@ -253,13 +261,16 @@ def advance_session(
 ) -> AdvanceResponse:
     """足を N 本(M5 換算)進める。SL/TP ヒット時は自動決済する。
 
+    仕様 §5.1.1: 「+N 本」は **実在する M5 バーが N 本経過する時刻まで `current_position` を進める**。
+    時刻加算ではないため、市場クローズ(週末・祝日)に位置していると自動的に次の取引バーへ
+    スキップされる(土曜 H1 +1本 → M5 換算 12 本 → 月曜開場後の M5 12 本目時刻)。
+
     `new_bars` レスポンスは持たない(frontend は chart-stack を再呼び出しして全 TF を同期取得する)。
     """
     agg = ensure_session(session_id)
 
     cp = agg.meta.current_position
     current_pos = cp if cp.tzinfo is not None else cp.replace(tzinfo=timezone.utc)
-    new_pos = current_pos + timedelta(minutes=5 * bars)
 
     auto_closed = False
     exit_reason = None
@@ -269,10 +280,35 @@ def advance_session(
     trade = agg.trade if agg.trade is not None and agg.trade.exit_time is None else None
     advance_symbol = trade.symbol if trade is not None else (symbol.upper() if symbol else None)
 
-    if advance_symbol and trade is not None:
-        new_m5 = get_ohlc(advance_symbol, "M5", current_pos + timedelta(minutes=5), new_pos)
-        if not new_m5.empty:
-            hit = _check_sl_tp(trade, new_m5)
+    new_pos: datetime
+    if advance_symbol:
+        # 実 M5 バー N 本を確実に拾える時間幅で取りに行く: 週末・連休クローズ吸収分(_ADVANCE_MAX_CLOSURE_HOURS)
+        # に「N 本分の M5 時間」を加える。bars が小さくても週末を跨いで月曜開場後のバーへ到達できる
+        fetch_window = timedelta(hours=_ADVANCE_MAX_CLOSURE_HOURS) + timedelta(minutes=bars * 5)
+        m5 = get_ohlc(
+            advance_symbol,
+            "M5",
+            current_pos + timedelta(minutes=5),
+            current_pos + fetch_window,
+        )
+        if len(m5) >= bars:
+            # bars 本目の M5 バー開始時刻 + 5min = そのバーの終了時刻 = 新 current_position
+            target_index = m5.index[bars - 1]
+            target_dt = target_index if target_index.tzinfo is not None else target_index.replace(tzinfo=timezone.utc)
+            new_pos = target_dt + timedelta(minutes=5)
+            sl_tp_target = m5.head(bars)
+        else:
+            # MT5 ヒストリ末尾 / 連休継続でフォールバック(I-11.6 デフォルト fallback)。
+            # frontend は current_position の値で「進んだか」を判断する。
+            log.warning(
+                "[advance] requested %d M5 bars but only %d available for %s after %s; falling back to time addition",
+                bars, len(m5), advance_symbol, current_pos,
+            )
+            new_pos = current_pos + timedelta(minutes=5 * bars)
+            sl_tp_target = m5
+
+        if trade is not None and not sl_tp_target.empty:
+            hit = _check_sl_tp(trade, sl_tp_target)
             if hit:
                 exit_reason, exit_price = hit
                 pips_pnl = _calculate_pips(advance_symbol, trade.direction, trade.entry_price, exit_price)
@@ -282,6 +318,9 @@ def advance_session(
                 trade.pips_pnl = pips_pnl
                 session_store.save_trade(session_id, trade)
                 auto_closed = True
+    else:
+        # 銘柄未確定(分析中で symbol query 無し)— 現状は到達しない想定だが安全側で時刻加算
+        new_pos = current_pos + timedelta(minutes=5 * bars)
 
     agg.meta.current_position = new_pos
     session_store.save_meta(agg.meta)
