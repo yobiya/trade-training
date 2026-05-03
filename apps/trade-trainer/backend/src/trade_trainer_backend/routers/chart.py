@@ -283,26 +283,41 @@ def advance_session(
     new_pos: datetime
     if advance_symbol:
         # 実 M5 バー N 本を確実に拾える時間幅で取りに行く: 週末・連休クローズ吸収分(_ADVANCE_MAX_CLOSURE_HOURS)
-        # に「N 本分の M5 時間」を加える。bars が小さくても週末を跨いで月曜開場後のバーへ到達できる
+        # に「N 本分の M5 時間」を加える。bars が小さくても週末を跨いで月曜開場後のバーへ到達できる。
+        # current_pos の M5 境界(cp_floor)から取得することで:
+        #   - m5.index[0] = cp_floor のバー(現在の live bar、もしくは weekend skip 後の最初の取引バー)
+        #   - m5.index[bars] = N 本 newly-confirmed したあとの新 live bar の開始時刻 = 新 current_position
+        # current_pos + 5min から取得すると weekend skip 時に N 本目を 1 本飛ばしてしまう不具合があった。
         fetch_window = timedelta(hours=_ADVANCE_MAX_CLOSURE_HOURS) + timedelta(minutes=bars * 5)
+        cp_floor = _bar_start_for_tf(current_pos, "M5")
         m5 = get_ohlc(
             advance_symbol,
             "M5",
-            current_pos + timedelta(minutes=5),
-            current_pos + fetch_window,
+            cp_floor,
+            cp_floor + fetch_window,
         )
-        if len(m5) >= bars:
-            # bars 本目の M5 バー開始時刻 + 5min = そのバーの終了時刻 = 新 current_position
-            target_index = m5.index[bars - 1]
+        if len(m5) > bars:
+            # 新 live bar の開始時刻
+            target_index = m5.index[bars]
             target_dt = target_index if target_index.tzinfo is not None else target_index.replace(tzinfo=timezone.utc)
-            new_pos = target_dt + timedelta(minutes=5)
-            sl_tp_target = m5.head(bars)
-        else:
-            # MT5 ヒストリ末尾 / 連休継続でフォールバック(I-11.6 デフォルト fallback)。
-            # frontend は current_position の値で「進んだか」を判断する。
+            new_pos = target_dt
+            # SL/TP 判定対象は newly-confirmed の N 本(index 0 〜 bars-1)
+            sl_tp_target = m5.iloc[:bars]
+        elif len(m5) >= 1:
+            # 取得バー数が bars 以下:取れた最後のバー直後を new_pos とする(連休跨ぎでデータ末尾)
             log.warning(
-                "[advance] requested %d M5 bars but only %d available for %s after %s; falling back to time addition",
-                bars, len(m5), advance_symbol, current_pos,
+                "[advance] requested %d M5 bars but only %d available for %s after %s; advancing to last bar end",
+                bars, len(m5), advance_symbol, cp_floor,
+            )
+            last = m5.index[-1]
+            last_dt = last if last.tzinfo is not None else last.replace(tzinfo=timezone.utc)
+            new_pos = last_dt + timedelta(minutes=5)
+            sl_tp_target = m5
+        else:
+            # 取得 0 本のフォールバック(MT5 切断 / ヒストリ完全外、I-11.6 デフォルト fallback)
+            log.warning(
+                "[advance] no M5 bars available for %s after %s; falling back to time addition",
+                advance_symbol, cp_floor,
             )
             new_pos = current_pos + timedelta(minutes=5 * bars)
             sl_tp_target = m5

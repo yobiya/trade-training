@@ -310,18 +310,27 @@ DataFrame の規約:
      # 実 M5 バー N 本を確実に拾える時間幅 = 最大連続クローズ + N 本分の M5 時間
      # (bars が小さくても週末跨ぎで月曜開場後のバーに到達できる、§C.2.2 と方針整合)
      fetch_window = timedelta(hours=100) + timedelta(minutes=bars * 5)
-     m5 = market_data.get_ohlc(advance_symbol, 'M5', current_pos + 5min, current_pos + fetch_window)
-     if len(m5) >= bars:
-       new_pos = m5.index[bars - 1] + timedelta(minutes=5)  # bars 本目の M5 バー終了時刻
+     # current_pos の M5 境界(cp_floor)から取得する。MT5 は from を含むバーから返すため
+     # m5.index[0] = cp_floor のバー(= 現在の live bar)、m5.index[bars] = N 本 newly-confirmed
+     # したあとの新 live bar の開始時刻 = 新 current_position
+     cp_floor = bar_start(current_pos, 'M5')
+     m5 = market_data.get_ohlc(advance_symbol, 'M5', cp_floor, cp_floor + fetch_window)
+     if len(m5) > bars:
+       new_pos = m5.index[bars]                  # 新 live bar の開始時刻
+       sl_tp_target = m5.iloc[:bars]            # newly-confirmed N 本
+     elif len(m5) >= 1:
+       new_pos = m5.index[-1] + timedelta(minutes=5)   # データ末尾フォールバック
+       sl_tp_target = m5
      else:
-       new_pos = current_pos + (5min × bars)                # 取れない場合のフォールバック(notify対象)
-     if trade and len(m5) > 0:
-       hit = _check_sl_tp(trade, m5.head(bars))
+       new_pos = current_pos + (5min × bars)            # 取得 0 本のフォールバック(I-11.6)
+       sl_tp_target = m5
+     if trade and not sl_tp_target.empty:
+       hit = _check_sl_tp(trade, sl_tp_target)
        if hit:
          update trade.exit_*
          session_store.save_trade(...)
    else:
-     new_pos = current_pos + (5min × bars)                  # 銘柄未確定(分析中で symbol query なし) — 将来対象外想定
+     new_pos = current_pos + (5min × bars)              # 銘柄未確定(分析中で symbol query なし) — 将来対象外想定
 5. agg.meta.current_position = new_pos
    session_store.save_meta(...)
 6. return AdvanceResponse(current_position, trade_auto_closed, ...)
