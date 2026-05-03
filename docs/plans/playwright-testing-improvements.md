@@ -136,7 +136,7 @@ UI フローを 3 段に分けて、Playwright を最後の統合検証だけに
 - ✅ **backend pytest 追加**(2026/05/03): `bar_start` + `resample_ohlc`(market-data) + `_bar_start_for_tf` + `_calculate_pips`(backend) の計 53 件 pass
 - ✅ **案 B 実装済み**(2026/05/03): `Chart.tsx` に `window.__chartTest` (DEV only) を登録。`priceToY` / `yToPrice` / `timeToX` / `xToTime` を TF キーで公開。unmount 時に cleanup。
 - ✅ **案 A 実装済み**(2026/05/03): `.claude/agents/playwright-tester.md` 作成。Known gotchas / 出力フォーマット / 操作テンプレート集を記載。
-- ⏳ 案 C は未着手
+- ✅ **案 C 実装済み**(2026/05/03): `apps/trade-trainer/frontend/tests/e2e/` に playwright 設定 + ヘルパー + 5 spec ファイルを追加。`npm run test:e2e` で実行可能(手動 / 開発サーバー起動済み前提)。
 
 ## 推奨実装順
 
