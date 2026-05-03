@@ -363,6 +363,24 @@ DataFrame の規約:
 7. return TradeResponse
 ```
 
+### D.4.1 PATCH `/sessions/{id}/trade` (`routers/trades.py:update_trade`)
+
+仕様 §5.5.5: 保有中フェーズで SL/TP を drag 移動した際に呼ばれる。`sl` / `tp` のみ部分更新。
+
+```
+1. ensure session
+2. trade = agg.trade
+3. if trade is None or trade.exit_time is not None:
+     return 409 (No active trade in this session)
+4. if body.sl is not None: trade.sl = body.sl
+5. if body.tp is not None: trade.tp = body.tp
+6. session_store.save_trade
+7. return TradeResponse
+```
+
+- **アクティブトレード以外では 409**: 振り返りフェーズで履歴を改竄させない(§5.5.5)
+- **entry_price / direction / entry_tf は更新不可**: SL/TP 以外の Trade フィールドは凍結。エントリー価格は履歴であり、エントリー方向 / TF はエントリー時の決定として保持する
+
 ### D.5 GET `/sessions/{id}/post-review` (`routers/sessions.py:get_post_review`)
 
 ```

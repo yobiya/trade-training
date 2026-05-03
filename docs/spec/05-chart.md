@@ -174,6 +174,14 @@
 - ラベルに価格を併記(例: `Entry @ 150.123`、`SL @ 149.800`)
 - 銘柄が確定済の保有中・振り返りでは銘柄切替不可([§6.1](./06-session-screen.md#61-画面構成))のため、表示銘柄と Trade 銘柄は常に一致する
 
+### 5.5.5 SL / TP の drag 移動(保有中のみ)
+- **保有中**フェーズに限り、SL / TP の横線を水平線描画(§5.3)と同じ操作感で **drag で移動できる**。マウスダウンで掴み、移動中は preview 表示 → マウスアップで確定。確定時に backend に `PATCH /sessions/{id}/trade { sl?, tp? }` を送って `Trade.sl` / `Trade.tp` を更新する
+- データの真実は引き続き **`Trade.sl` / `Trade.tp`**(`session.json` 内、§I-3 / §I-6)。描画オブジェクト(`drawings.json`)には記録しない。drag 操作のみ描画ツールの状態機械(§I-12 / drawing-tools.md)を共有する役割境界
+- **分析中**(SL/TP draft 段階)では drag は使わず、§7.4 の「SL 配置 / TP 配置」ボタン → クリック方式のみ(draft はまだ Trade に確定していないため別経路)
+- **振り返り**フェーズでは drag 不可(履歴改竄防止、決済済み Trade の SL/TP は固定値として表示するのみ)
+- entry 横線(`entry_price`)・exit 横線(`exit_price`)は drag 不可(エントリー / 決済時の価格は履歴であり後から動かす意味が無い)
+- hit-test の y 距離許容は水平線と同じ(数 px 内)。SL / TP が同じ価格に重なっている場合は SL を優先(stop loss は下落リスクを直接表すため)
+
 ### 5.5.4 縦マーカー(`entry_tf` のチャートのみ)
 - エントリー / 決済時刻に三角マーカーを配置(lightweight-charts 標準 `setMarkers` API)
 - マーカーが意味を持つのは **`Trade.entry_tf`(エントリー時に固定されたフォーカス TF)** のチャートだけ。他 TF はバー時刻と Trade 時刻が一致せずマーカーがズレるため非表示

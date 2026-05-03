@@ -24,6 +24,13 @@ class ExitTradeRequest(BaseModel):
     reason: Literal["manual", "tp", "sl"] = "manual"
 
 
+class UpdateTradeRequest(BaseModel):
+    """仕様 §5.5.5: 保有中の SL/TP drag 移動で送られる部分更新。entry_price / direction /
+    entry_tf は履歴のため更新不可。"""
+    sl: float | None = None
+    tp: float | None = None
+
+
 class TradeResponse(BaseModel):
     id: str
     symbol: str

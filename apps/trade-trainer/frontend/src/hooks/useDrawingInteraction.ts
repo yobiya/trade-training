@@ -9,9 +9,12 @@ import {
   idleState,
   isMovingState,
   previewOf,
+  tradeLinePreviewOf,
   type DispatchContext,
   type DrawingEvent,
   type DrawingState,
+  type TradeLineHandle,
+  type TradeLinesSnapshot,
 } from '../drawing/state'
 import type {
   ChartApi,
@@ -28,6 +31,10 @@ type Params = {
   onCreate: (body: CreateDrawingBody) => Promise<Drawing>
   onUpdate: (id: number, patch: UpdateDrawingPatch) => Promise<void>
   onDelete: (id: number) => Promise<void>
+  /** §5.5.5 SL/TP の drag 移動。null = drag 不可(分析中・振り返り・無トレード) */
+  tradeLines?: TradeLinesSnapshot | null
+  /** §5.5.5 SL/TP drag 確定時の commit。`tradeLines` 非 null + これがあるときのみ drag 可 */
+  onUpdateTradeLine?: (handle: TradeLineHandle, price: number) => Promise<void>
 }
 
 export type DrawingInteraction = {
@@ -39,6 +46,8 @@ export type DrawingInteraction = {
   activeTool: DrawingKind | null
   /** 波動ラベル配置中の波番号(wave_label ツール選択時のみ非 null)。1-5 推進波 + A/B/C 補正波。 */
   activeWave: WaveValue | null
+  /** §5.5.5 SL/TP drag 中の preview 値。SessionPage が priceLine 描画で元値を上書きする */
+  tradeLinePreview: { handle: TradeLineHandle; price: number } | null
   /** ツールボタンから呼ぶ。null で Idle に戻る。wave_label の場合は wave 番号必須。 */
   selectTool: (tool: DrawingKind | null, wave?: WaveValue) => void
   /** Chart に繋ぐイベント中継 */
@@ -60,24 +69,29 @@ export type DrawingInteraction = {
 export function useDrawingInteraction({
   drawings, activeTimeframe, chartApiRef,
   onCreate, onUpdate, onDelete,
+  tradeLines = null, onUpdateTradeLine,
 }: Params): DrawingInteraction {
   const [state, setState] = useState<DrawingState>(idleState)
   const stateRef = useRef<DrawingState>(state)
 
-  // 最新の drawings / activeTimeframe を参照し続けるための ref
+  // 最新の drawings / activeTimeframe / tradeLines を参照し続けるための ref
   const drawingsRef = useRef(drawings)
   useEffect(() => { drawingsRef.current = drawings }, [drawings])
   const tfRef = useRef(activeTimeframe)
   useEffect(() => { tfRef.current = activeTimeframe }, [activeTimeframe])
+  const tradeLinesRef = useRef(tradeLines)
+  useEffect(() => { tradeLinesRef.current = tradeLines }, [tradeLines])
 
   const ctx = useMemo<DispatchContext>(() => ({
     get chartApi() { return chartApiRef.current ?? noopChartApi },
     get drawings() { return drawingsRef.current },
     get activeTimeframe() { return tfRef.current },
+    get tradeLines() { return tradeLinesRef.current },
     createDrawing: onCreate,
     updateDrawing: onUpdate,
     deleteDrawing: onDelete,
-  }), [chartApiRef, onCreate, onUpdate, onDelete])
+    updateTradeLine: onUpdateTradeLine,
+  }), [chartApiRef, onCreate, onUpdate, onDelete, onUpdateTradeLine])
 
   const dispatch = useCallback((event: DrawingEvent) => {
     const prev = stateRef.current
@@ -146,6 +160,7 @@ export function useDrawingInteraction({
     hoveredId: hoveredIdOf(state),
     activeTool: activeToolOf(state),
     activeWave: activeWaveOf(state),
+    tradeLinePreview: tradeLinePreviewOf(state),
     selectTool,
     handlers,
   }

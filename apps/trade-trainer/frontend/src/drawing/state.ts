@@ -8,9 +8,20 @@ import type {
   ChartApi,
   CreateDrawingBody,
   HitResult,
+  PointPx,
   PointerPayload,
   UpdateDrawingPatch,
 } from './types'
+
+// §5.5.5 SL/TP 線の hit-test 距離(水平線描画と同じ)
+const TRADE_LINE_HIT_PX = 6
+
+export type TradeLineHandle = 'sl' | 'tp'
+
+export type TradeLinesSnapshot = {
+  sl: number | null
+  tp: number | null
+}
 
 /**
  * 描画ツールの状態管理(tagged union + 単一 dispatch 関数で実装)。
@@ -33,6 +44,10 @@ export type DrawingState =
   | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchor: PP }
   | { kind: 'moving-wave-label'; original: Drawing; preview: Drawing }
+  // §5.5.5 SL/TP の drag 移動。Drawing ではなく Trade.sl / Trade.tp を直接更新する
+  // (描画モデルは汚さない、データの真実は session.json 内の Trade)。state machine の
+  // hit-test/drag インフラだけ共有する。original / preview は price (number)。
+  | { kind: 'moving-trade-line'; handle: TradeLineHandle; original: number; preview: number }
 
 export type DrawingEvent =
   | { type: 'mouse-move'; payload: PointerPayload }
@@ -49,6 +64,9 @@ export interface DispatchContext {
   createDrawing(body: CreateDrawingBody): Promise<Drawing>
   updateDrawing(id: number, patch: UpdateDrawingPatch): Promise<void>
   deleteDrawing(id: number): Promise<void>
+  // §5.5.5 SL/TP の drag 移動。null = drag 不可(分析中・振り返り・無トレード)
+  tradeLines: TradeLinesSnapshot | null
+  updateTradeLine?(handle: TradeLineHandle, price: number): Promise<void>
 }
 
 export function idleState(): DrawingState {
@@ -79,6 +97,7 @@ export function dispatchEvent(
     case 'moving-fibonacci-handle': return reduceMovingFibonacciHandle(state, event, ctx)
     case 'moving-fibonacci-body': return reduceMovingFibonacciBody(state, event, ctx)
     case 'moving-wave-label': return reduceMovingWaveLabel(state, event, ctx)
+    case 'moving-trade-line': return reduceMovingTradeLine(state, event, ctx)
   }
 }
 
@@ -93,7 +112,8 @@ export function cursorOf(state: DrawingState): string {
     case 'drawing-trendline':
     case 'drawing-fibonacci':
     case 'drawing-wave-label': return 'crosshair'
-    case 'moving-line': return 'ns-resize'
+    case 'moving-line':
+    case 'moving-trade-line': return 'ns-resize'
     case 'moving-trendline-body':
     case 'moving-fibonacci-body':
     case 'moving-wave-label': return 'move'
@@ -149,6 +169,38 @@ export function hoveredIdOf(state: DrawingState): number | null {
 
 export function isMovingState(state: DrawingState): boolean {
   return state.kind.startsWith('moving-')
+}
+
+/**
+ * §5.5.5: SL/TP drag 中の preview 値。SessionPage が priceLine 描画時に元値を上書きする。
+ * 非 drag 時は null(SessionPage は Trade.sl / Trade.tp を使う)。
+ */
+export function tradeLinePreviewOf(
+  state: DrawingState,
+): { handle: TradeLineHandle; price: number } | null {
+  return state.kind === 'moving-trade-line'
+    ? { handle: state.handle, price: state.preview }
+    : null
+}
+
+/**
+ * §5.5.5: SL/TP の hit-test。同一 y 距離なら SL を優先(stop loss = 直接的な下落リスクを表すため)。
+ * `tradeLines === null` または両方 `null` のときは hit しない。
+ */
+function findTradeLineHit(
+  tradeLines: TradeLinesSnapshot | null,
+  px: PointPx,
+  api: ChartApi,
+): TradeLineHandle | null {
+  if (!tradeLines) return null
+  for (const handle of ['sl', 'tp'] as const) {
+    const price = tradeLines[handle]
+    if (price === null) continue
+    const y = api.priceToY(price)
+    if (y === null) continue
+    if (Math.abs(px.y - y) <= TRADE_LINE_HIT_PX) return handle
+  }
+  return null
 }
 
 // -----------------------------------------------------------------------------
@@ -246,6 +298,9 @@ function reduceIdle(
   ctx: DispatchContext,
 ): DrawingState {
   if (event.type === 'mouse-move') {
+    // §5.5.5 SL/TP は描画より優先(同距離なら SL/TP を掴めるようにする)
+    const tradeHit = findTradeLineHit(ctx.tradeLines, event.payload.pointerPx, ctx.chartApi)
+    if (tradeHit) return { kind: 'idle', cursor: 'ns-resize', hoveredId: null }
     const hit = findHit(ctx.drawings, event.payload.pointerPx, ctx.chartApi)
     return {
       kind: 'idle',
@@ -254,6 +309,14 @@ function reduceIdle(
     }
   }
   if (event.type === 'mouse-down') {
+    // §5.5.5 SL/TP の drag 開始(updateTradeLine が無いと commit できないので idle のまま)
+    if (ctx.tradeLines && ctx.updateTradeLine) {
+      const tradeHit = findTradeLineHit(ctx.tradeLines, event.payload.pointerPx, ctx.chartApi)
+      if (tradeHit) {
+        const price = ctx.tradeLines[tradeHit] as number  // findTradeLineHit が non-null を保証
+        return { kind: 'moving-trade-line', handle: tradeHit, original: price, preview: price }
+      }
+    }
     const hit = findHit(ctx.drawings, event.payload.pointerPx, ctx.chartApi)
     if (!hit) return state
     return buildMovingState(hit, event.payload, ctx) ?? state
@@ -486,6 +549,23 @@ function reduceMovingFibonacciBody(
   if (event.type === 'mouse-up') {
     if (state.preview !== state.original) {
       void ctx.updateDrawing(state.original.id, { data: state.preview.data })
+    }
+    return idleState()
+  }
+  return state
+}
+
+function reduceMovingTradeLine(
+  state: Extract<DrawingState, { kind: 'moving-trade-line' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'mouse-move') {
+    return { ...state, preview: event.payload.point.price }
+  }
+  if (event.type === 'mouse-up') {
+    if (ctx.updateTradeLine && state.preview !== state.original) {
+      void ctx.updateTradeLine(state.handle, event.payload.point.price)
     }
     return idleState()
   }

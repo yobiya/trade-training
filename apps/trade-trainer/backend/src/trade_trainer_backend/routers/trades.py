@@ -12,6 +12,7 @@ from trade_trainer_backend.schemas.trade import (
     EnterTradeRequest,
     ExitTradeRequest,
     TradeResponse,
+    UpdateTradeRequest,
 )
 from trade_trainer_backend.services import session_store
 from trade_trainer_backend.services.session_models import FinalDecision, Trade
@@ -99,6 +100,27 @@ def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
 
     # ディレクトリ名を pending → symbol に rename
     session_store.rename_dir(session_id)
+
+    return _trade_to_response(trade)
+
+
+@router.patch("/sessions/{session_id}/trade", response_model=TradeResponse)
+def update_trade(session_id: str, body: UpdateTradeRequest) -> TradeResponse:
+    """仕様 §5.5.5: 保有中の SL/TP drag 移動で部分更新する。
+
+    アクティブトレード(`exit_time is None`)以外では 409。entry_price / direction / entry_tf は
+    更新不可(履歴改竄防止)。
+    """
+    agg = ensure_session(session_id)
+    if agg.trade is None or agg.trade.exit_time is not None:
+        raise HTTPException(status_code=409, detail="No active trade in this session")
+
+    trade = agg.trade
+    if body.sl is not None:
+        trade.sl = body.sl
+    if body.tp is not None:
+        trade.tp = body.tp
+    session_store.save_trade(session_id, trade)
 
     return _trade_to_response(trade)
 

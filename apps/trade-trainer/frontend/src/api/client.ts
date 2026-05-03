@@ -147,6 +147,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    /** §5.5.5 SL/TP の drag 移動。保有中以外は backend が 409 を返す */
+    updatePartial: (sessionId: string, body: { sl?: number; tp?: number }) =>
+      request<TradeResponse>(`/sessions/${sessionId}/trade`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
   },
 
   settings: {

@@ -74,6 +74,8 @@ function priceLinesForTf(
   entryDraft: { sl: number | null; tp: number | null },
   trade: TradeForDisplay,
   digits: number,
+  /** §5.5.5 SL/TP drag 中の preview 値。Trade.sl / Trade.tp の表示値を上書きする */
+  tradeLinePreview: { handle: 'sl' | 'tp'; price: number } | null,
 ): PriceLine[] {
   const lines: PriceLine[] = drawings
     .filter(d => d.kind === 'line' && isDrawingVisibleOnTf(d, tf))
@@ -101,19 +103,22 @@ function priceLinesForTf(
       label: `Entry @ ${fmtPrice(trade.entry_price, digits)}`,
       color: '#e3b341',
     })
-    if (trade.sl != null) {
+    // §5.5.5: drag 中は preview 値で上書き表示(commit 前に視覚的フィードバック)
+    const slDisplay = tradeLinePreview?.handle === 'sl' ? tradeLinePreview.price : trade.sl
+    const tpDisplay = tradeLinePreview?.handle === 'tp' ? tradeLinePreview.price : trade.tp
+    if (slDisplay != null) {
       lines.push({
         id: -2002,
-        price: trade.sl,
-        label: `SL @ ${fmtPrice(trade.sl, digits)}`,
+        price: slDisplay,
+        label: `SL @ ${fmtPrice(slDisplay, digits)}`,
         color: '#ff5555',
       })
     }
-    if (trade.tp != null) {
+    if (tpDisplay != null) {
       lines.push({
         id: -2003,
-        price: trade.tp,
-        label: `TP @ ${fmtPrice(trade.tp, digits)}`,
+        price: tpDisplay,
+        label: `TP @ ${fmtPrice(tpDisplay, digits)}`,
         color: '#58a6ff',
       })
     }
@@ -339,15 +344,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
     await removeDrawing(id)
   }, [removeDrawing])
 
-  const interaction = useDrawingInteraction({
-    drawings,
-    activeTimeframe: focusedTf,
-    chartApiRef,
-    onCreate: handleCreateDrawing,
-    onUpdate: handleUpdateDrawing,
-    onDelete: handleDeleteDrawing,
-  })
-
   // §7.4: SL/TP 配置のチャートクリック横取り
   const pipSize = currentSymbol.toUpperCase().endsWith('JPY') ? 0.01 : 0.0001
   const roundToDigits = useCallback((p: number): number => {
@@ -355,6 +351,35 @@ export function SessionPage({ sessionId, onBack }: Props) {
     const factor = Math.pow(10, d)
     return Math.round(p * factor) / factor
   }, [session?.digits])
+
+  // §5.5.5: 保有中のみ SL/TP の drag 移動を許可。振り返り以降は tradeLines = null で hit-test off。
+  const tradeLinesForDrag = useMemo(() => {
+    if (phase !== 'holding' || !activeTrade) return null
+    return { sl: activeTrade.sl, tp: activeTrade.tp }
+  }, [phase, activeTrade])
+
+  const handleUpdateTradeLine = useCallback(async (handle: 'sl' | 'tp', price: number) => {
+    const rounded = roundToDigits(price)
+    try {
+      const updated = await api.trades.updatePartial(sessionId, { [handle]: rounded })
+      setActiveTrade(updated)
+      setLatestTrade(updated)
+    } catch (err) {
+      console.warn('[SessionPage] updateTradeLine failed', err)
+      notify(`${handle.toUpperCase()} の移動に失敗しました`, 'error')
+    }
+  }, [sessionId, roundToDigits, setActiveTrade, setLatestTrade, notify])
+
+  const interaction = useDrawingInteraction({
+    drawings,
+    activeTimeframe: focusedTf,
+    chartApiRef,
+    onCreate: handleCreateDrawing,
+    onUpdate: handleUpdateDrawing,
+    onDelete: handleDeleteDrawing,
+    tradeLines: tradeLinesForDrag,
+    onUpdateTradeLine: handleUpdateTradeLine,
+  })
 
   const handleChartClick = useCallback(
     (price: number, time: number | null, px: { x: number; y: number }) => {
@@ -601,7 +626,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 } : undefined}
                 onMouseDown={focusedTf === tf ? interaction.handlers.onMouseDown : undefined}
                 onMouseUp={focusedTf === tf ? interaction.handlers.onMouseUp : undefined}
-                priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft, displayTrade, session?.digits ?? 5)}
+                priceLines={priceLinesForTf(drawings, tf, interaction.preview, trade.entryDraft, displayTrade, session?.digits ?? 5, interaction.tradeLinePreview)}
                 markers={displayTrade && tf === (displayTrade.entry_tf || 'M5') ? entryMarkers : undefined}
                 indicators={indicators.filter(i => i.timeframe === tf)}
               />

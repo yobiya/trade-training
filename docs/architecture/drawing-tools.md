@@ -83,6 +83,10 @@ type DrawingState =
   | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchor: PP }
   | { kind: 'moving-wave-label'; original: Drawing; preview: Drawing }
+  // §5.5.5 SL/TP の drag 移動(保有中のみ)。Drawing ではなく Trade.sl / Trade.tp を直接更新する
+  // (描画モデルは汚さない、データの真実は session.json 内の Trade)。状態機械の hit-test/drag
+  // インフラだけ共有する役割境界。
+  | { kind: 'moving-trade-line'; handle: 'sl' | 'tp'; original: number; preview: number }
 
 type PP = { t: number; price: number }
 ```
@@ -90,6 +94,7 @@ type PP = { t: number; price: number }
 - `idle`: 何も進行していない待機状態。マウス位置から hoveredId/cursor を導出
 - `drawing-*`: 新規作成中（1 クリック完結 / 2 クリック完結）
 - `moving-*`: 既存描画の編集中。`original` は確定値、`preview` は未保存の中間値
+- `moving-trade-line`: SL/TP 価格線の drag 中。`original` / `preview` は **price (number)** で `Drawing` ではない。確定時に `ctx.updateTradeLine(handle, price)` を呼び backend `PATCH /sessions/{id}/trade` で `Trade.sl` または `Trade.tp` を更新する
 
 旧設計(11 個のクラス)では、`Drawing*Mode`/`Moving*Mode`/`IdleMode` がそれぞれ別ファイルに別クラスとして実装されており、共通プロトコル(`onEnter` / `onExit` / `getPreview` / `cursor` ゲッタ等)を継承で揃えていたため、定型コードが大量に重複していた。union + selector で同等の意味を表現できる。
 
@@ -119,6 +124,9 @@ interface DispatchContext {
   createDrawing(body: CreateDrawingBody): Promise<Drawing>
   updateDrawing(id: number, patch: UpdateDrawingPatch): Promise<void>
   deleteDrawing(id: number): Promise<void>
+  // §5.5.5 SL/TP の drag 移動。null = drag 不可(分析中・振り返り・無トレード)
+  tradeLines: { sl: number | null; tp: number | null } | null
+  updateTradeLine?(handle: 'sl' | 'tp', price: number): Promise<void>
 }
 ```
 
