@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     app_password: str = "changeme"
     secret_key: str = "change-this-secret-key-to-32plus-chars"
     host: str = "0.0.0.0"
-    port: int = 8001
+    port: int = 8001          # dev=8001 / release=8002
+    # TRAINER_CORS_ORIGINS='["http://localhost:4173","http://localhost:5173"]' で上書き可
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:4173"]
     # 訓練対象の期間設定(現在時刻から見た最小・最大の遡り日数)
     history_min_days: int = 30    # 直近30日は出題しない
     history_max_days: int = 1825  # 最大5年

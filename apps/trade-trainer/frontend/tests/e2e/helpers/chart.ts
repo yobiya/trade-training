@@ -4,7 +4,10 @@
  */
 import type { Page } from '@playwright/test'
 
-export const API = 'http://localhost:5173/api'
+// dev=http://localhost:5173 / release=http://localhost:4173
+// PLAYWRIGHT_BASE_URL 環境変数で切替(playwright.config.ts の baseURL と揃える)。
+const FRONTEND_URL = process.env['PLAYWRIGHT_BASE_URL'] ?? 'http://localhost:5173'
+export const API = `${FRONTEND_URL}/api`
 
 // E2E_PASSWORD 未設定時は 'changeme' にフォールバック
 export const E2E_PASSWORD = process.env['E2E_PASSWORD'] ?? 'changeme'

@@ -41,7 +41,11 @@ $RepoRoot          = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $BackendDir        = Join-Path $RepoRoot 'apps\trade-trainer\backend'
 $FrontendWorkspace = 'apps/trade-trainer/frontend'
 
-$BackendCmd  = 'uv run uvicorn trade_trainer_backend.main:app --reload --port 8001'
+# ポート定義: dev=5173/8001 / release(release.ps1)=4173/8002
+$BackendPort  = 8001
+$FrontendPort = 5173
+
+$BackendCmd  = "uv run uvicorn trade_trainer_backend.main:app --reload --port $BackendPort"
 $FrontendCmd = "npm run dev --workspace=$FrontendWorkspace"
 
 # Prefer PowerShell 7 (pwsh) if available, otherwise fall back to Windows PowerShell.
@@ -102,7 +106,7 @@ if ($startFrontend) {
 
 if (-not $NoNewWindow) {
     Write-Host ''
-    Write-Host 'Backend:  http://localhost:8001/health' -ForegroundColor Yellow
-    Write-Host 'Frontend: http://localhost:5173'        -ForegroundColor Yellow
+    Write-Host "Backend:  http://localhost:$BackendPort/health" -ForegroundColor Yellow
+    Write-Host "Frontend: http://localhost:$FrontendPort"      -ForegroundColor Yellow
     Write-Host 'Press Ctrl+C in each window to stop.'
 }
