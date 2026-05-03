@@ -298,45 +298,47 @@ DataFrame の規約:
 
 ### D.2 POST `/sessions/{id}/advance` (`routers/chart.py:advance_session`)
 
-`bars` パラメータは **M5 換算本数**(frontend が entry TF → M5 比率を掛けて算出する。仕様 §5.1.1)。
+`bars` パラメータは **フォーカス TF のバー数**、`focused_tf` クエリパラメータでフォーカス TF を受け取る。frontend は `(n, focusedTf)` をそのまま渡す(M5 換算しない)。
 
-仕様 §5.1.1「+N 本 = 実バー N 本分」に従い、**`current_position` を実在する M5 バーが N 本分経過する時刻まで進める**(時刻加算ではない)。市場クローズ期間に位置していると、自動的に次の取引バーへスキップされる(土曜 H1 +1本 → M5 換算 12 本 → 月曜開場後の M5 12 本目時刻まで進む)。
+仕様 §5.1.1「+N 本 = フォーカス TF の N 本境界へ進める」に従い、**`current_position` をフォーカス TF の N 本目境界まで進める**(境界アライメント、時刻加算ではない)。例: H1 focus で `current_pos = 10:15` から +1 本 → 新 `current_pos = 11:00`(次の H1 境界)。市場クローズ期間に位置していると、自動的に次の取引バー境界へスキップされる(土曜 H1 +1 本 → 月曜開場後の最初に確定する H1 バー終端)。
 
 ```
 1. session_store.load(id)
 2. trade = active trade (if any)
 3. advance_symbol = trade.symbol or query param symbol
-4. if advance_symbol:
-     # 実 M5 バー N 本を確実に拾える時間幅 = 最大連続クローズ + N 本分の M5 時間
-     # (bars が小さくても週末跨ぎで月曜開場後のバーに到達できる、§C.2.2 と方針整合)
-     fetch_window = timedelta(hours=100) + timedelta(minutes=bars * 5)
-     # current_pos の M5 境界(cp_floor)から取得する。MT5 は from を含むバーから返すため
-     # m5.index[0] = cp_floor のバー(= 現在の live bar)、m5.index[bars] = N 本 newly-confirmed
-     # したあとの新 live bar の開始時刻 = 新 current_position
-     cp_floor = bar_start(current_pos, 'M5')
-     m5 = market_data.get_ohlc(advance_symbol, 'M5', cp_floor, cp_floor + fetch_window)
-     if len(m5) > bars:
-       new_pos = m5.index[bars]                  # 新 live bar の開始時刻
-       sl_tp_target = m5.iloc[:bars]            # newly-confirmed N 本
-     elif len(m5) >= 1:
-       new_pos = m5.index[-1] + timedelta(minutes=5)   # データ末尾フォールバック
-       sl_tp_target = m5
+4. f_minutes = TIMEFRAME_MINUTES[focused_tf]
+   if advance_symbol:
+     # フォーカス TF の N 本境界を確実に拾える時間幅 = 最大連続クローズ + N 本分のフォーカス TF 時間
+     fetch_window = timedelta(hours=100) + timedelta(minutes=bars * f_minutes)
+     # current_pos のフォーカス TF 境界(f_floor)からフォーカス TF バーを取得する。MT5 は
+     # from を含むバーから返すため:
+     #   - f_bars.index[0] = f_floor のバー(= 現在の live bar、または weekend skip 後の最初の取引バー)
+     #   - f_bars.index[bars] = N 本 newly-confirmed したあとの新 live bar 開始時刻 = 新 current_position
+     f_floor = bar_start(current_pos, focused_tf)
+     f_bars = market_data.get_ohlc(advance_symbol, focused_tf, f_floor, f_floor + fetch_window)
+     if len(f_bars) > bars:
+       new_pos = f_bars.index[bars]                       # 新 live bar の開始時刻
+     elif len(f_bars) >= 1:
+       new_pos = f_bars.index[-1] + timedelta(minutes=f_minutes)   # データ末尾フォールバック
      else:
-       new_pos = current_pos + (5min × bars)            # 取得 0 本のフォールバック(I-11.6)
-       sl_tp_target = m5
-     if trade and not sl_tp_target.empty:
-       hit = _check_sl_tp(trade, sl_tp_target)
-       if hit:
-         update trade.exit_*
-         session_store.save_trade(...)
+       new_pos = current_pos + (f_minutes × bars)           # 取得 0 本のフォールバック(I-11.6)
+     if trade:
+       # SL/TP 判定: current_pos 以降の実 M5 バーで high/low が SL/TP を抜けたかを判定
+       sl_tp_m5 = market_data.get_ohlc(advance_symbol, 'M5', current_pos + 5min, new_pos)
+       if not sl_tp_m5.empty:
+         hit = _check_sl_tp(trade, sl_tp_m5)
+         if hit:
+           update trade.exit_*
+           session_store.save_trade(...)
    else:
-     new_pos = current_pos + (5min × bars)              # 銘柄未確定(分析中で symbol query なし) — 将来対象外想定
+     new_pos = current_pos + (f_minutes × bars)           # 銘柄未確定(分析中で symbol query なし) — 将来対象外想定
 5. agg.meta.current_position = new_pos
    session_store.save_meta(...)
 6. return AdvanceResponse(current_position, trade_auto_closed, ...)
 ```
 
-- **「N 本未満しか取れなかった」**(MT5 ヒストリ末尾 + 連休継続等のレア): `current_position` はフォールバックで時刻加算される。frontend に `bars_advanced < bars_requested` を伝えて `notify('進めましたが新しい M5 データが取得できませんでした')` で I-11.4 を満たす(将来追加。現状は `current_position` の値で frontend が判定)
+- **「N 本未満しか取れなかった」**(MT5 ヒストリ末尾 + 連休継続等のレア): `current_position` は最後のバー直後にアライメントされる。frontend は `current_position` の値で「進んだか」を判定する
+- **SL/TP 判定は M5 解像度で実行**: フォーカス TF が H1 などで上位足の場合も、その間に M5 で high/low が SL/TP を抜けたかを判定する(粒度を犠牲にしない)
 - **frontend は `chart-stack` を再呼び出しして全 TF を同期取得**(`new_bars` レスポンスは持たない、§5.1.1)
 
 ### D.3 POST `/sessions/{id}/skip` (`routers/sessions.py:skip_session`)

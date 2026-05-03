@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import type { TradeResponse, TradeSession } from '../api/client'
-import { TIMEFRAME_MINUTES } from '../constants'
 import { useNotify } from './useNotify'
 
 export type EntryDraft = { sl: number | null; tp: number | null }
@@ -99,9 +98,9 @@ export function useTradeFlow({
   const handleAdvance = useCallback<TradeFlowApi['handleAdvance']>(async (n = 1) => {
     setAdvancing(true)
     try {
-      // 仕様 §5.1.1: 「+N 本」はフォーカス TF の N バー。backend は M5 換算本数を受ける。
-      const m5Bars = Math.max(1, n * Math.round((TIMEFRAME_MINUTES[focusedTf] ?? 5) / 5))
-      const res = await api.chart.advance(sessionId, m5Bars, currentSymbol)
+      // 仕様 §5.1.1: 「+N 本」はフォーカス TF の N バー = 次の N 本目のフォーカス TF 境界へ進む。
+      // backend で focused_tf を使って境界アライメント + 市場クローズスキップを行う。
+      const res = await api.chart.advance(sessionId, n, focusedTf, currentSymbol)
       await reloadStack()
       if (res.trade_auto_closed) {
         const pips = res.trade_pips_pnl ?? 0

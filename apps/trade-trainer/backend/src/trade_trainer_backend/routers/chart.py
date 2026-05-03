@@ -257,16 +257,22 @@ def chart_history(
 def advance_session(
     session_id: str,
     bars: int = 1,
+    focused_tf: str = "M5",
     symbol: str | None = None,
 ) -> AdvanceResponse:
-    """足を N 本(M5 換算)進める。SL/TP ヒット時は自動決済する。
+    """足をフォーカス TF の N 本進める。SL/TP ヒット時は自動決済する。
 
-    仕様 §5.1.1: 「+N 本」は **実在する M5 バーが N 本経過する時刻まで `current_position` を進める**。
-    時刻加算ではないため、市場クローズ(週末・祝日)に位置していると自動的に次の取引バーへ
-    スキップされる(土曜 H1 +1本 → M5 換算 12 本 → 月曜開場後の M5 12 本目時刻)。
+    仕様 §5.1.1: 「+N 本」は **フォーカス TF のバーが N 本進む** = `current_position` を
+    フォーカス TF の N 本目の境界へ進める。時刻加算ではなく境界アライメント。
+    例: H1 focus で `current_pos = 10:15` から +1 本 → 新 `current_pos = 11:00`(次の H1 境界)。
+    市場クローズ(週末・祝日)に位置していると自動的に次の取引バー境界へスキップされる
+    (土曜 H1 +1 本 → 月曜開場後の最初に確定する H1 バー終端)。
 
     `new_bars` レスポンスは持たない(frontend は chart-stack を再呼び出しして全 TF を同期取得する)。
     """
+    if focused_tf not in TIMEFRAME_MINUTES:
+        raise bad_request(f"Invalid focused_tf: {focused_tf}")
+
     agg = ensure_session(session_id)
 
     cp = agg.meta.current_position
@@ -280,62 +286,62 @@ def advance_session(
     trade = agg.trade if agg.trade is not None and agg.trade.exit_time is None else None
     advance_symbol = trade.symbol if trade is not None else (symbol.upper() if symbol else None)
 
+    f_minutes = TIMEFRAME_MINUTES[focused_tf]
     new_pos: datetime
     if advance_symbol:
-        # 実 M5 バー N 本を確実に拾える時間幅で取りに行く: 週末・連休クローズ吸収分(_ADVANCE_MAX_CLOSURE_HOURS)
-        # に「N 本分の M5 時間」を加える。bars が小さくても週末を跨いで月曜開場後のバーへ到達できる。
-        # current_pos の M5 境界(cp_floor)から取得することで:
-        #   - m5.index[0] = cp_floor のバー(現在の live bar、もしくは weekend skip 後の最初の取引バー)
-        #   - m5.index[bars] = N 本 newly-confirmed したあとの新 live bar の開始時刻 = 新 current_position
-        # current_pos + 5min から取得すると weekend skip 時に N 本目を 1 本飛ばしてしまう不具合があった。
-        fetch_window = timedelta(hours=_ADVANCE_MAX_CLOSURE_HOURS) + timedelta(minutes=bars * 5)
-        cp_floor = _bar_start_for_tf(current_pos, "M5")
-        m5 = get_ohlc(
+        # フォーカス TF の N 本境界を確実に拾える時間幅 = 最大連続クローズ + N 本分のフォーカス TF 時間
+        fetch_window = timedelta(hours=_ADVANCE_MAX_CLOSURE_HOURS) + timedelta(minutes=bars * f_minutes)
+        f_floor = _bar_start_for_tf(current_pos, focused_tf)
+        # フォーカス TF のバー列を取得: index[0] = f_floor のバー(または weekend skip 後の最初の取引バー)
+        # index[bars] = N 本 newly-confirmed したあとの新 live bar 開始時刻 = 新 current_position
+        f_bars = get_ohlc(
             advance_symbol,
-            "M5",
-            cp_floor,
-            cp_floor + fetch_window,
+            focused_tf,
+            f_floor,
+            f_floor + fetch_window,
         )
-        if len(m5) > bars:
-            # 新 live bar の開始時刻
-            target_index = m5.index[bars]
-            target_dt = target_index if target_index.tzinfo is not None else target_index.replace(tzinfo=timezone.utc)
-            new_pos = target_dt
-            # SL/TP 判定対象は newly-confirmed の N 本(index 0 〜 bars-1)
-            sl_tp_target = m5.iloc[:bars]
-        elif len(m5) >= 1:
+        if len(f_bars) > bars:
+            target_index = f_bars.index[bars]
+            new_pos = target_index if target_index.tzinfo is not None else target_index.replace(tzinfo=timezone.utc)
+        elif len(f_bars) >= 1:
             # 取得バー数が bars 以下:取れた最後のバー直後を new_pos とする(連休跨ぎでデータ末尾)
             log.warning(
-                "[advance] requested %d M5 bars but only %d available for %s after %s; advancing to last bar end",
-                bars, len(m5), advance_symbol, cp_floor,
+                "[advance] requested %d %s bars but only %d available for %s after %s; advancing to last bar end",
+                bars, focused_tf, len(f_bars), advance_symbol, f_floor,
             )
-            last = m5.index[-1]
+            last = f_bars.index[-1]
             last_dt = last if last.tzinfo is not None else last.replace(tzinfo=timezone.utc)
-            new_pos = last_dt + timedelta(minutes=5)
-            sl_tp_target = m5
+            new_pos = last_dt + timedelta(minutes=f_minutes)
         else:
             # 取得 0 本のフォールバック(MT5 切断 / ヒストリ完全外、I-11.6 デフォルト fallback)
             log.warning(
-                "[advance] no M5 bars available for %s after %s; falling back to time addition",
-                advance_symbol, cp_floor,
+                "[advance] no %s bars available for %s after %s; falling back to time addition",
+                focused_tf, advance_symbol, f_floor,
             )
-            new_pos = current_pos + timedelta(minutes=5 * bars)
-            sl_tp_target = m5
+            new_pos = current_pos + timedelta(minutes=f_minutes * bars)
 
-        if trade is not None and not sl_tp_target.empty:
-            hit = _check_sl_tp(trade, sl_tp_target)
-            if hit:
-                exit_reason, exit_price = hit
-                pips_pnl = _calculate_pips(advance_symbol, trade.direction, trade.entry_price, exit_price)
-                trade.exit_time = new_pos
-                trade.exit_price = exit_price
-                trade.exit_reason = exit_reason
-                trade.pips_pnl = pips_pnl
-                session_store.save_trade(session_id, trade)
-                auto_closed = True
+        # SL/TP 判定: current_pos 〜 new_pos の間の M5 バーで high/low が SL/TP を抜けたか
+        if trade is not None:
+            sl_tp_m5 = get_ohlc(
+                advance_symbol,
+                "M5",
+                current_pos + timedelta(minutes=5),
+                new_pos,
+            )
+            if not sl_tp_m5.empty:
+                hit = _check_sl_tp(trade, sl_tp_m5)
+                if hit:
+                    exit_reason, exit_price = hit
+                    pips_pnl = _calculate_pips(advance_symbol, trade.direction, trade.entry_price, exit_price)
+                    trade.exit_time = new_pos
+                    trade.exit_price = exit_price
+                    trade.exit_reason = exit_reason
+                    trade.pips_pnl = pips_pnl
+                    session_store.save_trade(session_id, trade)
+                    auto_closed = True
     else:
         # 銘柄未確定(分析中で symbol query 無し)— 現状は到達しない想定だが安全側で時刻加算
-        new_pos = current_pos + timedelta(minutes=5 * bars)
+        new_pos = current_pos + timedelta(minutes=f_minutes * bars)
 
     agg.meta.current_position = new_pos
     session_store.save_meta(agg.meta)

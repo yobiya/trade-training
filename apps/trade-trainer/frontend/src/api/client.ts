@@ -118,8 +118,8 @@ export const api = {
       if (symbol) params.set('symbol', symbol)
       return request<ChartHistoryResponse>(`/sessions/${sessionId}/chart-history?${params.toString()}`)
     },
-    advance: (sessionId: string, bars = 1, symbol?: string) => {
-      const params = new URLSearchParams({ bars: String(bars) })
+    advance: (sessionId: string, bars: number, focusedTf: string, symbol?: string) => {
+      const params = new URLSearchParams({ bars: String(bars), focused_tf: focusedTf })
       if (symbol) params.set('symbol', symbol)
       return request<AdvanceResponse>(`/sessions/${sessionId}/advance?${params.toString()}`, { method: 'POST' })
     },
