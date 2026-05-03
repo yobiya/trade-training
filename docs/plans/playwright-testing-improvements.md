@@ -131,6 +131,7 @@ UI フローを 3 段に分けて、Playwright を最後の統合検証だけに
 ## 進捗
 
 - ✅ **案 D 実装済み**(2026/05/03): `docs/WORKFLOW.md §C 検証粒度の使い分け` + `architecture/frontend-overview.md §I テスト戦略と検証粒度` でルール明文化。詳細は `docs/CHANGELOG.md` の「設計書: 検証粒度の 3 階層化」エントリ
+- ✅ **vitest 環境整備**(2026/05/03): `vitest.config.ts` 作成。`drawing/state.ts` の単体テスト 77 件 pass(`src/drawing/__tests__/state.test.ts`)
 - ⏳ 案 A / B / C は未着手
 
 ## 推奨実装順
