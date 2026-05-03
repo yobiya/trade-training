@@ -134,7 +134,8 @@ UI フローを 3 段に分けて、Playwright を最後の統合検証だけに
 - ✅ **vitest 環境整備**(2026/05/03): `vitest.config.ts` 作成。`drawing/state.ts` の単体テスト 77 件 pass(`src/drawing/__tests__/state.test.ts`)
 - ✅ **frontend 単体テスト追加**(2026/05/03): visibility / wave_label / tools_hit_test / calculations / chartStackCache / datetime の計 200 件 pass
 - ✅ **backend pytest 追加**(2026/05/03): `bar_start` + `resample_ohlc`(market-data) + `_bar_start_for_tf` + `_calculate_pips`(backend) の計 53 件 pass
-- ⏳ 案 A / B / C は未着手
+- ✅ **案 B 実装済み**(2026/05/03): `Chart.tsx` に `window.__chartTest` (DEV only) を登録。`priceToY` / `yToPrice` / `timeToX` / `xToTime` を TF キーで公開。unmount 時に cleanup。
+- ⏳ 案 A / C は未着手
 
 ## 推奨実装順
 

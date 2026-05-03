@@ -312,6 +312,29 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     chartRef.current = chart
     seriesRef.current = series
 
+    // §playwright-testing-improvements 案 B: DEV 環境限定で座標変換 API を window に露出する。
+    // Playwright テストが 1 行で y 座標を取得できるようにするためのフック。
+    // production ビルドでは import.meta.env.DEV が false になりツリーシェイクで除去される。
+    if (import.meta.env.DEV) {
+      type ChartTestEntry = {
+        priceToY(p: number): number | null
+        yToPrice(y: number): number | null
+        timeToX(t: number): number | null
+        xToTime(x: number): number | null
+      }
+      const w = window as unknown as { __chartTest?: Map<string, ChartTestEntry> }
+      w.__chartTest ??= new Map()
+      w.__chartTest.set(timeframe, {
+        priceToY: (p) => seriesRef.current?.priceToCoordinate(p) ?? null,
+        yToPrice: (y) => {
+          const v = seriesRef.current?.coordinateToPrice(y)
+          return typeof v === 'number' ? v : null
+        },
+        timeToX: (t) => timeToPx(t),
+        xToTime: (x) => pxToTime(x),
+      })
+    }
+
     // 可視範囲が左端付近に近づいたら追加 history を要求(loadMoreHistory)。
     // logical range の `from` がデータ先頭バー(index=0)に近づくと負値になるので、
     // 一定閾値より下回ったタイミングで onNeedMoreHistory を呼ぶ。
@@ -406,6 +429,9 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
     container.addEventListener('wheel', wheelHandler, { passive: false })
 
     return () => {
+      if (import.meta.env.DEV) {
+        (window as unknown as { __chartTest?: Map<string, unknown> }).__chartTest?.delete(timeframe)
+      }
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(rangeHandler)
       chart.unsubscribeClick(clickHandler)
       chart.unsubscribeCrosshairMove(crosshairHandler)
