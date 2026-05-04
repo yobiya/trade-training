@@ -14,6 +14,7 @@
 - [§2 座標系と TF 間 projection の規約](#2-座標系と-tf-間-projection-の規約)
 - [§3 lightweight-charts 境界カタログ](#3-lightweight-charts-境界カタログ)
 - [§4 Chart instance の lifecycle と useEffect 責務](#4-chart-instance-の-lifecycle-と-useeffect-責務)
+  - [§4.3 private hook 分割方針(Phase 3)](#43-private-hook-分割方針phase-3)
 - [§5 オーバーレイ群](#5-オーバーレイ群)
 - [§6 関連 hooks(useChartRefCache / useCrosshairSync)](#6-関連-hooksusechartrefcache--usecrosshairsync)
 - [§7 アンチパターン記録(過去の失敗から)](#7-アンチパターン記録過去の失敗から)
@@ -316,6 +317,64 @@ function logicalToXFractional(handle, logical) {
 トレードオフ: bars が大きく形状の違う symbol へ切り替えた時、width だけ保持するため「直前と同じ位置にいたバー」は表示されない可能性がある(右端は新 bars の最終バーに揃うため)。これは仕様として受け入れる。
 
 ハンドラは ref 経由で常に最新値を呼ぶ(マウント時の購読関数は閉包なので)。
+
+### 4.3 private hook 分割方針(Phase 3)
+
+`Chart.tsx` は §4.1 の通り 9 個の useEffect に責務が分かれているが、ファイル単体で 600+ 行になっておりファイル内ナビゲーションが負担になる。**ロジック・公開 API・lifecycle は据え置きのまま** Chart.tsx 内部に閉じた private hook(同 `components/Chart/` 直下に分割)へ機能単位で切り出す。
+
+#### 不変条件(分割しても破ってはいけない)
+
+- **Chart instance は TF ごとに 1 つだけ永続化**(§4.2)。分割で複数 useEffect の発火順序が変わってはいけない
+- **`subscribeVisibleLogicalRangeChange` は `loadMoreHistory` トリガーにのみ使う**(§7.1)
+- **公開 props と `ChartHandle` 契約は変えない**(SessionPage / overlay 群との境界を固定)
+- **DEV 用 `window.__chartTest` の登録 / unmount cleanup は維持**(e2e テストの依存)
+
+#### 分割候補(機能単位、命名暫定)
+
+| 切り出し先 | 取り込む責務 | 元の useEffect | 公開する API |
+|---|---|---|---|
+| `useChartInstance` | `createChart` / `addCandlestickSeries` / cleanup / DEV `__chartTest` 登録 | メイン初期化(`[]` deps) | `chartRef`, `seriesRef`, `containerRef` |
+| `useChartCoordinates` | `pxToTime` / `timeToPx` の純粋ロジック(barsRef + tfRef を入力) | (関数定義のみ、effect なし) | `pxToTime`, `timeToPx` |
+| `useChartCandlestickData` | `series.setData` + 初回 `applyVisibleRange` + symbol 変化時の width preserve | 描画(`[bars, timeframe, symbol]`) | (副作用のみ、戻り値なし) |
+| `useChartPriceLines` | priceLines の差分追加 / 削除 / `applyOptions` | priceLines(`[priceLines]`) | (副作用のみ) |
+| `useChartMarkers` | `setMarkers` の bulk reset | markers(`[markers]`) | (副作用のみ) |
+| `useChartIndicators` | overlay / subpanel 系列の差分追加 + `priceScale` margin 構成 | インジケーター(`[indicators, bars]`) | (副作用のみ) |
+| `useChartCrosshair` | `subscribeCrosshairMove` / `setCrosshairPosition` / userCrosshairSubs | (現状はメイン初期化に同居) | `setCrosshairTime`, `subscribeUserCrosshair` |
+| `useChartMouseRelay` | container の mousemove / mousedown / mouseup / click / wheel(Ctrl ズーム) を上位 props へ中継 | (現状はメイン初期化に同居) | (副作用のみ、ref で props を読む) |
+
+`useChartScreenshot` は単独 hook 化するほどでもないため `useChartInstance` から chart instance を取って `ChartHandle.takeScreenshot` をビルドするときにインライン定義する。
+
+#### Chart.tsx 本体の到達目標
+
+```ts
+export const Chart = forwardRef<ChartHandle, Props>(function Chart(props, ref) {
+  const { containerRef, chartRef, seriesRef } = useChartInstance(props.timeframe)
+  const { pxToTime, timeToPx } = useChartCoordinates(chartRef, seriesRef, props.timeframe)
+  useChartCandlestickData(chartRef, seriesRef, props.bars, props.timeframe, props.symbol)
+  useChartPriceLines(seriesRef, props.priceLines)
+  useChartMarkers(seriesRef, props.markers)
+  useChartIndicators(chartRef, props.indicators, props.bars)
+  const { setCrosshairTime, subscribeUserCrosshair } = useChartCrosshair(chartRef, seriesRef)
+  useChartMouseRelay(containerRef, chartRef, seriesRef, { onChartClick, onMouseMove, ... })
+  // priceFormat (digits) のみ薄い useEffect で残す
+  useChartPriceFormat(seriesRef, props.digits)
+  // ChartHandle の組み立て
+  useImperativeHandle(ref, () => ({ ... }), [])
+  return <div ref={containerRef} style={...} />
+})
+```
+
+到達目標: Chart.tsx 本体 ~200 行。各 private hook は 30〜80 行。
+
+#### 進める前のチェック(WORKFLOW §A-2.1)
+
+Phase 3 着手時、必ず以下を確認してから書き始める:
+
+- [ ] 各 hook が触る ref / state を全部書き出した(`barsRef`, `tfRef`, `prevSymbolRef`, `fittedForTfRef`, `priceLineHandlesRef`, `indicatorSeriesRef`, `rsiPaneConfiguredRef`, `userCrosshairSubsRef`, `onXxxRef` 群)
+- [ ] hook 間で ref を共有する場合、所有者(初期化責任)を 1 つに固定したか
+- [ ] useEffect の発火順序が分割前と一致するか(初期化 → setData → priceLines → markers → indicators の順は維持)
+- [ ] DEV `__chartTest` の Map 登録 / 削除タイミングが Chart instance lifecycle と一致するか(過去の e2e helper 仕様 `tests/e2e/helpers/chart.ts`)
+- [ ] `setData` の自動 emit がハンドラ側で memory 書き戻しを起こさないか(§7.1 アンチパターンの再発防止)
 
 ---
 

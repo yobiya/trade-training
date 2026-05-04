@@ -47,7 +47,7 @@ src/
 ├─ pages/
 │  ├─ LoginPage.tsx
 │  ├─ SessionListPage.tsx
-│  └─ SessionPage.tsx         ← 主要(現状 600+ LOC)
+│  └─ SessionPage.tsx         ← 主要(orchestration + JSX)
 ├─ components/
 │  ├─ Chart.tsx               ← lightweight-charts ラッパ(forwardRef + useImperativeHandle)
 │  ├─ DrawingOverlay.tsx      ← 描画 SVG オーバーレイ
@@ -70,6 +70,8 @@ src/
 │  ├─ useCrosshairSync.ts      ← クロスヘア同期(詳細は frontend-chart.md)
 │  ├─ useSessionFetch.ts       ← session / activeTrade / latestTrade / phase
 │  ├─ useTradeFlow.ts          ← トレード操作 state + handler
+│  ├─ useEntryMarkers.ts       ← Trade.entry_tf チャートの 三角マーカー導出(§D.4)
+│  ├─ useSessionShortcuts.ts   ← M / [ / ] / F / S キーボードショートカット(§D.5)
 │  ├─ useNotify.ts             ← toast 通知
 │  └─ useAuth.ts
 ├─ chart/                     ← Chart 関連の純粋ロジック(モジュールスコープ)
@@ -77,12 +79,15 @@ src/
 ├─ api/
 │  ├─ types.ts                 ← レスポンス・リクエスト型
 │  └─ client.ts                ← fetch ラッパ + エンドポイント定義
+├─ utils/
+│  ├─ datetime.ts              ← formatJST / formatJSTDate
+│  ├─ bars.ts                  ← `nearestBarTime` 等のバー配列ユーティリティ
+│  └─ priceLines.ts            ← `priceLinesForTf` (drawings + entryDraft + Trade → PriceLine[])
 ├─ contexts/
 │  └─ NotifyContext.tsx        ← toast 通知 Provider
 ├─ drawing/                    ← drawing-tools.md
 │  ├─ types.ts, state.ts, tools/, visibility.ts
-├─ indicators/                 ← インジケーター(SMA / EMA / RSI 等)
-└─ utils/
+└─ indicators/                 ← インジケーター(SMA / EMA / RSI 等)
 ```
 
 ---
@@ -178,6 +183,39 @@ function useNotify(): {
 ```
 
 詳細は [invariants.md I-11.4](./invariants.md#i-114-ユーザー入力起因の失敗は-ui-に通知)。
+
+### D.4 `useEntryMarkers(displayTrade, barsByTf)`
+
+```ts
+function useEntryMarkers(
+  displayTrade: TradeResponse | null,
+  barsByTf: Record<string, OhlcBar[]>,
+): ChartMarker[]
+```
+
+責務: §5.5.4 Trade.entry_tf チャートに渡すエントリー / 決済の三角マーカーを `displayTrade` と該当 TF の bars から導出する。
+
+- `displayTrade.entry_tf` の bars 内で `entry_time` / `exit_time` の最寄りバー時刻を `nearestBarTime`(`utils/bars.ts`)で求める
+- buy なら下向き(belowBar / arrowUp)、sell なら上向きのエントリー三角。決済時は反対向き、利益なら緑・損失なら赤
+- bars 未取得 / displayTrade null のケースは空配列を返す
+
+`barsByTf` 全体ではなく **`displayTrade.entry_tf` の bars だけ参照する** が、現実装は `barsByTf` 全体を deps に取る(SessionPage の useMemo 移植のため)。性能上問題があれば deps を絞るリファクタを検討する。
+
+### D.5 `useSessionShortcuts(params)`
+
+```ts
+function useSessionShortcuts(params: {
+  phase: 'analyzing' | 'holding' | 'reviewing'
+  setMemoOpen: (updater: (v: boolean) => boolean) => void
+  setSymbolMode: (updater: (m: 'all' | 'star') => 'all' | 'star') => void
+  stepSymbol: (dir: 1 | -1) => void
+  toggleCandidate: () => Promise<void>
+}): void
+```
+
+責務: 仕様書 §7.3 (M) / §6.2 ([, ], F, S) のキーボードショートカットを `window` に attach する。INPUT / TEXTAREA / contenteditable へのフォーカス中はスキップ。`M` はフェーズ問わず、`[ / ] / F / S` は `phase === 'analyzing'` のみ有効。
+
+cleanup で `removeEventListener` を確実に呼ぶ。`stepSymbol` / `toggleCandidate` は呼び出し側で useCallback 安定化したものを渡す前提。
 
 ---
 
@@ -332,7 +370,7 @@ MemoPanel:
 
 ### H.4 残課題(将来の別タスク)
 
-- **Chart.tsx 責務分割**: 460+ 行 / useEffect 8 個。座標変換 / series 管理 / イベント中継 / クロスヘア / スクリーンショットを内部 private hook に分解する余地あり。詳細は [`frontend-chart.md`](./frontend-chart.md)
+- **Chart.tsx 責務分割**: 現状 616 行 / useEffect 9 個(うちハンドラ ref 6 個)。座標変換 / series 管理 / priceLines / markers / indicators / クロスヘア / スクリーンショットを Chart.tsx 内部の private hook に分解する余地あり。分割方針は [`frontend-chart.md §4.3`](./frontend-chart.md#43-private-hook-分割方針phase-3) を参照
 - **`drawing/state.ts` 599 行を tool 別 reducer に分割**: 設計自体は良好(state machine)、ファイルサイズだけが課題。次の描画機能追加時に着手
 - **`index.css` 1,274 行のモジュール化**: CSS Modules / Tailwind 移行は別タスク
 - **テスト整備(Vitest)**: テスト戦略は [§I](#i-テスト戦略と検証粒度) に集約。実体ファイル整備は別タスク
