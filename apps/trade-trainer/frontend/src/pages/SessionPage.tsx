@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { Drawing, EconomicEvent, SettingsResponse } from '../api/client'
+import type { EconomicEvent, SettingsResponse } from '../api/client'
 import { Chart } from '../components/Chart'
-import type { ChartMarker, PriceLine } from '../components/Chart'
-import type { OhlcBar } from '../api/client'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
 import { EventOverlay } from '../components/EventOverlay'
@@ -19,120 +17,23 @@ import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
 import { SYMBOLS, TIMEFRAMES, TIMEFRAME_MINUTES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
-import { isDrawingVisibleOnTf } from '../drawing/visibility'
 import { useChartRefCache } from '../hooks/useChartRefCache'
 import { useCrosshairSync } from '../hooks/useCrosshairSync'
 import { useCharts } from '../hooks/useCharts'
 import { useDrawings } from '../hooks/useDrawings'
 import { useDrawingInteraction } from '../hooks/useDrawingInteraction'
 import { useEconomicEvents } from '../hooks/useEconomicEvents'
+import { useEntryMarkers } from '../hooks/useEntryMarkers'
 import { useNotify } from '../hooks/useNotify'
 import { useSessionFetch } from '../hooks/useSessionFetch'
+import { useSessionShortcuts } from '../hooks/useSessionShortcuts'
 import { useTradeFlow } from '../hooks/useTradeFlow'
 import { formatJST } from '../utils/datetime'
+import { priceLinesForTf } from '../utils/priceLines'
 
 type Props = {
   sessionId: string
   onBack: () => void
-}
-
-/** §5.5 Trade 由来の表示価格を保持。phase に応じて優先順を決める(holding=activeTrade, reviewing=latestTrade)。 */
-type TradeForDisplay = {
-  entry_price: number
-  sl: number | null
-  tp: number | null
-  exit_price: number | null
-  pips_pnl: number | null
-} | null
-
-/**
- * §5.5.4: マーカー時刻を `bars` の最寄りバー timestamp にスナップする。
- * lightweight-charts は厳密一致する time でないとマーカーを描画しない。
- */
-function nearestBarTime(bars: OhlcBar[], targetUnix: number): number | null {
-  if (bars.length === 0) return null
-  let nearest = bars[0].t
-  let bestDiff = Math.abs(targetUnix - nearest)
-  for (const b of bars) {
-    const d = Math.abs(targetUnix - b.t)
-    if (d < bestDiff) {
-      nearest = b.t
-      bestDiff = d
-    }
-  }
-  return nearest
-}
-
-function fmtPrice(p: number, digits: number): string {
-  return p.toFixed(digits)
-}
-
-function priceLinesForTf(
-  drawings: Drawing[],
-  tf: string,
-  preview: Drawing | null,
-  entryDraft: { sl: number | null; tp: number | null },
-  trade: TradeForDisplay,
-  digits: number,
-  /** §5.5.5 SL/TP drag 中の preview 値。Trade.sl / Trade.tp の表示値を上書きする */
-  tradeLinePreview: { handle: 'sl' | 'tp'; price: number } | null,
-): PriceLine[] {
-  const lines: PriceLine[] = drawings
-    .filter(d => d.kind === 'line' && isDrawingVisibleOnTf(d, tf))
-    .map(d => {
-      const previewMatch = preview?.id === d.id ? preview : null
-      return {
-        id: d.id,
-        price: Number(previewMatch?.data.price ?? d.data.price),
-        label: d.label ?? undefined,
-        color: getTimeframeColor(d.timeframe),
-      }
-    })
-  // §7.4: 組み立て中の SL / TP を全 TF に表示
-  if (entryDraft.sl != null) {
-    lines.push({ id: -1001, price: entryDraft.sl, label: 'SL', color: '#ff5555' })
-  }
-  if (entryDraft.tp != null) {
-    lines.push({ id: -1002, price: entryDraft.tp, label: 'TP', color: '#58a6ff' })
-  }
-  // §5.5 Trade 由来の表示(エントリー後・決済後)
-  if (trade) {
-    lines.push({
-      id: -2001,
-      price: trade.entry_price,
-      label: `Entry @ ${fmtPrice(trade.entry_price, digits)}`,
-      color: '#e3b341',
-    })
-    // §5.5.5: drag 中は preview 値で上書き表示(commit 前に視覚的フィードバック)
-    const slDisplay = tradeLinePreview?.handle === 'sl' ? tradeLinePreview.price : trade.sl
-    const tpDisplay = tradeLinePreview?.handle === 'tp' ? tradeLinePreview.price : trade.tp
-    if (slDisplay != null) {
-      lines.push({
-        id: -2002,
-        price: slDisplay,
-        label: `SL @ ${fmtPrice(slDisplay, digits)}`,
-        color: '#ff5555',
-      })
-    }
-    if (tpDisplay != null) {
-      lines.push({
-        id: -2003,
-        price: tpDisplay,
-        label: `TP @ ${fmtPrice(tpDisplay, digits)}`,
-        color: '#58a6ff',
-      })
-    }
-    if (trade.exit_price != null) {
-      const exitColor = (trade.pips_pnl ?? 0) >= 0 ? '#26a69a' : '#ef5350'
-      lines.push({
-        id: -2004,
-        price: trade.exit_price,
-        label: `Exit @ ${fmtPrice(trade.exit_price, digits)}`,
-        color: exitColor,
-      })
-    }
-  }
-  return lines
 }
 
 /**
@@ -224,42 +125,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
     : (phase === 'reviewing' ? latestTrade : null)
 
   // §5.5.4: Trade.entry_tf チャートに渡す三角マーカー(エントリー / 決済時刻)
-  const entryMarkers = useMemo<ChartMarker[]>(() => {
-    if (!displayTrade) return []
-    const tradeTf = displayTrade.entry_tf || 'M5'
-    const entryBars = barsByTf[tradeTf] ?? []
-    if (entryBars.length === 0) return []
-    const out: ChartMarker[] = []
-    const entryUnix = Math.floor(new Date(displayTrade.entry_time).getTime() / 1000)
-    const entryNearest = nearestBarTime(entryBars, entryUnix)
-    if (entryNearest != null) {
-      const isBuy = displayTrade.direction === 'buy'
-      out.push({
-        time: entryNearest,
-        position: isBuy ? 'belowBar' : 'aboveBar',
-        shape: isBuy ? 'arrowUp' : 'arrowDown',
-        color: isBuy ? '#26a69a' : '#ef5350',
-        text: `${isBuy ? 'BUY' : 'SELL'} ${displayTrade.entry_price}`,
-      })
-    }
-    if (displayTrade.exit_time != null && displayTrade.exit_price != null) {
-      const exitUnix = Math.floor(new Date(displayTrade.exit_time).getTime() / 1000)
-      const exitNearest = nearestBarTime(entryBars, exitUnix)
-      if (exitNearest != null) {
-        const isProfit = (displayTrade.pips_pnl ?? 0) >= 0
-        const isBuy = displayTrade.direction === 'buy'
-        // エントリーと反対向きの三角(決済 = ポジション解消の方向)
-        out.push({
-          time: exitNearest,
-          position: isBuy ? 'aboveBar' : 'belowBar',
-          shape: isBuy ? 'arrowDown' : 'arrowUp',
-          color: isProfit ? '#26a69a' : '#ef5350',
-          text: `Exit ${displayTrade.exit_price}`,
-        })
-      }
-    }
-    return out
-  }, [displayTrade, barsByTf])
+  const entryMarkers = useEntryMarkers(displayTrade, barsByTf)
 
   // §5.4 経済指標: 設定読み込み + 表示期間内のイベント取得
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
@@ -456,32 +322,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
   }, [displaySymbols, currentSymbol])
 
   // 仕様書 §7.3 (M) / §6.2 ([, ], F, S) キーボードショートカット
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      // M はフェーズ問わず有効
-      if (e.key === 'm' || e.key === 'M') {
-        e.preventDefault()
-        setMemoOpen(v => !v)
-        return
-      }
-      // 銘柄操作系は分析中のみ
-      if (phase !== 'analyzing') return
-      if (e.key === '[') { e.preventDefault(); stepSymbol(-1) }
-      else if (e.key === ']') { e.preventDefault(); stepSymbol(1) }
-      else if (e.key === 'f' || e.key === 'F') {
-        e.preventDefault()
-        setSymbolMode(m => m === 'all' ? 'star' : 'all')
-      }
-      else if (e.key === 's' || e.key === 'S') {
-        e.preventDefault()
-        void toggleCandidate()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [phase, stepSymbol, toggleCandidate])
+  useSessionShortcuts({ phase, setMemoOpen, setSymbolMode, stepSymbol, toggleCandidate })
 
   return (
     <div className="training-page session-page">
