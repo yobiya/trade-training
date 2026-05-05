@@ -286,7 +286,9 @@ function logicalToXFractional(handle, logical) {
 }
 ```
 
-`api.logicalToX` 自体は LWC の薄ラッパなので **共通ラッパは ChartHandle 側に持たせず、利用側(LowerTfRangeOverlay)が必要に応じて整数化する** 方針。fractional logical を扱う他の overlay / hook が出てきたら共通化を検討する。
+`api.logicalToX` 自体は LWC の薄ラッパなので **共通ラッパは ChartHandle 側に持たせず、利用側(LowerTfRangeOverlay)が必要に応じて整数化する** 方針。
+
+ただし `chartApi.timeToX` は内部で fractional logical を生み出す経路があるため(in-range gap の時刻 → 隣接バー時間比補間で fractional logical を返す。trendline / fibonacci を別 TF chart に重ね描きする場合に発生)、`useChartCoordinates.timeToPx` 内に **`logicalToCoordinateFractional` ヘルパを持ち、内部で同じ整数 2 点補間を実施**する。これにより `timeToX` の利用側(各ツールの `renderOverlay`)は fractional を意識せずに px を取れる。
 
 ---
 

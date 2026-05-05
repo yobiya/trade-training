@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import type { IChartApi, Logical, Time } from 'lightweight-charts'
+import type { IChartApi, ITimeScaleApi, Logical, Time } from 'lightweight-charts'
 import type { OhlcBar } from '../../api/client'
 import { TIMEFRAME_MINUTES } from '../../constants'
 
@@ -8,6 +8,24 @@ export type ChartCoordinates = {
   pxToTime: (pxX: number) => number | null
   /** Unix 秒 → chart 内 x 座標。範囲外は logical 経由で外挿 */
   timeToPx: (time: number) => number | null
+}
+
+/**
+ * LWC `logicalToCoordinate` の fractional 引数バグ回避(設計 §3.7 / §7.2)。
+ *
+ * LWC は logical が整数のときのみ正しい px を返し、fractional を渡すと **0** を返す
+ * (整数なら範囲外でも線形外挿で px を返すのに対し、fractional は in-range でも 0 にフォールバック)。
+ * 整数 2 点 `floor(logical)` / `floor(logical) + 1` で px を取り、線形補間して fractional に対応する。
+ */
+function logicalToCoordinateFractional(ts: ITimeScaleApi<Time>, logical: number): number | null {
+  if (Number.isInteger(logical)) {
+    return ts.logicalToCoordinate(logical as Logical) ?? null
+  }
+  const lo = Math.floor(logical)
+  const x0 = ts.logicalToCoordinate(lo as Logical)
+  const x1 = ts.logicalToCoordinate((lo + 1) as Logical)
+  if (x0 == null || x1 == null) return null
+  return x0 + (logical - lo) * (x1 - x0)
 }
 
 /**
@@ -82,7 +100,7 @@ export function useChartCoordinates(
         logical = lo + (time - bars[lo].t) / span
       }
     }
-    return ts.logicalToCoordinate(logical as Logical) ?? null
+    return logicalToCoordinateFractional(ts, logical)
   }, [chartRef, barsRef, tfRef])
 
   return useMemo(() => ({ pxToTime, timeToPx }), [pxToTime, timeToPx])
