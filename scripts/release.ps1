@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     trade-trainer をリリース(本番ビルド)モードで起動する。
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Start trade-trainer backend (FastAPI) and frontend (Vite) for development.
 
