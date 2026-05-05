@@ -173,7 +173,9 @@ export function SessionPage({ sessionId, onBack }: Props) {
   })
 
   const [hoveredEvent, setHoveredEvent] = useState<EconomicEvent | null>(null)
-  // §5.3: 描画一覧の行 hover で全 TF chart 上の対応描画を spotlight 強調する
+  // §5.3: 描画一覧の行 hover で全 TF chart 上の対応描画を spotlight 強調する。
+  // 描画ツールがアクティブ化したら listHoveredId を必ずクリアする(行 unmount 等で
+  // onMouseLeave が確実に発火しないケースでの stuck 防止)。
   const [listHoveredId, setListHoveredId] = useState<number | null>(null)
 
   // §5.1.5: マウスホバーではフォーカスを変えず、chartApiRef だけ更新する
@@ -283,6 +285,12 @@ export function SessionPage({ sessionId, onBack }: Props) {
       interactionSelectTool(null)
     }
   }, [trade.entryPlacing, interactionActiveTool, interactionSelectTool])
+
+  // §5.3 描画ツールがアクティブになったら listHoveredId を必ずクリアする
+  // (描画一覧 row の onMouseLeave が確実には発火しないケースでの stuck 防止)
+  useEffect(() => {
+    if (interactionActiveTool !== null) setListHoveredId(null)
+  }, [interactionActiveTool])
 
   // 銘柄切替 / フェーズ移行で draft をクリア。
   // `trade` 全体は毎レンダで新参照になるので、stable な setter のみを dep に取る。

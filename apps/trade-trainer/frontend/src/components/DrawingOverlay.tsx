@@ -79,10 +79,11 @@ export function DrawingOverlay({ chartHandle, drawings, preview, activeTimeframe
       {visible.map(d => {
         const tool = TOOLS[d.kind]
         if (!tool?.renderOverlay) return null
-        // §5.3 spotlight: hoveredId が設定されている時、対象以外を半透明にして
-        // どの描画が hover 中か視覚的に分かるようにする(描画一覧 hover と
-        // チャート cursor hover の双方からこの経路に入る)
-        const isFaded = hoveredId != null && d.id !== hoveredId
+        // §5.3 spotlight: hoveredId が設定されている時、対象以外を半透明にする。
+        // ただし `preview` が存在する間(描画作成中 / drag 中)は fade を無効化する。
+        // 理由: 作成中はユーザーがその描画に集中している + listHoveredId が stuck
+        // していたケースで波動配置中に他の番号が暗く表示される問題があった。
+        const isFaded = hoveredId != null && d.id !== hoveredId && preview === null
         return (
           <g key={`d-${d.id}`} opacity={isFaded ? 0.25 : 1}>
             {tool.renderOverlay(d, api)}
