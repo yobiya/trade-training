@@ -93,6 +93,18 @@ export function SessionPage({ sessionId, onBack }: Props) {
     }
   }, [symbolMode, candidates.length])
 
+  // 分析中に表示銘柄リストが現在の選択を含まなくなった場合(★ モード切替など)、
+  // analyzingSymbol を先頭に補正する。これがないと <select value> が無効値となり
+  // ブラウザは先頭 option を視覚表示するが、チャート側 currentSymbol は古いままで
+  // 「セレクタの表示名と実チャートが一致しない」状態になる。
+  useEffect(() => {
+    if (phase !== 'analyzing') return
+    if (displaySymbols.length === 0) return
+    if (!displaySymbols.includes(analyzingSymbol)) {
+      setAnalyzingSymbol(displaySymbols[0])
+    }
+  }, [phase, displaySymbols, analyzingSymbol])
+
   // 表示順序: エントリー足を最上段
   const visibleTfs = useMemo(() => {
     // §5.1.1: 並び順は TF 固定順 (M5 → MN1)。フォーカス TF で並び替えない。
