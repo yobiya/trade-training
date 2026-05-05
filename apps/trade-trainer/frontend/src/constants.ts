@@ -30,19 +30,10 @@ export const TIMEFRAME_MINUTES: Record<string, number> = {
   MN1: 43200,
 }
 
-// 時間足ごとに初回取得するバー本数(仕様書 §5.1 マルチタイムフレーム)。
-// 全 TF で `DEFAULT_VISIBLE_BARS = 100` を満たせるよう一律 200 本取得する
-// (ブローカーの保有データが 100 本未満の場合は MT5 が返す範囲のみとなる)。
-// 過去 history は frontend の loadMoreHistory(左端到達時)で動的拡張される。
-export const BARS_BY_TF: Record<string, number> = {
-  M5: 200, M15: 200, H1: 200, H4: 200, D1: 200, W1: 200, MN1: 200,
-}
-
-// 仕様書 §5.1.3: 初期表示する可視範囲のバー数(全 TF 統一)。
-// `BARS_BY_TF` は MT5 から取得する全バー数(背景に保持)、こちらは可視範囲のバー数。
-// セッション内メモリ(`chart/visibleBarsMemory.ts`)が確定するまでのフォールバックに使う。
-// 縦積みマルチ TF で各チャートのローソク幅が揃うことを優先し、TF 別差をなくして単一値とする。
-export const DEFAULT_VISIBLE_BARS = 150
+// 仕様書 §5.1.3: 初期表示する可視範囲のバー数(全 TF 統一)。backend `_BARS_BY_TF` (400) が
+// 取得本数、こちらは画面に映るバー数。縦積みマルチ TF で各チャートのローソク幅が揃うことを
+// 優先し、TF 別差をなくして単一値とする。
+export const DEFAULT_VISIBLE_BARS = 300
 
 // メイン時間足を選んだときに並行表示する上位足(仕様書 §5.1)。
 // MN1 は最上位のため上位足なしで main のみ表示。

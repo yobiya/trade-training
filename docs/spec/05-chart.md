@@ -42,7 +42,7 @@
 - Chart instance は **TF ごとに 1 つだけ永続化** する(銘柄切替で remount しない)。これにより visible range は Chart instance 内の lightweight-charts の state として自然に保持される
 - 銘柄切替時は **直前の visible range の `to - from` を width として取得 → 新銘柄の bars に setData → 右端を最新バーに合わせて `setVisibleLogicalRange({from: bars.length-1+RIGHT_OFFSET-width, to: bars.length-1+RIGHT_OFFSET})`** とする。これで「同 TF で同じ表示本数 / 表示密度」がシンボル間で保たれる
 - 同 symbol 内の bars 変化(advance / loadMoreHistory)では visible range を触らず、ユーザーの zoom / pan 状態を維持する
-- 初回マウント時のみ既定 width(`DEFAULT_VISIBLE_BARS = 150`)で右端揃えする
+- 初回マウント時のみ既定 width(`DEFAULT_VISIBLE_BARS = 300`)で右端揃えする
 - `bars.length < width` の TF(broker のヒストリ不足等)では `fitContent()` でフォールバック表示する
 - 過去の「`visibleBarsMemory.ts` (TF キーのモジュールスコープ Map)で width を共有する」設計は撤廃した。ライブラリの自動 emit が memory を汚染するパスがあったため
 
