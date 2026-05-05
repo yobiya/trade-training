@@ -35,6 +35,24 @@ A 種のうち、以下のどれか 1 つでも当てはまるものは **コー
 
 具体的にやること: 関連する設計ファイル(`docs/ARCHITECTURE.md` または `docs/architecture/*.md`)のセクションを **先に**更新し、新 state と既存 state の干渉が文章で追える状態にする。これを飛ばさない。
 
+## ファイル作成規約
+
+### `.ps1` (PowerShell スクリプト) は UTF-8 with BOM で保存する
+
+- 新規作成・編集問わず、`.ps1` ファイルは **UTF-8 with BOM (先頭 `EF BB BF`)** で保存する
+- ASCII 専用(日本語コメント無し)でも、将来日本語追加時の事故防止のため BOM を付ける
+- 理由: Windows PowerShell 5.1 (`powershell.exe`) は BOM 無しの `.ps1` を ANSI (Windows-1252)
+  として読み、日本語コメントの UTF-8 列を誤デコードしてパースエラー
+  (`Unexpected token '}'` 等)で停止する。pwsh 7 は BOM 無しでも UTF-8 として読むため
+  開発時に気付かないが、ユーザー実行環境(別 clone / 別 shell)で破綻する
+- 確認方法: `[System.IO.File]::ReadAllBytes('path').ps1')[0..2]` の戻り値が `239,187,191`
+- BOM 付与方法:
+  ```powershell
+  $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+  $content = Get-Content -Raw -Encoding UTF8 'scripts\xxx.ps1'
+  [System.IO.File]::WriteAllText((Resolve-Path 'scripts\xxx.ps1').Path, $content, $utf8Bom)
+  ```
+
 ## やってはいけないこと(再掲)
 
 - ✗ コードを先に書いて仕様書 / 設計を後回しにする
