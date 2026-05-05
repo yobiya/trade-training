@@ -9,7 +9,7 @@
 - [`docs/CHANGELOG.md`](./docs/CHANGELOG.md) — 仕様書の変更履歴(ver 1.X 単位、append-only)
 - 設計ドキュメント(層別に分割):
   - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — トップレベル(全体図 / **frontend↔backend 役割境界** / 索引)
-  - [`docs/architecture/invariants.md`](./docs/architecture/invariants.md) — 横断不変条件 I-1〜I-12(着手前必読)
+  - [`docs/architecture/invariants.md`](./docs/architecture/invariants.md) — 横断不変条件 I-1〜I-13(着手前必読)
   - [`docs/architecture/backend.md`](./docs/architecture/backend.md) — backend + market-data
   - [`docs/architecture/frontend-overview.md`](./docs/architecture/frontend-overview.md) — frontend 全体構造(画面 / 状態 / hooks / フロー)
   - [`docs/architecture/frontend-chart.md`](./docs/architecture/frontend-chart.md) — Chart 関連(**座標系 / LWC 境界 / TF 間 projection 規約**)

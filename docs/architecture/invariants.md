@@ -20,6 +20,7 @@
 | [I-10](#i-10-observability-の最低ライン) | observability | silent failure を作らない |
 | [I-11](#i-11-エラー処理--失敗の可視化) | エラー処理 | 6 項目: silent 禁止 / 捕捉スコープ / 空 vs 失敗 / UI 通知 / trust boundary / デフォルト返却 |
 | [I-12](#i-12-座標変換と-tf-間-projection) | 座標変換 | 単一 Chart 内は LWC 信頼、TF 間 projection は純粋関数経由 |
+| [I-13](#i-13-ユーザー操作座標演算は-barpixel-空間で行う) | bar 空間原則 | drag / 進行 / 距離判定は bar/pixel で。時刻差を直接 delta にしない(weekend gap 混入) |
 
 ---
 
@@ -273,3 +274,85 @@ lower の visible logical
 ### I-12.4 `logicalToCoordinate` は fractional 引数を受け付けない
 
 LWC の `logicalToCoordinate` は **整数 logical のみ正しい px を返し、fractional(小数値)を渡すと 0 を返す**(範囲外でも整数なら線形外挿で px を返す)。TF 間 projection は時刻補間で fractional logical を生むため、整数 2 点(`floor(logical)` と `floor(logical) + 1`)で px を取って線形補間する自前ラッパで吸収する。詳細・実測値・対処コードは [`frontend-chart.md` §3.7](./frontend-chart.md#37-logicaltocoordinate-は-fractional-引数を受け付けない)。
+
+---
+
+## I-13. ユーザー操作・座標演算は bar/pixel 空間で行う
+
+### 背景: 時刻ベース演算が weekend gap で破綻する再発パターン
+
+過去事故(時系列):
+
+| ver | 場所 | 失敗モード |
+|---|---|---|
+| 1.78 | chart-stack 取得 | 「時間幅 = bars × tf_minutes × FACTOR」が 1.5 倍では週末 65h を吸収できず M5 が空配列 |
+| 1.78 | advance | `current_pos + 5min × bars` が日曜から実行されると土日に留まり「+1 本押しても画面が変わらない」 |
+| 1.79 | advance | M5 換算 12 本 = H1 1 本 のロジックが weekend で M5 取得 0 本になり停滞 |
+| (今回) | trendline body drag | `dt = current.t - anchor.t` が weekend gap 65h を含み、`original.t + dt` が gap 内の存在しない時刻に |
+| (今回) | timeToX 補間 | gap 内時刻を「隣接バーの時間比」で補間 → fractional logical → LWC バグ(I-12.4)を踏む |
+
+**共通の真因**: 「時間軸で N 単位を表現する」と bar grid のギャップで semantic が崩れる。FX 市場は週末 ~65h + 平日連休のため、一連の bar 列は時間軸上で**等間隔ではない**。
+
+### I-13.1 「N 単位の進行 / 移動 / 距離」は bar 数で表現する
+
+✗ ダメな例:
+```ts
+// drag delta を時間で計算
+const dt = current.t - anchor.t        // weekend を跨ぐと dt に 65h gap が混入
+const newT = original.t + dt            // gap 内の存在しない時刻になる
+
+// 「N バー後」を時刻加算で表現
+const advanceTo = current_position + N * tfSec   // 週末で停滞
+
+// 距離判定を時刻で
+if (Math.abs(t1 - t2) < threshold) ...   // 同じ logical 距離でも weekend で false に
+```
+
+◯ 良い例:
+```ts
+// drag は pixel 空間で計算 → xToTime で bar 時刻にスナップ
+const dx = current.pointerPx.x - anchor.pointerPx.x
+const newT = chartApi.xToTime(chartApi.timeToX(p.t) + dx)
+
+// 「N バー後」は bar 配列を引いて N 本目の境界を取る
+const advanceTo = bars[currentIdx + N].t
+
+// 距離判定は logical / bar idx 差で
+if (Math.abs(idx1 - idx2) < threshold) ...
+```
+
+### I-13.2 drag / pan の delta は pixel 空間で計算する
+
+drag handler は時刻ではなく **`pointerPx`(pixel 座標)を anchor として保持**し、mouse-move のたびに pixel delta を計算する。time / price への変換は最終的に `xToTime` / `yToPrice` で 1 回だけ行う(座標系の往復で gap を吸収する)。
+
+trendline / fibonacci の body drag、SL/TP drag、波動ラベル drag、視野 pan(現状は LWC 任せ)はこの規約に沿う。`drawing/state.ts` の `shiftPointsByPixel` がリファレンス実装。
+
+### I-13.3 時刻ベース演算が許容される箇所(例外)
+
+以下は **時刻のまま扱う** 箇所(I-1 と整合):
+
+- データ永続化(`Drawing.data.t`、`Trade.entry_time`、`OhlcBar.t`):UTC 不変条件 I-1 を保つため
+- API 境界(chart-stack の `current_position`、event API の time range):broker / 経済指標 provider と整合
+- 時刻表示(`formatJST`)、絶対時刻ラベル
+- chart-stack 取得 window の決定(`current_pos - timedelta(minutes=...)`):過剰取得は MT5 側で空 fallback されるため副作用なし(I-2 / `_FACTOR = 10` で吸収)
+
+ここで時刻演算をしているコードは weekend gap が混入しても「過剰取得 / 表示が遅れない」程度の影響に閉じる必要がある。閉じない場合は I-13.1 / I-13.2 に従って bar/pixel 空間へ移す。
+
+### I-13.4 新規実装時のチェックリスト
+
+新しい drag / 進行 / 距離判定ロジックを書くときに自問する:
+
+1. **delta を time で持っているか?** → pixel / bar idx に変えられるか検討
+2. **`t1 ± delta_seconds` を保存・比較しているか?** → 結果が bar 境界に乗るか確認、乗らないなら xToTime でスナップ
+3. **「N 単位」の N は何の単位か?** → bar 数(I-13.1)/ pixel(I-13.2)/ 時刻(I-13.3 例外のみ)
+4. **weekend / 祝日を跨いでも壊れないか?** → 跨ぐシナリオを 1 つ手で追ってみる
+
+WORKFLOW §A-2.1 のチェックリストにこの 4 問を含める。
+
+### I-13.5 過去事故 → 修正の対応表
+
+| 過去事故 | 修正 ver | 採用した戦略 |
+|---|---|---|
+| advance の M5 換算停滞 | 1.79 | bar 配列を引いて N 本目境界へ進む(I-13.1 例) |
+| trendline body drag 消失 | (今回) | pixel 空間 drag + xToTime スナップ(I-13.2) |
+| chart-stack 週末空配列 | 1.78 | FACTOR を時刻スケールで拡大(I-13.3 例外、過剰取得で吸収) |

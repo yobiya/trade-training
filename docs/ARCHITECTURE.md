@@ -29,7 +29,7 @@
 | ファイル | 範囲 | いつ読む |
 |---|---|---|
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md)(本ファイル) | システム全体図 / frontend ↔ backend 役割境界 / 主要データフロー / 索引 | プロジェクトを初めて触るとき / 新機能設計時に「どこに置くか」を判定するとき |
-| [`architecture/invariants.md`](./architecture/invariants.md) | 横断的な不変条件 I-1〜I-12(全層共通の前提) | 仕様変更・バグ修正の **着手前に必ず確認** |
+| [`architecture/invariants.md`](./architecture/invariants.md) | 横断的な不変条件 I-1〜I-13(全層共通の前提) | 仕様変更・バグ修正の **着手前に必ず確認** |
 | [`architecture/backend.md`](./architecture/backend.md) | backend(FastAPI / services / session_store)+ market-data(OHLC 取得 / プロバイダ抽象 / resample) | API 追加・変更 / セッションファイル仕様変更 / MT5 連携の修正時 |
 | [`architecture/frontend-overview.md`](./architecture/frontend-overview.md) | frontend 全体構造(画面 / hooks / 状態の所有 / 主要フロー / API クライアント) | SessionPage / hooks / 一般的な UI 機能を触るとき |
 | [`architecture/frontend-chart.md`](./architecture/frontend-chart.md) | Chart 関連(コンポーネント契約 / 座標系 / **TF 間 projection 規約** / LWC 境界カタログ / overlay 群 / アンチパターン記録) | チャート / overlay / 座標変換 / クロスヘア同期 を触るとき |

@@ -72,6 +72,7 @@ frontend / backend の役割境界(どこに置くか)を判定するときは [
 - [ ] 既存の lifecycle(`<X key={...}>` 等の remount 戦略・cleanup 順序・useEffect 発火順)に与える影響を該当する設計ファイル(`ARCHITECTURE.md` または `architecture/*.md`)に書いた
 - [ ] 想定される副作用の伝播経路を 1 本のフロー図 / 文章で追えるか確認した(「state A が変わると B が変わって C が再描画される」を口頭で説明できる状態)
 - [ ] ライブラリ(lightweight-charts 等)の **暗黙の副作用**(setData が visible range emit を起こす等)が新機能と干渉しないか検討した
+- [ ] **bar/pixel 空間原則**([I-13](./architecture/invariants.md#i-13-ユーザー操作座標演算は-barpixel-空間で行う)): drag / 進行 / 距離判定で時刻 delta(`t1 ± delta_seconds`)を使っていないか? weekend / 祝日を跨ぐシナリオを 1 つ手で追って壊れないか確認した
 
 「機能としては小さい」と感じても、上記いずれかに当たれば A-2 を必ず実施する。「小さい機能だから設計スキップでヨシ」と判断したくなる時こそ罠。
 
@@ -263,7 +264,7 @@ ver 1.80 のとき、SL/TP drag のロジック自体は Tier 1(`findTradeLineHi
 - 変更履歴: [`docs/CHANGELOG.md`](./CHANGELOG.md)
 - 設計ドキュメント:
   - [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) — トップレベル(全体図 / 役割境界 / 索引)
-  - [`docs/architecture/invariants.md`](./architecture/invariants.md) — 横断不変条件 I-1〜I-12
+  - [`docs/architecture/invariants.md`](./architecture/invariants.md) — 横断不変条件 I-1〜I-13
   - [`docs/architecture/backend.md`](./architecture/backend.md) — backend + market-data
   - [`docs/architecture/frontend-overview.md`](./architecture/frontend-overview.md) — frontend 全体構造
   - [`docs/architecture/frontend-chart.md`](./architecture/frontend-chart.md) — Chart 関連(座標 / LWC 境界 / overlay)
