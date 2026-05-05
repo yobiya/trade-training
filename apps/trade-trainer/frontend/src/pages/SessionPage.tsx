@@ -173,6 +173,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
   })
 
   const [hoveredEvent, setHoveredEvent] = useState<EconomicEvent | null>(null)
+  // §5.3: 描画一覧の行 hover で全 TF chart 上の対応描画を spotlight 強調する
+  const [listHoveredId, setListHoveredId] = useState<number | null>(null)
 
   // §5.1.5: マウスホバーではフォーカスを変えず、chartApiRef だけ更新する
   // (経済指標ホバー検出 / 描画オーバーレイ用)。フォーカス自体はクリックで明示変更。
@@ -506,7 +508,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
                 drawings={drawings}
                 preview={focusedTf === tf ? interaction.preview : null}
                 activeTimeframe={tf}
-                hoveredId={focusedTf === tf ? interaction.hoveredId : null}
+                hoveredId={listHoveredId ?? (focusedTf === tf ? interaction.hoveredId : null)}
               />
             </div>
           )
@@ -543,6 +545,7 @@ export function SessionPage({ sessionId, onBack }: Props) {
             drawings={drawings.filter(d => d.timeframe === focusedTf)}
             focusedTf={focusedTf}
             onRemove={(id) => void removeDrawing(id)}
+            onHoverChange={setListHoveredId}
             digits={session?.digits ?? 5}
           />
 

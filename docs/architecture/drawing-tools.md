@@ -152,7 +152,7 @@ cursorOf(state)       → string                // CSS cursor
 previewOf(state)      → Drawing | null        // SVG オーバーレイのプレビュー
 activeToolOf(state)   → DrawingKind | null    // ボタンハイライト
 activeWaveOf(state)   → WaveLabel | null      // 波動ラベル選択中('1'-'5' 推進波 / 'A'-'C' 補正波、文字列統一)
-hoveredIdOf(state)    → number | null         // §5.3 TF バッジ表示用
+hoveredIdOf(state)    → number | null         // §5.3 TF バッジ + 描画一覧 hover spotlight
 isMovingState(state)  → boolean               // チャートのスクロール抑止判定
 ```
 

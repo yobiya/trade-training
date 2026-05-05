@@ -79,7 +79,15 @@ export function DrawingOverlay({ chartHandle, drawings, preview, activeTimeframe
       {visible.map(d => {
         const tool = TOOLS[d.kind]
         if (!tool?.renderOverlay) return null
-        return <g key={`d-${d.id}`}>{tool.renderOverlay(d, api)}</g>
+        // §5.3 spotlight: hoveredId が設定されている時、対象以外を半透明にして
+        // どの描画が hover 中か視覚的に分かるようにする(描画一覧 hover と
+        // チャート cursor hover の双方からこの経路に入る)
+        const isFaded = hoveredId != null && d.id !== hoveredId
+        return (
+          <g key={`d-${d.id}`} opacity={isFaded ? 0.25 : 1}>
+            {tool.renderOverlay(d, api)}
+          </g>
+        )
       })}
       {preview && TOOLS[preview.kind]?.renderOverlay && (
         <g key="preview" opacity={0.85}>

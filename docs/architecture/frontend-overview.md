@@ -51,7 +51,7 @@ src/
 ├─ components/
 │  ├─ Chart.tsx               ← lightweight-charts ラッパ(forwardRef + useImperativeHandle)
 │  ├─ DrawingOverlay.tsx      ← 描画 SVG オーバーレイ
-│  ├─ DrawingTools.tsx        ← 描画ツール選択 UI
+│  ├─ DrawingTools.tsx        ← 描画ツール選択 UI + 描画一覧(行 hover で全 TF chart 上の対応描画を spotlight 強調、§5.3)
 │  ├─ EventOverlay.tsx        ← 経済指標オーバーレイ
 │  ├─ LowerTfRangeOverlay.tsx ← §5.1.6 下位 TF レンジ背景
 │  ├─ TradePanel.tsx          ← エントリー / 決済 / SL/TP 表示

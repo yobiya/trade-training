@@ -14,6 +14,8 @@ type Props = {
   drawings: Drawing[]
   focusedTf: string
   onRemove: (id: number) => void
+  /** §5.3: 行 hover で全 TF chart の対応描画を spotlight 強調するための通知。null = 解除 */
+  onHoverChange?: (id: number | null) => void
   digits: number
 }
 
@@ -33,7 +35,14 @@ function hintFor(tool: DrawingKind, wave: WaveValue | null): string {
 function describe(d: Drawing, digits: number): string {
   switch (d.kind) {
     case 'line': return `水平線 ${Number(d.data.price).toFixed(digits)}`
-    case 'trendline': return 'トレンドライン'
+    case 'trendline': {
+      const pts = d.data.points as Array<{ price: number }> | undefined
+      if (pts && pts.length === 2) {
+        // §5.3 描画一覧で同種の trendline を区別できるよう端点価格を表示
+        return `トレンドライン ${Number(pts[0].price).toFixed(digits)} → ${Number(pts[1].price).toFixed(digits)}`
+      }
+      return 'トレンドライン'
+    }
     case 'fibonacci': {
       const pts = d.data.points as Array<{ price: number }> | undefined
       if (pts && pts.length === 2) {
@@ -47,7 +56,7 @@ function describe(d: Drawing, digits: number): string {
 }
 
 export function DrawingTools({
-  activeTool, activeWave, onSelectTool, drawings, focusedTf, onRemove, digits,
+  activeTool, activeWave, onSelectTool, drawings, focusedTf, onRemove, onHoverChange, digits,
 }: Props) {
   return (
     <div className="drawing-tools">
@@ -111,7 +120,12 @@ export function DrawingTools({
       {drawings.length > 0 ? (
         <ul className="drawing-list">
           {drawings.map(d => (
-            <li key={d.id} className="drawing-item">
+            <li
+              key={d.id}
+              className="drawing-item"
+              onMouseEnter={() => onHoverChange?.(d.id)}
+              onMouseLeave={() => onHoverChange?.(null)}
+            >
               <span className="drawing-kind">{describe(d, digits)}</span>
               <button
                 type="button"
