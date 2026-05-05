@@ -65,7 +65,22 @@ export function useChartCoordinates(
     } else if (time < bars[0].t) {
       logical = (time - bars[0].t) / tfSec
     } else {
-      return null
+      // in-range gap: time が bars[lo] と bars[lo+1] の間(週末・祝日 gap や mid-bar 時刻)
+      // 隣接バーの時間比で logical を補間する。これにより trendline body drag が
+      // weekend gap を跨いで新 point が gap 内の時刻になっても描画が継続する。
+      let lo = 0
+      let hi = lastIdx
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1
+        if (bars[mid].t <= time) lo = mid
+        else hi = mid - 1
+      }
+      if (bars[lo].t === time || lo === lastIdx) {
+        logical = lo
+      } else {
+        const span = bars[lo + 1].t - bars[lo].t
+        logical = lo + (time - bars[lo].t) / span
+      }
     }
     return ts.logicalToCoordinate(logical as Logical) ?? null
   }, [chartRef, barsRef, tfRef])

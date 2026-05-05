@@ -76,7 +76,7 @@ ChartApi は ref 経由・onChartClick の引数経由で取得できる「**当
 |---|---|---|---|---|
 | `priceToY(price)` | `number \| null` | あり(LWC `priceToCoordinate` がレンジ外でも線形外挿で返す) | series 未初期化時 | 価格 → y 座標 |
 | `yToPrice(y)` | `number \| null` | あり | 同上 | y 座標 → 価格 |
-| `timeToX(time)` | `number \| null` | **frontend 側で外挿補完あり**(時刻が未来/過去側のバー範囲外でも `tfSec` 換算 logical 経由で返す) | bars 空 / time が in-range の bar 境界に乗らないとき LWC `timeToCoordinate` が null を返す → frontend は in-range gap でも null を返す(注意点 §2.4) | 時刻 → x 座標 |
+| `timeToX(time)` | `number \| null` | **frontend 側で外挿/補間あり**(範囲外は `tfSec` 換算 logical で外挿、in-range gap は隣接バーの時間比で proportional 補間) | bars 空のみ。**in-range gap でも null を返さない**(weekend / 祝日 gap を跨ぐ trendline drag 等で描画消失するバグの再発防止) | 時刻 → x 座標 |
 | `xToTime(x)` | `number \| null` | あり(範囲外は `tfSec` で外挿) | bars 空 / `coordinateToLogical` が null | x 座標 → 時刻 |
 | `logicalToX(logical)` | `number \| null` | **あり**(LWC `logicalToCoordinate` は範囲外 logical でも線形外挿で返す) | 未マウント時のみ | logical → x 座標。**LowerTfRangeOverlay の唯一の px 変換 API** |
 | `setScrollEnabled(enabled)` | `void` | — | — | チャートのドラッグパン有効/無効。Moving 状態で false にして描画と干渉させない |
@@ -162,7 +162,9 @@ function timeToLogical(time: number, bars: OhlcBar[], tfSec: number): number {
 
 LWC の `timeToCoordinate(time)` は **time が当該 chart の visible bars の bar 境界に一致しないと null を返す**。下位 TF の logical 値は浮動小数(例: 53.0、53.67)で、それを時刻に変換すると **上位 TF のバー境界に乗らない時刻**(M15 のバー時刻が H4 のバー境界に乗ることはほぼない)が生まれる。
 
-frontend 側の `timeToX` は範囲外の time に対しては logical 換算で外挿してくれるが、**in-range gap**(時刻が bars[lo] と bars[lo+1] の間)では LWC が null を返した後 frontend のフォールバックも null を返す。これを overlay 側で「null だから諦める」とすると band がそもそも描画されない / 「 null を 0 として扱う」とすると pane 左端から過剰描画される、という両方とも誤った挙動になる。
+frontend 側の `timeToX` は範囲外の time に対して logical 換算で外挿し、**in-range gap**(時刻が `bars[lo]` と `bars[lo+1]` の間 = weekend / 祝日 gap や mid-bar 時刻)に対しても隣接バーの時間比で **proportional 補間** で logical を返す(§2.2 純粋関数経路と同規則)。これにより単一 Chart 内で時刻に閉じた drag(trendline body を週末を跨いで移動する等)で gap-time が新 point になっても描画が消失しない。
+
+ただし TF 間 projection で `timeToX` を使うと **下位 TF の bar 配列 / tfSec を上位 TF chart の `timeToX` へ渡す形になり矛盾する**(timeToX は自 chart の barsRef を参照する)。TF 間は §2.2 の純粋関数経路を必ず使う。
 
 純粋関数経路は **bar 境界に乗らない時刻でも線形補間** で logical を返すため、こうした分岐がそもそも発生しない。LWC 依存は `logicalToCoordinate` だけになり、それは範囲外 logical でも線形外挿で px を返すため、唯一の信頼できる px 変換 API として使う([I-12.2](./invariants.md#i-122-tf-間-projection-は純粋関数経由のみ))。
 
