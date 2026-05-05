@@ -417,7 +417,7 @@ describe('cursorOf', () => {
 
   it('moving-trendline-body → move', () => {
     const d = makeDrawing()
-    expect(cursorOf({ kind: 'moving-trendline-body', original: d, preview: d, anchor: { t: 0, price: 0 } })).toBe('move')
+    expect(cursorOf({ kind: 'moving-trendline-body', original: d, preview: d, anchorPx: { x: 0, y: 0 }, anchorPrice: 0 })).toBe('move')
   })
 
   it('moving-trendline-handle → grabbing', () => {

@@ -40,9 +40,9 @@ export type DrawingState =
   | { kind: 'drawing-wave-label'; wave: Wave; previewPoint: PP | null }
   | { kind: 'moving-line'; original: Drawing; preview: Drawing }
   | { kind: 'moving-trendline-handle'; original: Drawing; preview: Drawing; handleIndex: number }
-  | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchor: PP }
+  | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchorPx: PointPx; anchorPrice: number }
   | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
-  | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchor: PP }
+  | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchorPx: PointPx; anchorPrice: number }
   | { kind: 'moving-wave-label'; original: Drawing; preview: Drawing }
   // §5.5.5 SL/TP の drag 移動。Drawing ではなく Trade.sl / Trade.tp を直接更新する
   // (描画モデルは汚さない、データの真実は session.json 内の Trade)。state machine の
@@ -263,7 +263,8 @@ function buildMovingState(
         kind: 'moving-trendline-body',
         original: drawing,
         preview: drawing,
-        anchor: { t: payload.point.time, price: payload.point.price },
+        anchorPx: payload.pointerPx,
+        anchorPrice: payload.point.price,
       }
     case 'fibonacci':
       if (hit.part === 'handle' && hit.handleIndex !== undefined) {
@@ -279,7 +280,8 @@ function buildMovingState(
         kind: 'moving-fibonacci-body',
         original: drawing,
         preview: drawing,
-        anchor: { t: payload.point.time, price: payload.point.price },
+        anchorPx: payload.pointerPx,
+        anchorPrice: payload.point.price,
       }
     case 'wave_label':
       return { kind: 'moving-wave-label', original: drawing, preview: drawing }
@@ -426,6 +428,33 @@ function reduceDrawingWaveLabel(
   return state
 }
 
+/**
+ * trendline / fibonacci の body drag を **pixel(logical)空間** で計算する。
+ *
+ * 時間空間で `dt = current.t - anchor.t` を使うと weekend gap (~65h) を跨いだとき
+ * dt が実時間ベースで肥大化し、`original.t + dt` が gap 内の存在しない時刻へ落ちる。
+ * pixel 空間で drag → `xToTime` で bar 時刻にスナップする経路なら、weekend を跨いでも
+ * 「N bars 単位」の semantic で確実に bar 時刻が得られる。
+ *
+ * price は gap の概念がないので時間空間の dp をそのまま使う。
+ */
+function shiftPointsByPixel(
+  orig: { t: number; price: number }[],
+  dx: number,
+  dp: number,
+  chartApi: ChartApi,
+): { t: number; price: number }[] | null {
+  const result: { t: number; price: number }[] = []
+  for (const p of orig) {
+    const origX = chartApi.timeToX(p.t)
+    if (origX === null) return null
+    const newT = chartApi.xToTime(origX + dx)
+    if (newT === null) return null
+    result.push({ t: newT, price: p.price + dp })
+  }
+  return result
+}
+
 function reduceMovingLine(
   state: Extract<DrawingState, { kind: 'moving-line' }>,
   event: DrawingEvent,
@@ -479,17 +508,15 @@ function reduceMovingTrendlineBody(
   ctx: DispatchContext,
 ): DrawingState {
   if (event.type === 'mouse-move') {
-    if (event.payload.point.time === null) return state
-    const dt = event.payload.point.time - state.anchor.t
-    const dp = event.payload.point.price - state.anchor.price
     const orig = getTrendlinePoints(state.original)
     if (!orig) return state
+    const dx = event.payload.pointerPx.x - state.anchorPx.x
+    const dp = event.payload.point.price - state.anchorPrice
+    const newPoints = shiftPointsByPixel(orig, dx, dp, ctx.chartApi)
+    if (newPoints === null) return state
     return {
       ...state,
-      preview: {
-        ...state.original,
-        data: { points: orig.map(p => ({ t: p.t + dt, price: p.price + dp })) },
-      },
+      preview: { ...state.original, data: { points: newPoints } },
     }
   }
   if (event.type === 'mouse-up') {
@@ -533,17 +560,15 @@ function reduceMovingFibonacciBody(
   ctx: DispatchContext,
 ): DrawingState {
   if (event.type === 'mouse-move') {
-    if (event.payload.point.time === null) return state
-    const dt = event.payload.point.time - state.anchor.t
-    const dp = event.payload.point.price - state.anchor.price
     const orig = getFibPoints(state.original)
     if (!orig) return state
+    const dx = event.payload.pointerPx.x - state.anchorPx.x
+    const dp = event.payload.point.price - state.anchorPrice
+    const newPoints = shiftPointsByPixel(orig, dx, dp, ctx.chartApi)
+    if (newPoints === null) return state
     return {
       ...state,
-      preview: {
-        ...state.original,
-        data: { points: orig.map(p => ({ t: p.t + dt, price: p.price + dp })) },
-      },
+      preview: { ...state.original, data: { points: newPoints } },
     }
   }
   if (event.type === 'mouse-up') {
