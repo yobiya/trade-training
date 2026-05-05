@@ -183,7 +183,7 @@ backend の `routers/chart.py` 等は `from market_data.accessor import get_ohlc
 
 ```python
 TF_ORDER = ["M5", "M15", "H1", "H4", "D1", "W1", "MN1"]
-BARS_BY_TF = {tf: 200 for tf in TF_ORDER}
+BARS_BY_TF = {tf: 400 for tf in TF_ORDER}
 FACTOR = 1.5
 
 prev_tf_df = None
@@ -219,7 +219,7 @@ return ChartStackResponse(symbol, current_position, stacks)
 - **下位 TF 連鎖集約**: 上位 TF の最新バーは前段で確定したフル DataFrame(confirmed + live)から `[boundary, current_position]` 範囲を `resample_ohlc` で 1 行に集約する。これにより `current_position` 以降の broker データが混入しない(未来漏れ防止)
 - **broker の in-progress バーは捨てる**: `raw[raw.index < boundary]` で boundary より前の確定済みのみ採用
 - **キャッシュなし**: `ohlc` テーブルは本フローからは読み書きしない(将来再導入候補)。MT5 ターミナル側キャッシュで 2 回目以降は十分速い
-- **`FACTOR = 10`**: bars × tf_minutes に掛ける単純係数。FX 市場の最大連続クローズ(週末 ~65h + 平日連休) を吸収するため、最下位 TF (M5) で 200 × 5 × 10 = 100h ≧ 65h を確保する。TF 別に分岐させない方針は維持(上位 TF では窓が過剰になるが MT5 はヒストリ外を空で返すだけのため副作用なし)。仕様 §5.1.1「最新 N バー保証」を時間窓ベースで実用上満たす値。過去設計の `FACTOR = 1.5` は週末に M5 の 25h 窓が完全に飲まれて空配列を返す不具合があった
+- **`FACTOR = 10`**: bars × tf_minutes に掛ける単純係数。FX 市場の最大連続クローズ(週末 ~65h + 平日連休) を吸収するため、最下位 TF (M5) で 400 × 5 × 10 = 200h ≧ 65h を確保する。TF 別に分岐させない方針は維持(上位 TF では窓が過剰になるが MT5 はヒストリ外を空で返すだけのため副作用なし)。仕様 §5.1.1「最新 N バー保証」を時間窓ベースで実用上満たす値。過去設計の `FACTOR = 1.5` は週末に M5 の 25h 窓が完全に飲まれて空配列を返す不具合があった
 
 #### C.2.2 末尾の安全策
 
