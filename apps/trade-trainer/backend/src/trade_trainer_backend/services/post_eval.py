@@ -27,6 +27,11 @@ LOOKAHEAD_STAGES: tuple[int, ...] = (10, 50, 200)
 # §9.5 続き観察の既定本数(M5)
 CONTINUATION_BARS: int = 50
 
+# I-13.3: 「N 本ぶん」の M5 を時間幅で fetch するときの拡張係数。weekend (~65h) +
+# 平日連休を吸収するため `5min × N × FACTOR` で取得して df.head(N) でトリムする。
+# chart.py の `_FACTOR = 10` と同パターン。N=200 で 166h、N=50 で 41h を確保。
+_FETCH_FACTOR = 10
+
 
 @dataclass
 class StageEval:
@@ -137,7 +142,10 @@ def evaluate_symbol(
 
     from market_data.accessor import get_ohlc
     max_bars = max(LOOKAHEAD_STAGES)
-    to_dt = ref_dt + timedelta(minutes=5 * (max_bars + 20))
+    # I-13.3: weekend / 連休吸収のため bars × 5min × FACTOR で過剰取得し df.head(N) で
+    # トリムする(chart.py と同パターン)。時間幅 fetch のままだと金曜深夜 ref_dt で
+    # M5 が 24 本しか取れず 200 本ステージが過小評価になっていた。
+    to_dt = ref_dt + timedelta(minutes=5 * max_bars * _FETCH_FACTOR)
     try:
         df = get_ohlc(symbol, "M5", ref_dt, to_dt)
     except Exception:  # noqa: BLE001
@@ -224,12 +232,15 @@ def evaluate_entry(trade: Trade) -> EntryObservation:
         r_pnl = round(exit_diff_pips / r_unit_pips, 2)
 
     # 続き観察の OHLC 取得可否(チャートはフロントが /chart 経由で別途取得)
+    # I-13.3: weekend / 連休を吸収するため CONTINUATION_BARS × 5min × FACTOR で取得。
+    # 単純な (CONTINUATION_BARS + 5) × 5min = 4.6h だと金曜引け直後の trade で
+    # weekend 65h を跨げず continuation_available が誤って False になる。
     continuation_available = False
     try:
         cont_df = get_ohlc(
             trade.symbol, "M5",
             exit_time + timedelta(minutes=5),
-            exit_time + timedelta(minutes=5 * (CONTINUATION_BARS + 5)),
+            exit_time + timedelta(minutes=5 * CONTINUATION_BARS * _FETCH_FACTOR),
         )
         continuation_available = cont_df is not None and len(cont_df) > 0
     except Exception:  # noqa: BLE001
