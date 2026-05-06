@@ -30,10 +30,10 @@ export type ChartHandle = {
   subscribeRedraw: (cb: () => void) => () => void
   /** §11.3.1 AI 分析向けにチャートのスクリーンショットを PNG dataURL で返す。 */
   takeScreenshot: () => string | null
-  /** §5.1.2 クロスヘア同期(命令的): 他チャートからの時刻を受け取り setCrosshairPosition を呼ぶ。 */
-  setCrosshairTime: (time: number | null) => void
-  /** §5.1.2 クロスヘア同期(購読): ユーザー操作によるクロスヘア移動のみを通知する。 */
-  subscribeUserCrosshair: (cb: (time: number | null) => void) => () => void
+  /** §5.1.2 クロスヘア同期(命令的): 他チャートからの (time, price) を受け取り setCrosshairPosition を呼ぶ。 */
+  setCrosshair: (time: number | null, price: number | null) => void
+  /** §5.1.2 クロスヘア同期(購読): ユーザー操作によるクロスヘア移動を (time, price) で通知する。 */
+  subscribeUserCrosshair: (cb: (time: number | null, price: number | null) => void) => () => void
   /** §5.1.6 LowerTfRangeOverlay 用: 自 Chart の visible logical range を返す。 */
   getVisibleLogicalRange: () => { from: number; to: number } | null
 }

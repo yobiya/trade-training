@@ -73,7 +73,7 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
   useChartMouseRelay(containerRef, core, coords, { onChartClick, onMouseMove, onMouseDown, onMouseUp })
   useChartTestExposure(timeframe, core, coords)
 
-  const { setCrosshairTime, subscribeUserCrosshair } = useChartCrosshair(core, chartRef, seriesRef, barsRef)
+  const { setCrosshair, subscribeUserCrosshair } = useChartCrosshair(core, chartRef, seriesRef, barsRef)
 
   /**
    * ChartHandle は **callback ref パターン**(SessionPage の `setChartRef(tf)`)で受け取られる。
@@ -128,14 +128,14 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         return null
       }
     },
-    setCrosshairTime,
+    setCrosshair,
     subscribeUserCrosshair,
     getVisibleLogicalRange() {
       const range = chartRef.current?.timeScale().getVisibleLogicalRange()
       if (!range) return null
       return { from: range.from, to: range.to }
     },
-  }), [chartRef, seriesRef, containerRef, coords, setCrosshairTime, subscribeUserCrosshair])
+  }), [chartRef, seriesRef, containerRef, coords, setCrosshair, subscribeUserCrosshair])
 
   return (
     <div
