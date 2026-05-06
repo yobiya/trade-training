@@ -5,10 +5,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from shared_schema.models.config import Setting
+from shared_schema.symbols_config import get_symbols_config
 from trade_trainer_backend.deps import get_db
-from trade_trainer_backend.schemas.settings import SettingsResponse, UpdateSettingsRequest
+from trade_trainer_backend.schemas.settings import (
+    SettingsResponse,
+    SymbolsListResponse,
+    UpdateSettingsRequest,
+)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+@router.get("/symbols", response_model=SymbolsListResponse)
+def get_symbols_endpoint() -> SymbolsListResponse:
+    """§2.8 銘柄一覧を返す。`config/symbols.toml` の `default_active = true` を宣言順で返す。
+
+    frontend は起動時に 1 回取得して銘柄ドロップダウン等に使う(SYMBOLS ハードコード廃止)。
+    """
+    cfg = get_symbols_config()
+    return SymbolsListResponse(symbols=cfg.default_active_codes())
 
 
 def _response(st: Setting) -> SettingsResponse:

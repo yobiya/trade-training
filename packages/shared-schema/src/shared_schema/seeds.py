@@ -8,23 +8,24 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from shared_schema.models.config import (
-    DEFAULT_SPREADS,
-    DEFAULT_SYMBOLS,
     DEFAULT_TIMEFRAME_PRESETS,
     Setting,
+    default_spreads,
+    default_symbols,
 )
 
 
 def seed_settings(session: Session) -> None:
-    """デフォルト設定を挿入。既存なら何もしない。"""
+    """デフォルト設定を挿入。既存なら何もしない。仕様書 §2.8 / §3:
+    銘柄リスト・スプレッド初期値は `config/symbols.toml` から導出する。"""
     if session.get(Setting, 1) is not None:
         return
 
     session.add(
         Setting(
             id=1,
-            symbols=DEFAULT_SYMBOLS,
-            spreads=DEFAULT_SPREADS,
+            symbols=default_symbols(),
+            spreads=default_spreads(),
             timeframe_presets=DEFAULT_TIMEFRAME_PRESETS,
             time_filter_presets=None,
             event_importance_threshold=3,

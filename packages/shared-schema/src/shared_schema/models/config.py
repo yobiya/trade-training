@@ -7,39 +7,24 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared_schema.base import Base
 
-# 初期対象銘柄(仕様書 §2.8: FX 28 ペア + 商品 7 銘柄)
-DEFAULT_SYMBOLS = [
-    # FX 主要(seed が小さい初回起動時に最低限載せる)
-    "USDJPY", "EURUSD", "GBPUSD", "AUDUSD", "EURJPY", "GBPJPY", "AUDJPY", "EURGBP",
-    # 商品(仕様書 §2.8): 貴金属 / 暗号通貨 / 株価指数
-    "XAUUSD", "XAGUSD",
-    "BTCUSD", "ETHUSD",
-    "US30", "NAS100", "JP225",
-]
+# 初期対象銘柄 / 初期スプレッドは `config/symbols.toml` を真実の所有者とする(仕様書 §2.8 / §3)。
+# `seeds.py` から `default_symbols()` / `default_spreads()` を呼んで Setting に流す。
+
+
+def default_symbols() -> list[str]:
+    """`config/symbols.toml` で `default_active = true` の銘柄コードを返す(仕様書 §2.8)。"""
+    from shared_schema.symbols_config import get_symbols_config
+    return get_symbols_config().default_active_codes()
+
+
+def default_spreads() -> dict[str, float]:
+    """`config/symbols.toml` の `spread_pips` を `{code: spread}` で返す(仕様書 §3)。"""
+    from shared_schema.symbols_config import get_symbols_config
+    return get_symbols_config().default_spreads()
+
 
 # 仕様書 §7.2.3 メモ見出しテンプレートはリポジトリ内 Markdown ファイル
 # (`data/memo-templates/{candidate,session-note}.md`)で管理する。DB には保存しない。
-
-# 初期スプレッド暫定値(pips)。MT5 デモ接続後に実測値で上書き(仕様書 3章)。
-# 商品は broker 慣行ベースの暫定値(仕様書 §3.1 pip サイズ table と整合)。
-DEFAULT_SPREADS = {
-    "USDJPY": 1.0,
-    "EURUSD": 0.6,
-    "GBPUSD": 1.2,
-    "AUDUSD": 1.0,
-    "EURJPY": 1.4,
-    "GBPJPY": 2.0,
-    "AUDJPY": 1.5,
-    "EURGBP": 1.0,
-    # 商品(暫定値、ユーザーが MT5 接続後に上書きする前提)
-    "XAUUSD": 3.0,   # $0.30 / 0.1
-    "XAGUSD": 3.0,   # $0.030 / 0.01
-    "BTCUSD": 20.0,  # $20 / 1.0
-    "ETHUSD": 15.0,  # $1.50 / 0.1
-    "US30": 2.0,
-    "NAS100": 2.0,
-    "JP225": 10.0,
-}
 
 # 時間軸プリセット初期値
 DEFAULT_TIMEFRAME_PRESETS = [

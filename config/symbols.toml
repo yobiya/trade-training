@@ -1,0 +1,213 @@
+# 銘柄定義(仕様書 §2.4 / §2.8 / §3 / §3.1)
+#
+# 真実の所有者: 本ファイル。コード側は banner / lookup でのみ参照する。
+# 新 broker への切替・新銘柄追加・alias 追加・spread 調整は本ファイルの編集だけで完結する。
+#
+# フィールド:
+#   category          : "fx" | "metal" | "crypto_btc" | "crypto_eth" | "index"
+#                       (services/symbols.py:derive_pip_size の補正カテゴリ)
+#   spread_pips       : 暫定スプレッド(MT5 デモ接続後に実測値で上書き、§3)
+#   pip_size_fallback : MT5 不通時の pip サイズ(broker 一般慣行値、§3.1)
+#   aliases           : broker 実シンボル候補(完全一致 → startswith マッチ順、§2.4)
+#                       省略時は code 自体のみを試す
+#   default_active    : 初回 seed 時に Setting.symbols へ含めるか(省略時 true)
+
+# ---------------------------------------------------------------------------
+# FX: メジャー 8 通貨の全 28 ペア(§2.8)
+# ---------------------------------------------------------------------------
+
+# USD ストレート
+[symbols.USDJPY]
+category = "fx"
+spread_pips = 1.0
+pip_size_fallback = 0.01
+
+[symbols.EURUSD]
+category = "fx"
+spread_pips = 0.6
+pip_size_fallback = 0.0001
+
+[symbols.GBPUSD]
+category = "fx"
+spread_pips = 1.2
+pip_size_fallback = 0.0001
+
+[symbols.AUDUSD]
+category = "fx"
+spread_pips = 1.0
+pip_size_fallback = 0.0001
+
+[symbols.NZDUSD]
+category = "fx"
+spread_pips = 1.5
+pip_size_fallback = 0.0001
+
+[symbols.USDCAD]
+category = "fx"
+spread_pips = 1.5
+pip_size_fallback = 0.0001
+
+[symbols.USDCHF]
+category = "fx"
+spread_pips = 1.5
+pip_size_fallback = 0.0001
+
+# JPY クロス
+[symbols.EURJPY]
+category = "fx"
+spread_pips = 1.4
+pip_size_fallback = 0.01
+
+[symbols.GBPJPY]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.01
+
+[symbols.AUDJPY]
+category = "fx"
+spread_pips = 1.5
+pip_size_fallback = 0.01
+
+[symbols.NZDJPY]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.01
+
+[symbols.CADJPY]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.01
+
+[symbols.CHFJPY]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.01
+
+# EUR クロス
+[symbols.EURGBP]
+category = "fx"
+spread_pips = 1.0
+pip_size_fallback = 0.0001
+
+[symbols.EURAUD]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.0001
+
+[symbols.EURNZD]
+category = "fx"
+spread_pips = 2.5
+pip_size_fallback = 0.0001
+
+[symbols.EURCAD]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.0001
+
+[symbols.EURCHF]
+category = "fx"
+spread_pips = 1.5
+pip_size_fallback = 0.0001
+
+# GBP クロス
+[symbols.GBPAUD]
+category = "fx"
+spread_pips = 2.5
+pip_size_fallback = 0.0001
+
+[symbols.GBPNZD]
+category = "fx"
+spread_pips = 3.5
+pip_size_fallback = 0.0001
+
+[symbols.GBPCAD]
+category = "fx"
+spread_pips = 2.5
+pip_size_fallback = 0.0001
+
+[symbols.GBPCHF]
+category = "fx"
+spread_pips = 2.5
+pip_size_fallback = 0.0001
+
+# AUD / NZD / CAD クロス
+[symbols.AUDNZD]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.0001
+
+[symbols.AUDCAD]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.0001
+
+[symbols.AUDCHF]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.0001
+
+[symbols.NZDCAD]
+category = "fx"
+spread_pips = 2.5
+pip_size_fallback = 0.0001
+
+[symbols.NZDCHF]
+category = "fx"
+spread_pips = 2.5
+pip_size_fallback = 0.0001
+
+[symbols.CADCHF]
+category = "fx"
+spread_pips = 2.0
+pip_size_fallback = 0.0001
+
+# ---------------------------------------------------------------------------
+# 商品(§2.8)
+# broker により命名が異なる場合 aliases を使用。例: 一部 broker は XAUUSD ではなく
+# GOLD#、XAGUSD ではなく SILVER# という名前で持つ。
+# ---------------------------------------------------------------------------
+
+# 貴金属
+[symbols.XAUUSD]
+category = "metal"
+spread_pips = 3.0
+pip_size_fallback = 0.1
+aliases = ["XAUUSD", "GOLD", "XAU/USD"]
+
+[symbols.XAGUSD]
+category = "metal"
+spread_pips = 3.0
+pip_size_fallback = 0.01
+aliases = ["XAGUSD", "SILVER", "XAG/USD"]
+
+# 暗号通貨
+[symbols.BTCUSD]
+category = "crypto_btc"
+spread_pips = 20.0
+pip_size_fallback = 1.0
+aliases = ["BTCUSD", "BITCOIN", "BTC/USD"]
+
+[symbols.ETHUSD]
+category = "crypto_eth"
+spread_pips = 15.0
+pip_size_fallback = 0.1
+aliases = ["ETHUSD", "ETHEREUM", "ETH/USD"]
+
+# 株価指数
+[symbols.US30]
+category = "index"
+spread_pips = 2.0
+pip_size_fallback = 1.0
+aliases = ["US30", "DJI30", "WallStreet30", "DowJones30"]
+
+[symbols.NAS100]
+category = "index"
+spread_pips = 2.0
+pip_size_fallback = 1.0
+aliases = ["NAS100", "USTEC", "USTECH100", "NASDAQ100"]
+
+[symbols.JP225]
+category = "index"
+spread_pips = 10.0
+pip_size_fallback = 1.0
+aliases = ["JP225", "Nikkei225", "JPN225", "NIK225"]

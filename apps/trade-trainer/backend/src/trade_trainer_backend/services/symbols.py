@@ -1,44 +1,19 @@
 """銘柄メタ情報(pip サイズ導出)。仕様書 §3.1 単一情報源。
 
 通常パスは MT5 `symbol_info.point` を起点に `derive_pip_size()` で導出する。MT5 接続失敗時は
-`pip_size_fallback()` のハードコード table(broker 慣行ベース)を使う。
+`pip_size_fallback()` で `config/symbols.toml` のフォールバック値を使う。
 
+銘柄ごとの設定値(category / pip_size_fallback / aliases)は **`config/symbols.toml`** に
+集約され、本ファイルは load 済みの `SymbolsConfig` を参照する(コードに table を持たない)。
 frontend は `SessionResponse.pip_size` を読むだけでハードコード table を持たない。
 """
-from typing import Final, Literal
-
-SymbolCategory = Literal["fx", "metal", "crypto_btc", "crypto_eth", "index"]
-
-# 仕様書 §3.1: pip 導出ルール (FX = 10×point、商品はカテゴリ別)。broker 依存の揺れは
-# `_CATEGORY_OVERRIDES` で吸収する。
-_CATEGORY_OVERRIDES: Final[dict[str, SymbolCategory]] = {
-    "XAUUSD": "metal",
-    "XAGUSD": "metal",
-    "BTCUSD": "crypto_btc",
-    "ETHUSD": "crypto_eth",
-    "US30": "index",
-    "NAS100": "index",
-    "JP225": "index",
-}
-
-# 仕様書 §3.1: MT5 不通時 / `symbol_info` 取得失敗時のハードコードフォールバック値
-# (broker 一般慣行ベース)。通常パスでは到達しない。
-_PIP_SIZE_FALLBACK: Final[dict[str, float]] = {
-    "XAUUSD": 0.1,
-    "XAGUSD": 0.01,
-    "BTCUSD": 1.0,
-    "ETHUSD": 0.1,
-    "US30": 1.0,
-    "NAS100": 1.0,
-    "JP225": 1.0,
-}
+from shared_schema.symbols_config import SymbolCategory, get_symbols_config
 
 
 def _category_of(symbol: str) -> SymbolCategory:
-    sym = symbol.upper()
-    if sym in _CATEGORY_OVERRIDES:
-        return _CATEGORY_OVERRIDES[sym]
-    return "fx"  # 既定: FX 通貨ペア(USDJPY / EURUSD / ...)
+    cfg = get_symbols_config()
+    sd = cfg.by_code.get(symbol.upper())
+    return sd.category if sd is not None else "fx"
 
 
 def derive_pip_size(point: float, digits: int, symbol: str) -> float:
@@ -75,12 +50,14 @@ def derive_pip_size(point: float, digits: int, symbol: str) -> float:
 def pip_size_fallback(symbol: str) -> float:
     """MT5 不通時のフォールバック pip サイズ。仕様書 §3.1。
 
-    通常パスは `derive_pip_size(point, digits, symbol)` を使う。本関数は
-    MT5 接続が確立していない / `symbol_info` が `None` を返したケースの最終的な砦。
+    `config/symbols.toml` の `pip_size_fallback` 値を返す。未登録銘柄は JPY=0.01 / 他=0.0001
+    の最終フォールバック(broker 一般慣行)。通常パスは `derive_pip_size` を使う。
     """
     sym = symbol.upper()
-    if sym in _PIP_SIZE_FALLBACK:
-        return _PIP_SIZE_FALLBACK[sym]
+    cfg = get_symbols_config()
+    sd = cfg.by_code.get(sym)
+    if sd is not None:
+        return sd.pip_size_fallback
     if sym.endswith("JPY"):
         return 0.01
     return 0.0001

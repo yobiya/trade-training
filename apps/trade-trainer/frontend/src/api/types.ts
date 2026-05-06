@@ -81,6 +81,11 @@ export type TradeResponse = {
   is_open: boolean
 }
 
+// §2.8 銘柄一覧(`config/symbols.toml` の default_active を宣言順)
+export type SymbolsListResponse = {
+  symbols: string[]
+}
+
 // 仕様書 §5.4 経済指標表示の設定
 // §7.2.3 メモテンプレートはリポジトリ内 Markdown ファイル管理(data/memo-templates/)へ移行したため
 // API レスポンスに含まれない。

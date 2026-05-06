@@ -11,6 +11,7 @@ import type {
   SessionCandidate,
   SessionListItem,
   SettingsResponse,
+  SymbolsListResponse,
   TradeResponse,
   TradeSession,
 } from './types'
@@ -162,6 +163,8 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
+    /** §2.8 銘柄一覧。アプリ起動時に 1 回取得して使い回す(useSymbols hook 経由)。 */
+    getSymbols: () => request<SymbolsListResponse>('/settings/symbols'),
   },
 
   ai: {

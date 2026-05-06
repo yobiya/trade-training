@@ -15,7 +15,7 @@ import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
 import type { IndicatorConfig } from '../indicators/types'
-import { SYMBOLS, TIMEFRAMES, TIMEFRAME_MINUTES, getTimeframeColor } from '../constants'
+import { TIMEFRAMES, TIMEFRAME_MINUTES, getTimeframeColor } from '../constants'
 import type { ChartApi, CreateDrawingBody, UpdateDrawingPatch } from '../drawing/types'
 import { useChartRefCache } from '../hooks/useChartRefCache'
 import { useCrosshairSync } from '../hooks/useCrosshairSync'
@@ -27,6 +27,7 @@ import { useEntryMarkers } from '../hooks/useEntryMarkers'
 import { useNotify } from '../hooks/useNotify'
 import { useSessionFetch } from '../hooks/useSessionFetch'
 import { useSessionShortcuts } from '../hooks/useSessionShortcuts'
+import { useSymbols } from '../hooks/useSymbols'
 import { useTradeFlow } from '../hooks/useTradeFlow'
 import { formatJST } from '../utils/datetime'
 import { priceLinesForTf } from '../utils/priceLines'
@@ -56,8 +57,19 @@ export function SessionPage({ sessionId, onBack }: Props) {
     phase,
   } = useSessionFetch(sessionId)
 
+  // §2.8 銘柄リストは backend (`config/symbols.toml`) を真実の所有者として fetch する
+  const symbolsList = useSymbols()
+  const SYMBOLS = symbolsList ?? []
+
   // UI 配置に直結する local state
-  const [analyzingSymbol, setAnalyzingSymbol] = useState<string>(SYMBOLS[0])
+  const [analyzingSymbol, setAnalyzingSymbol] = useState<string>('')
+
+  // 銘柄一覧 fetch 完了後に analyzingSymbol を初期化(デフォルト = 先頭)
+  useEffect(() => {
+    if (analyzingSymbol === '' && SYMBOLS.length > 0) {
+      setAnalyzingSymbol(SYMBOLS[0])
+    }
+  }, [analyzingSymbol, SYMBOLS])
   // 仕様書 §6.1 / §6.2: 銘柄セレクタの絞り込みモード
   const [symbolMode, setSymbolMode] = useState<'all' | 'star'>('all')
   // §5.1.5: 旧 entryTf + activeTf を統合した「フォーカス TF」。クリックで明示選択する。

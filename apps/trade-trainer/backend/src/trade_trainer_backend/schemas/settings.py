@@ -21,3 +21,9 @@ class UpdateSettingsRequest(BaseModel):
     event_currencies: list[str] | None = None
     event_shading_before_min: int | None = None
     event_shading_after_min: int | None = None
+
+
+class SymbolsListResponse(BaseModel):
+    """§2.8 銘柄一覧。frontend が起動時に取得する。`config/symbols.toml` の
+    `default_active = true` の銘柄コードを宣言順で返す。"""
+    symbols: list[str]

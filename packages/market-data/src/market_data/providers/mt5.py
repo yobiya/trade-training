@@ -21,6 +21,20 @@ except ImportError as e:
 # get_available_symbols() で補完する
 _SYMBOL_SUFFIX_CACHE: dict[str, str] = {}
 
+# 仕様書 §2.4 / §2.8: broker の命名は標準名と異なることがある(prefix が違う / 全く別名)。
+# 内部標準名 → broker での候補 alias は **`config/symbols.toml` に集約**(market-data 内には
+# テーブルを持たない)。新しい broker / 新しい銘柄 / alias 追加は toml 編集だけで完結する。
+
+
+def _aliases_for(name: str) -> list[str]:
+    """`config/symbols.toml` から alias 候補リストを取得する。未登録銘柄は name 単独。"""
+    from shared_schema.symbols_config import get_symbols_config
+    cfg = get_symbols_config()
+    sd = cfg.by_code.get(name.upper())
+    if sd is not None:
+        return sd.aliases_or_self()
+    return [name]
+
 # 仕様 §5.1.1 / 設計 §B I-2: 各 TF を MT5 から個別取得する
 _MT5_TIMEFRAME = {
     "M1": mt5.TIMEFRAME_M1,
@@ -36,7 +50,13 @@ _MT5_TIMEFRAME = {
 
 
 def _resolve_symbol(name: str) -> str:
-    """接尾辞なし銘柄名から MT5 上の実際の銘柄名に解決する。キャッシュ付き。
+    """内部標準名から MT5 上の実際の銘柄名に解決する。キャッシュ付き。
+
+    解決ロジック(仕様書 §2.4):
+    1. `_SYMBOL_ALIASES` から候補 alias リストを取得(無ければ name 単独)
+    2. 各 alias に対して `symbol_info(alias)` の完全一致を試す
+    3. 完全一致が無ければ `symbols_get()` の startswith マッチで suffix 付きを探す
+       (例: `XAUUSD` → `XAUUSD.a`、`GOLD` → `GOLD#`)
 
     解決後は `mt5.symbol_select(resolved, True)` で MarketWatch に追加する。
     MT5 は MarketWatch 未登録の銘柄に対して `copy_rates_range` が silent に空配列を
@@ -46,25 +66,33 @@ def _resolve_symbol(name: str) -> str:
     if name in _SYMBOL_SUFFIX_CACHE:
         return _SYMBOL_SUFFIX_CACHE[name]
 
-    # 完全一致を試みる
+    candidates = _aliases_for(name)
+
     resolved: str | None = None
-    info = mt5.symbol_info(name)
-    if info is not None:
-        resolved = name
-    else:
-        # 接尾辞付きで探す
+    # 1. 完全一致を全候補で試す(symbol_info が軽量、symbols_get より速い)
+    for cand in candidates:
+        info = mt5.symbol_info(cand)
+        if info is not None:
+            resolved = cand
+            break
+
+    # 2. 完全一致が無ければ symbols_get() の startswith マッチ
+    if resolved is None:
         all_symbols = mt5.symbols_get()
         if all_symbols:
-            for sym in all_symbols:
-                if sym.name.startswith(name):
-                    resolved = sym.name
+            for cand in candidates:
+                for sym in all_symbols:
+                    if sym.name.startswith(cand):
+                        resolved = sym.name
+                        break
+                if resolved is not None:
                     break
 
     if resolved is None:
         log.warning(
-            "[mt5] symbol %s not found via symbol_info or symbols_get. "
-            "broker に該当銘柄が無いか、銘柄名のサフィックスが想定外です。",
-            name,
+            "[mt5] symbol %s not found via symbol_info or symbols_get (tried aliases: %s). "
+            "broker に該当銘柄が無いか、別名の場合は _SYMBOL_ALIASES に追記してください。",
+            name, candidates,
         )
         # キャッシュしない(後続で broker が銘柄を追加した場合に再解決可能にする)
         return name
@@ -77,6 +105,7 @@ def _resolve_symbol(name: str) -> str:
             resolved,
         )
 
+    log.info("[mt5] symbol resolved: %s -> %s", name, resolved)
     _SYMBOL_SUFFIX_CACHE[name] = resolved
     return resolved
 

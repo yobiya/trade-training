@@ -37,7 +37,10 @@ class DataSourceProvider:
 **正規化ルール**(プロバイダー内部で吸収)
 - タイムゾーン: **データ保存は全てUTC**に統一(表示は後述のUI層でJSTに変換)
 - 価格基準: 全て**Bid基準**に統一
-- 銘柄名: 接尾辞を除去した統一形式(例: `USDJPY.a` → `USDJPY`)
+- 銘柄名: アプリ内では**内部標準名**(`USDJPY` / `XAUUSD` 等、§2.8 のリスト)を使う。MT5 broker 側の実シンボル名は **接尾辞バリエーション**(`USDJPY.a`)も **完全別名**(`XAUUSD` → `GOLD#`、`XAGUSD` → `SILVER#` 等)も存在するため、プロバイダー (`market_data/providers/mt5.py:_resolve_symbol`) で吸収する:
+  - **解決ロジック**: 内部名 → `[symbols.X].aliases`(`config/symbols.toml`)の候補リスト → 各候補で `symbol_info` 完全一致 → 駄目なら `symbols_get` の `startswith` マッチ
+  - **単一情報源**: `config/symbols.toml`。コードに銘柄ごとの値(alias / pip / spread / category)をハードコードせず、すべて toml 経由で読み出す。新 broker / 新銘柄追加 / alias 追加は **toml 編集だけで完結**
+  - 解決結果は `_SYMBOL_SUFFIX_CACHE` にキャッシュ + `mt5.symbol_select(resolved, True)` で MarketWatch 登録(未登録だと `copy_rates_range` が silent に空配列を返す)
 - 出来高: ティック数または出来高(プロバイダー差異はメタ情報で管理)
 - 銘柄メタ情報: `symbol_info.digits` / `symbol_info.point` をプロバイダーから取得可能にする(`get_symbol_digits` / `get_symbol_point` の abstract method)。pip サイズの導出は backend `services/symbols.py:derive_pip_size` で集約し、frontend は `SessionResponse.pip_size` を読むだけ([§3.1](./03-trading-conditions.md#31-銘柄別-pip-サイズ))
 
@@ -71,21 +74,37 @@ CREATE TABLE ohlc (
 - 取得困難な期間がある場合は Dukascopy 等への切り替えを検討
 
 ## 2.8 対象銘柄
-- 設定画面でユーザーが指定
-- 有効化した銘柄群を出題対象として使用
-- **初期対象**: FX 28 ペア + 商品 7 銘柄 = 計 35 銘柄
-- **FX (28 ペア)**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
+
+- **真実の所有者**: `config/symbols.toml`(リポジトリ内の単一情報源)。銘柄一覧・カテゴリ・スプレッド・broker alias・pip フォールバックは全てここに集約する
+- frontend は backend の `GET /api/settings/symbols` 経由で取得する(ハードコード table を持たない)
+- backend は起動時に `shared_schema.symbols_config.load_symbols_config()` で 1 回 load し、以降はメモリ上の `SymbolsConfig` を参照する
+
+### symbols.toml のスキーマ
+
+```toml
+[symbols.USDJPY]
+category        = "fx"          # fx | metal | crypto_btc | crypto_eth | index
+spread_pips     = 1.0           # §3 暫定スプレッド(MT5 接続後に上書き)
+pip_size_fallback = 0.01        # §3.1 MT5 不通時のフォールバック pip サイズ
+default_active  = true          # 初回 seed 時に Setting.symbols へ含めるか
+
+[symbols.XAUUSD]
+category          = "metal"
+spread_pips       = 3.0
+pip_size_fallback = 0.1
+aliases           = ["XAUUSD", "GOLD", "XAU/USD"]   # §2.4 broker 実名候補
+default_active    = true
+```
+
+### 初期対象(配布時の `config/symbols.toml`)
+
+- **FX 28 ペア**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
   - USD ストレート: `USDJPY`, `EURUSD`, `GBPUSD`, `AUDUSD`, `NZDUSD`, `USDCAD`, `USDCHF`
   - JPY クロス: `EURJPY`, `GBPJPY`, `AUDJPY`, `NZDJPY`, `CADJPY`, `CHFJPY`
-  - EUR クロス: `EURGBP`, `EURAUD`, `EURNZD`, `EURCAD`, `EURCHF`
-  - GBP クロス: `GBPAUD`, `GBPNZD`, `GBPCAD`, `GBPCHF`
-  - AUD / NZD / CAD クロス: `AUDNZD`, `AUDCAD`, `AUDCHF`, `NZDCAD`, `NZDCHF`, `CADCHF`
-- **商品 (7 銘柄)**:
-  - 貴金属: `XAUUSD` (ゴールド), `XAGUSD` (シルバー)
-  - 暗号通貨: `BTCUSD` (ビットコイン), `ETHUSD` (イーサリアム)
-  - 株価指数: `US30` (ダウ平均), `NAS100` (ナスダック 100), `JP225` (日経 225)
-- **シンボル名はブローカー依存**: 上記は MT5 で一般的に流通する標準的シンボル名。ユーザーの MT5 ブローカーが別名(例: `GOLD`, `BITCOIN`, `WallStreet30`)を使う場合は market-data のシンボル正規化(§2.4 「銘柄名」)で吸収するか、設定画面からの登録で差し替える(将来実装)
-- ユーザーは設定画面から追加・無効化可能(将来実装)
+  - EUR / GBP / AUD / NZD / CAD クロス全 13 ペア
+- **商品 7 銘柄**: `XAUUSD` (ゴールド), `XAGUSD` (シルバー), `BTCUSD`, `ETHUSD`, `US30`, `NAS100`, `JP225`
+- **シンボル名はブローカー依存**: 上記は MT5 で一般的に流通する標準的シンボル名。ユーザーの broker が別名(例: `GOLD`, `BITCOIN`, `WallStreet30`)を使う場合は **`config/symbols.toml` の `aliases` を編集**して対応する(コード変更不要)
+- ユーザーが設定画面から有効/無効を切り替える機能は将来実装。現状は toml の `default_active` でリストから外す
 
 ## 2.9 データ更新
 - **価格データ**: ユーザーのアクセス時に market-data ライブラリが自動取得・キャッシュ(明示的な更新ボタンは不要)
