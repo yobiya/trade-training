@@ -32,6 +32,7 @@ from trade_trainer_backend.services.session_models import (
     Trade,
 )
 from trade_trainer_backend.services.post_eval import (
+    _trade_pip_size,
     evaluate_entry,
     evaluate_symbol,
     resolve_trade_r_unit_pips,
@@ -53,10 +54,6 @@ def _utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
-
-
-def _pip_size(symbol: str) -> float:
-    return 0.01 if symbol.upper().endswith("JPY") else 0.0001
 
 
 def _determine_mode(trade: Trade | None) -> AnalysisMode:
@@ -112,7 +109,7 @@ def _build_entry_result(trade: Trade) -> EntryResult | None:
     exit_time = _utc(trade.exit_time)
     hold_minutes = int((exit_time - entry_time).total_seconds() / 60)
 
-    psize = _pip_size(trade.symbol)
+    psize = _trade_pip_size(trade)
     actual_sl_pips = (
         abs(float(trade.entry_price) - float(trade.sl)) / psize
         if trade.sl is not None else None
@@ -167,13 +164,17 @@ def _build_layer1(
     ref_dt = pa if pa.tzinfo else pa.replace(tzinfo=timezone.utc)
     selected_symbol = agg.trade.symbol if agg.trade is not None else None
 
+    from market_data.accessor import get_symbol_digits, get_symbol_point
+    from trade_trainer_backend.services.symbols import derive_pip_size
+
     result: list[Layer1Candidate] = []
     for c in agg.candidates:
         if selected_symbol is not None and c.symbol == selected_symbol:
             continue
 
         if analysis_mode == "review":
-            rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=skip_r_unit)
+            cand_pip = derive_pip_size(get_symbol_point(c.symbol), get_symbol_digits(c.symbol), c.symbol)
+            rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=skip_r_unit, pip_size_override=cand_pip)
             stages = [
                 StageEvalOut(
                     bars=st.bars,

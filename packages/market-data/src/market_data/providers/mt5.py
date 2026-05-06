@@ -166,6 +166,13 @@ class MT5Provider(DataSourceProvider):
             return None
         return int(info.digits)
 
+    def get_symbol_point(self, symbol: str) -> float | None:
+        resolved = _resolve_symbol(symbol)
+        info = mt5.symbol_info(resolved)
+        if info is None:
+            return None
+        return float(info.point)
+
     def get_available_range(self, symbol: str) -> tuple[datetime, datetime] | None:
         resolved = _resolve_symbol(symbol)
         # 全期間の最初と最後の1本を取得して範囲を推定する

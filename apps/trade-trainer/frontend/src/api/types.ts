@@ -34,6 +34,7 @@ export type TradeSession = {
   is_settled: boolean   // §4.2.1 状態モデル
   has_active_trade: boolean
   digits: number  // MT5 symbol_info.digits (価格表示の小数桁数)
+  pip_size: number  // §3.1 銘柄の pip サイズ(MT5 由来 + carrier 補正)
   name: string | null  // §6.1 任意のセッション名
   note: string | null  // §7.2.2 横断メモ
   candidates: SessionCandidate[]

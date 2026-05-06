@@ -49,6 +49,7 @@ def trade_from_dict(data: Any) -> Trade | None:
         lot=_opt_float(data.get("lot")),
         mt5_order_id=data.get("mt5_order_id"),
         created_at=parse_iso_datetime(data.get("created_at")) or datetime.now(timezone.utc),
+        pip_size=_opt_float(data.get("pip_size")),  # §3.1 旧 trade は欠落しうる(post_eval 側でフォールバック)
     )
 
 
@@ -70,6 +71,7 @@ def trade_to_dict(t: Trade) -> dict[str, Any]:
         "lot": t.lot,
         "mt5_order_id": t.mt5_order_id,
         "created_at": t.created_at,
+        "pip_size": t.pip_size,
     }
 
 

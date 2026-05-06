@@ -20,7 +20,7 @@ export type ChartCore = {
  *   state と同タイミングで同期更新する(同じ effect 内で `chartRef.current = chart` する)。
  */
 export function useChartInstance(
-  containerRef: React.RefObject<HTMLDivElement>,
+  containerRef: React.RefObject<HTMLDivElement | null>,
 ): {
   core: ChartCore | null
   chartRef: React.MutableRefObject<IChartApi | null>

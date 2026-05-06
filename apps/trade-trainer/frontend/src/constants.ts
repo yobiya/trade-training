@@ -1,19 +1,28 @@
 // アプリ全体で参照する業務定数。散在を避け一箇所に集約する。
 // 仕様書の該当セクションをコメントで併記。
 
-// 仕様書 §2.8 対象銘柄(メジャー 8 通貨の全 28 ペア)
+// 仕様書 §2.8 対象銘柄(FX 28 ペア + 商品 7 銘柄 = 計 35 銘柄)
 export const SYMBOLS: string[] = [
-  // USD ストレート
+  // FX: USD ストレート
   'USDJPY', 'EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF',
-  // JPY クロス
+  // FX: JPY クロス
   'EURJPY', 'GBPJPY', 'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY',
-  // EUR クロス
+  // FX: EUR クロス
   'EURGBP', 'EURAUD', 'EURNZD', 'EURCAD', 'EURCHF',
-  // GBP クロス
+  // FX: GBP クロス
   'GBPAUD', 'GBPNZD', 'GBPCAD', 'GBPCHF',
-  // AUD / NZD / CAD クロス
+  // FX: AUD / NZD / CAD クロス
   'AUDNZD', 'AUDCAD', 'AUDCHF', 'NZDCAD', 'NZDCHF', 'CADCHF',
+  // 貴金属
+  'XAUUSD', 'XAGUSD',
+  // 暗号通貨
+  'BTCUSD', 'ETHUSD',
+  // 株価指数
+  'US30', 'NAS100', 'JP225',
 ]
+
+// pip サイズは `SessionResponse.pip_size`(MT5 由来 + carrier 補正)を真実とする(仕様書 §3.1)。
+// frontend は table を持たず、session 取得後の `session.pip_size` を読むだけ。
 
 // 仕様書 §5.1 時間軸
 export const TIMEFRAMES: string[] = ['M5', 'M15', 'H1', 'H4', 'D1', 'W1', 'MN1']

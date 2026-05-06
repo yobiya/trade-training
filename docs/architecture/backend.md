@@ -172,7 +172,8 @@ lifespan:
 | `configure(db_path, provider=None)` | アプリ起動時に 1 回 | provider=None ならキャッシュ参照のみ |
 | `get_ohlc(symbol, timeframe, from_dt, to_dt) -> DataFrame` | 通常の OHLC 取得 | UTC-aware index |
 | `get_latest(symbol, timeframe, n_bars)` | リアルタイム用(trade-live で使用) | provider 接続必須 |
-| `get_symbol_digits(symbol) -> int` | 価格表示桁数 | provider 不在時はヒューリスティック |
+| `get_symbol_digits(symbol) -> int` | 価格表示桁数 | provider 不在時はヒューリスティック(JPY=3 / 他=5) |
+| `get_symbol_point(symbol) -> float` | 価格最小単位 | provider 不在時はヒューリスティック(`10^-digits`) |
 | `shutdown()` | アプリ終了時 | provider を切断 |
 
 backend の `routers/chart.py` 等は `from market_data.accessor import get_ohlc` のみで利用する。
@@ -241,6 +242,7 @@ class DataSourceProvider(ABC):
     fetch_latest_m5(symbol, n_bars) -> DataFrame
     get_available_range(symbol) -> (dt, dt) | None
     get_symbol_digits(symbol) -> int | None
+    get_symbol_point(symbol) -> float | None
 ```
 
 DataFrame の規約:
@@ -356,12 +358,16 @@ DataFrame の規約:
 ```
 1. ensure session, no active trade
 2. _upsert_candidate_on_entry: 銘柄別メモを初期挿入(なければ)
-3. trade = Trade(direction, sl, tp, entry_price=current_price, ...)
-4. session_store.save_trade
-5. fd = FinalDecision(has_entry=True)
-6. session_store.save_final_decision + rename_dir
-7. return TradeResponse
+3. pip_size = derive_pip_size(get_symbol_point(symbol), get_symbol_digits(symbol), symbol)
+4. trade = Trade(direction, sl, tp, entry_price=current_price, pip_size=pip_size, ...)
+5. session_store.save_trade
+6. fd = FinalDecision(has_entry=True)
+7. session_store.save_final_decision + rename_dir
+8. return TradeResponse
 ```
+
+- **`Trade.pip_size` を snapshot する理由**: エントリー時点の broker 設定を凍結する(§3.1)。entry_price / direction と並ぶ「凍結フィールド」で、決済後の `pips_pnl` や `r_pnl` は常にこの値で計算する。broker 変更後でも過去 trade は当時の pip サイズで読まれる(I-3 履歴改竄防止)
+- **session レスポンスの `pip_size`**: `SessionResponse.pip_size` は **session 単位**(MT5 由来 + override)で、`Trade.pip_size` は **エントリー snapshot**。両者は通常同じだが、broker 変更直後の保有中 trade では分岐しうる(後勝ちさせず trade 側を信頼)
 
 ### D.4.1 PATCH `/sessions/{id}/trade` (`routers/trades.py:update_trade`)
 

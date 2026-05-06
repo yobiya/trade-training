@@ -120,3 +120,17 @@ class TestCalculatePips:
         # (150.005 - 150.0) / 0.01 = 0.5 → 0.5
         result = _calculate_pips("USDJPY", "buy", 150.0, 150.005)
         assert result == pytest.approx(0.5)
+
+    # --- 商品銘柄(仕様書 §3.1 pip サイズ table)---
+
+    def test_xauusd_buy_profit(self) -> None:
+        # XAUUSD pip = 0.1 → ($1.0 動き = 10 pips)
+        assert _calculate_pips("XAUUSD", "buy", 2000.0, 2001.0) == pytest.approx(10.0)
+
+    def test_btcusd_sell_profit(self) -> None:
+        # BTCUSD pip = 1.0 → ($50 動き = 50 pips)
+        assert _calculate_pips("BTCUSD", "sell", 30000.0, 29950.0) == pytest.approx(50.0)
+
+    def test_jp225_buy_loss(self) -> None:
+        # JP225 pip = 1.0 → (40 円下落 = -40 pips for buy)
+        assert _calculate_pips("JP225", "buy", 38000.0, 37960.0) == pytest.approx(-40.0)

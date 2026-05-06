@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { EconomicEvent, SettingsResponse } from '../api/client'
+import type { Drawing, EconomicEvent, SettingsResponse } from '../api/client'
 import { Chart } from '../components/Chart'
 import { DrawingOverlay } from '../components/DrawingOverlay'
 import { DrawingTools } from '../components/DrawingTools'
@@ -227,7 +227,8 @@ export function SessionPage({ sessionId, onBack }: Props) {
   }, [removeDrawing])
 
   // §7.4: SL/TP 配置のチャートクリック横取り
-  const pipSize = currentSymbol.toUpperCase().endsWith('JPY') ? 0.01 : 0.0001
+  // §3.1 pip サイズは backend が MT5 由来で導出した値(session.pip_size)を信頼する
+  const pipSize = session?.pip_size ?? 0.0001
   const roundToDigits = useCallback((p: number): number => {
     const d = session?.digits ?? 5
     const factor = Math.pow(10, d)

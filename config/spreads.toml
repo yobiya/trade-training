@@ -13,3 +13,12 @@ EURJPY = 1.4
 GBPJPY = 2.0
 AUDJPY = 1.5
 EURGBP = 1.0
+
+# 商品(仕様書 §2.8 / §3.1)。broker 慣行ベースの暫定値、MT5 接続後に上書き。
+XAUUSD = 3.0
+XAGUSD = 3.0
+BTCUSD = 20.0
+ETHUSD = 15.0
+US30 = 2.0
+NAS100 = 2.0
+JP225 = 10.0

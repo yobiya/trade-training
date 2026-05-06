@@ -48,6 +48,7 @@ class Trade:
     lot: float | None
     mt5_order_id: int | None
     created_at: datetime
+    pip_size: float | None = None              # §3.1 エントリー時 snapshot(履歴改竄防止)
 
 
 @dataclass

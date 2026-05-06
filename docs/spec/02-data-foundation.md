@@ -39,6 +39,7 @@ class DataSourceProvider:
 - 価格基準: 全て**Bid基準**に統一
 - 銘柄名: 接尾辞を除去した統一形式(例: `USDJPY.a` → `USDJPY`)
 - 出来高: ティック数または出来高(プロバイダー差異はメタ情報で管理)
+- 銘柄メタ情報: `symbol_info.digits` / `symbol_info.point` をプロバイダーから取得可能にする(`get_symbol_digits` / `get_symbol_point` の abstract method)。pip サイズの導出は backend `services/symbols.py:derive_pip_size` で集約し、frontend は `SessionResponse.pip_size` を読むだけ([§3.1](./03-trading-conditions.md#31-銘柄別-pip-サイズ))
 
 ## 2.5 DBスキーマでのソース管理
 複数ソース共存を可能にするため、`source` カラムを設ける。
@@ -72,12 +73,18 @@ CREATE TABLE ohlc (
 ## 2.8 対象銘柄
 - 設定画面でユーザーが指定
 - 有効化した銘柄群を出題対象として使用
-- **初期対象(デフォルト 28 ペア)**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
+- **初期対象**: FX 28 ペア + 商品 7 銘柄 = 計 35 銘柄
+- **FX (28 ペア)**: メジャー 8 通貨(USD / EUR / GBP / JPY / AUD / NZD / CAD / CHF)の全組合せ
   - USD ストレート: `USDJPY`, `EURUSD`, `GBPUSD`, `AUDUSD`, `NZDUSD`, `USDCAD`, `USDCHF`
   - JPY クロス: `EURJPY`, `GBPJPY`, `AUDJPY`, `NZDJPY`, `CADJPY`, `CHFJPY`
   - EUR クロス: `EURGBP`, `EURAUD`, `EURNZD`, `EURCAD`, `EURCHF`
   - GBP クロス: `GBPAUD`, `GBPNZD`, `GBPCAD`, `GBPCHF`
   - AUD / NZD / CAD クロス: `AUDNZD`, `AUDCAD`, `AUDCHF`, `NZDCAD`, `NZDCHF`, `CADCHF`
+- **商品 (7 銘柄)**:
+  - 貴金属: `XAUUSD` (ゴールド), `XAGUSD` (シルバー)
+  - 暗号通貨: `BTCUSD` (ビットコイン), `ETHUSD` (イーサリアム)
+  - 株価指数: `US30` (ダウ平均), `NAS100` (ナスダック 100), `JP225` (日経 225)
+- **シンボル名はブローカー依存**: 上記は MT5 で一般的に流通する標準的シンボル名。ユーザーの MT5 ブローカーが別名(例: `GOLD`, `BITCOIN`, `WallStreet30`)を使う場合は market-data のシンボル正規化(§2.4 「銘柄名」)で吸収するか、設定画面からの登録で差し替える(将来実装)
 - ユーザーは設定画面から追加・無効化可能(将来実装)
 
 ## 2.9 データ更新

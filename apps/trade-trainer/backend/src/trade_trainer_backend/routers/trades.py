@@ -74,6 +74,11 @@ def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
     if current_pos.tzinfo is None:
         current_pos = current_pos.replace(tzinfo=timezone.utc)
 
+    # §3.1 pip サイズを MT5 から導出してエントリー時に snapshot(履歴改竄防止)
+    from market_data.accessor import get_symbol_digits, get_symbol_point
+    from trade_trainer_backend.services.symbols import derive_pip_size
+    pip = derive_pip_size(get_symbol_point(symbol), get_symbol_digits(symbol), symbol)
+
     trade = Trade(
         id=str(uuid.uuid4()),
         symbol=symbol,
@@ -91,6 +96,7 @@ def enter_trade(session_id: str, body: EnterTradeRequest) -> TradeResponse:
         lot=None,
         mt5_order_id=None,
         created_at=datetime.now(timezone.utc),
+        pip_size=pip,
     )
     session_store.save_trade(session_id, trade)
 
@@ -140,7 +146,10 @@ def exit_trade(session_id: str, body: ExitTradeRequest) -> TradeResponse:
     trade.exit_price = body.price
     trade.exit_reason = body.reason
     trade.exit_time = current_pos
-    trade.pips_pnl = _calculate_pips(trade.symbol, trade.direction, trade.entry_price, body.price)
+    trade.pips_pnl = _calculate_pips(
+        trade.symbol, trade.direction, trade.entry_price, body.price,
+        pip_size_override=trade.pip_size,
+    )
     session_store.save_trade(session_id, trade)
 
     return _trade_to_response(trade)

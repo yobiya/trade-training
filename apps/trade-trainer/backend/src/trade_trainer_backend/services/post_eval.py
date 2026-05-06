@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 from typing import Any
 
+from trade_trainer_backend.services.symbols import pip_size
+
 # Trade はファイル管理(`session.json` 内の trade フィールド)の dataclass を渡される想定。
 # 関数内では .symbol / .entry_price / .sl / .exit_price / .exit_time /
 # .direction / .entry_time のフィールドアクセスのみを使うため
@@ -72,15 +74,20 @@ class EntryObservation:
 # ヘルパー
 # --------------------------------------------------------------------------- #
 
-def _pip_size(symbol: str) -> float:
-    return 0.01 if symbol.upper().endswith("JPY") else 0.0001
+def _trade_pip_size(trade: Trade) -> float:
+    """§3.1 trade 由来の pip サイズ。エントリー時 snapshot を信頼し、欠落時(legacy
+    session) は symbol-based fallback を使う。"""
+    snapshot = getattr(trade, "pip_size", None)
+    if snapshot is not None and snapshot > 0:
+        return float(snapshot)
+    return pip_size(trade.symbol)
 
 
 def resolve_trade_r_unit_pips(trade: Trade) -> float | None:
     """§9.3 エントリー時の R 基準 = 実 SL 幅(pips)。SL 未設定なら None。"""
     if trade.sl is None:
         return None
-    psize = _pip_size(trade.symbol)
+    psize = _trade_pip_size(trade)
     return abs(float(trade.entry_price) - float(trade.sl)) / psize
 
 
@@ -92,7 +99,7 @@ def quick_r_pnl(trade: Trade) -> float | None:
     """
     if trade.exit_price is None or trade.sl is None:
         return None
-    psize = _pip_size(trade.symbol)
+    psize = _trade_pip_size(trade)
     r_unit = abs(float(trade.entry_price) - float(trade.sl)) / psize
     if r_unit <= 0:
         return None
@@ -128,10 +135,12 @@ def evaluate_symbol(
     symbol: str,
     ref_dt: datetime,
     r_unit_pips: float | None = None,
+    pip_size_override: float | None = None,
 ) -> SymbolReview:
     """指定銘柄・起点から 3 段階の最大上昇/下落 pips と R を返す(§9.3)。
 
     `r_unit_pips` が None なら R は算出しない(StageEval の R フィールドは None)。
+    `pip_size_override` には session.pip_size 等の MT5 由来の値を渡す。None なら fallback。
     """
     if ref_dt.tzinfo is None:
         ref_dt = ref_dt.replace(tzinfo=timezone.utc)
@@ -153,7 +162,7 @@ def evaluate_symbol(
     if df is None or len(df) == 0:
         return SymbolReview(symbol=symbol, ref_price=ref_price, r_unit_pips=r_unit_pips, stages=[])
 
-    psize = _pip_size(symbol)
+    psize = pip_size_override if pip_size_override is not None and pip_size_override > 0 else pip_size(symbol)
     stages: list[StageEval] = []
     for bars in LOOKAHEAD_STAGES:
         window = df.head(bars)
@@ -201,7 +210,7 @@ def evaluate_entry(trade: Trade) -> EntryObservation:
         exit_time = exit_time.replace(tzinfo=timezone.utc)
 
     r_unit_pips = empty.r_unit_pips
-    psize = _pip_size(trade.symbol)
+    psize = _trade_pip_size(trade)
 
     # 保有期間の M5 OHLC から MFE/MAE を算出
     from market_data.accessor import get_ohlc

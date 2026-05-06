@@ -61,6 +61,7 @@ data/sessions/
     "exit_price": 150.3,
     "exit_reason": "manual",           // tp | sl | manual
     "pips_pnl": 30.0,                  // 補助指標、実損益 R は動的算出 §9.5
+    "pip_size": 0.01,                  // §3.1 エントリー時の pip サイズ snapshot(履歴改竄防止 — broker 変更後も当時の値で計算)
     "amount_pnl": null,                // real のみ
     "lot": null,                       // real のみ
     "mt5_order_id": null               // real のみ

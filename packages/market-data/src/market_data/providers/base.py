@@ -62,3 +62,11 @@ class DataSourceProvider(ABC):
     def get_symbol_digits(self, symbol: str) -> int | None:
         """銘柄の価格表示小数桁数を返す。取得不能なら None。既定実装は None。"""
         return None
+
+    def get_symbol_point(self, symbol: str) -> float | None:
+        """銘柄の価格最小単位(`symbol_info.point`)を返す。取得不能なら None。既定実装は None。
+
+        仕様書 §3.1: pip サイズ導出の起点となる値。MT5 broker の `point` は通常 `10^-digits`
+        だが、broker 設定で個別変動するため都度取得する。
+        """
+        return None

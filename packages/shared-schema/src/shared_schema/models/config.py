@@ -7,13 +7,21 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from shared_schema.base import Base
 
-# 初期対象銘柄(仕様書 2.8)
-DEFAULT_SYMBOLS = ["USDJPY", "EURUSD", "GBPUSD", "AUDUSD", "EURJPY", "GBPJPY", "AUDJPY", "EURGBP"]
+# 初期対象銘柄(仕様書 §2.8: FX 28 ペア + 商品 7 銘柄)
+DEFAULT_SYMBOLS = [
+    # FX 主要(seed が小さい初回起動時に最低限載せる)
+    "USDJPY", "EURUSD", "GBPUSD", "AUDUSD", "EURJPY", "GBPJPY", "AUDJPY", "EURGBP",
+    # 商品(仕様書 §2.8): 貴金属 / 暗号通貨 / 株価指数
+    "XAUUSD", "XAGUSD",
+    "BTCUSD", "ETHUSD",
+    "US30", "NAS100", "JP225",
+]
 
 # 仕様書 §7.2.3 メモ見出しテンプレートはリポジトリ内 Markdown ファイル
 # (`data/memo-templates/{candidate,session-note}.md`)で管理する。DB には保存しない。
 
 # 初期スプレッド暫定値(pips)。MT5 デモ接続後に実測値で上書き(仕様書 3章)。
+# 商品は broker 慣行ベースの暫定値(仕様書 §3.1 pip サイズ table と整合)。
 DEFAULT_SPREADS = {
     "USDJPY": 1.0,
     "EURUSD": 0.6,
@@ -23,6 +31,14 @@ DEFAULT_SPREADS = {
     "GBPJPY": 2.0,
     "AUDJPY": 1.5,
     "EURGBP": 1.0,
+    # 商品(暫定値、ユーザーが MT5 接続後に上書きする前提)
+    "XAUUSD": 3.0,   # $0.30 / 0.1
+    "XAGUSD": 3.0,   # $0.030 / 0.01
+    "BTCUSD": 20.0,  # $20 / 1.0
+    "ETHUSD": 15.0,  # $1.50 / 0.1
+    "US30": 2.0,
+    "NAS100": 2.0,
+    "JP225": 10.0,
 }
 
 # 時間軸プリセット初期値

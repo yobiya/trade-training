@@ -22,7 +22,7 @@ export type MouseRelayHandlers = {
  * のみに依存し、handler 変化では再 attach しない。
  */
 export function useChartMouseRelay(
-  containerRef: React.RefObject<HTMLDivElement>,
+  containerRef: React.RefObject<HTMLDivElement | null>,
   core: ChartCore | null,
   coords: ChartCoordinates,
   handlers: MouseRelayHandlers,

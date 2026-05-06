@@ -50,6 +50,7 @@ class SessionResponse(BaseModel):
     is_settled: bool                   # §4.2.1 状態モデル(settled_at != null)
     has_active_trade: bool
     digits: int  # 価格表示小数桁数(MT5 の symbol_info.digits、未取得時は JPY=3/その他=5)
+    pip_size: float  # §3.1 銘柄の pip サイズ(MT5 由来 + carrier 補正、未取得時はフォールバック)
     name: str | None = None  # §6.1 任意のセッション名(手法識別用、いつでも編集可)
     note: str | None = None  # §7.2.2 横断メモ
     candidates: list[CandidateResponse] = []  # §6.3 ウォッチリスト

@@ -86,6 +86,20 @@ def get_symbol_digits(symbol: str) -> int:
     return 3 if symbol.upper().endswith("JPY") else 5
 
 
+def get_symbol_point(symbol: str) -> float:
+    """銘柄の価格最小単位 (`symbol_info.point`) を返す。仕様書 §3.1。
+
+    provider 接続中は MT5 等から取得。取得不能/未接続時は `digits` から推定
+    (`10^-digits`)してフォールバック。
+    """
+    if _provider is not None and _provider.is_connected():
+        p = _provider.get_symbol_point(symbol)
+        if p is not None and p > 0:
+            return p
+    digits = get_symbol_digits(symbol)
+    return 10 ** (-digits)
+
+
 def shutdown() -> None:
     """アプリ終了時に呼ぶ。プロバイダ接続を切断する。"""
     global _initialized

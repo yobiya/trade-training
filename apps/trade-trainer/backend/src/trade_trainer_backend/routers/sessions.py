@@ -79,8 +79,16 @@ def _build_response(agg: SessionAggregate) -> SessionResponse:
     symbol = selected_symbol or ""
     has_active = agg.trade is not None and agg.trade.exit_time is None
 
-    from market_data.accessor import get_symbol_digits
-    digits = get_symbol_digits(symbol) if symbol else 5
+    from market_data.accessor import get_symbol_digits, get_symbol_point
+    from trade_trainer_backend.services.symbols import derive_pip_size, pip_size_fallback
+    if symbol:
+        digits = get_symbol_digits(symbol)
+        point = get_symbol_point(symbol)
+        pip_size = derive_pip_size(point, digits, symbol)
+    else:
+        # 銘柄未確定(エントリー前)時のプレースホルダ。frontend は pip 計算経路まで進まない
+        digits = 5
+        pip_size = pip_size_fallback("")
 
     return SessionResponse(
         id=agg.meta.id,
@@ -92,6 +100,7 @@ def _build_response(agg: SessionAggregate) -> SessionResponse:
         is_settled=is_settled(agg),
         has_active_trade=has_active,
         digits=digits,
+        pip_size=pip_size,
         name=agg.meta.name,
         note=agg.note,
         candidates=[_candidate_response(c, selected_symbol) for c in agg.candidates],
@@ -326,12 +335,15 @@ def get_post_review(session_id: str) -> PostReviewResponse:
         return [StageEvalResp(**st.__dict__) for st in stages]
 
     # 層 1: エントリーしなかった候補(SL 未確定のため pips のみで評価)
+    from market_data.accessor import get_symbol_digits, get_symbol_point
+    from trade_trainer_backend.services.symbols import derive_pip_size
     selected_symbol = agg.trade.symbol if agg.trade is not None else None
     candidate_reviews: list[CandidateReview] = []
     for c in agg.candidates:
         if selected_symbol is not None and c.symbol == selected_symbol:
             continue
-        rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=None)
+        cand_pip = derive_pip_size(get_symbol_point(c.symbol), get_symbol_digits(c.symbol), c.symbol)
+        rv = evaluate_symbol(c.symbol, ref_dt, r_unit_pips=None, pip_size_override=cand_pip)
         candidate_reviews.append(CandidateReview(
             symbol=c.symbol,
             memo=c.memo,
@@ -344,7 +356,12 @@ def get_post_review(session_id: str) -> PostReviewResponse:
     entry_review: EntryReview | None = None
     if agg.trade is not None:
         trade_r_unit = resolve_trade_r_unit_pips(agg.trade)
-        rv = evaluate_symbol(agg.trade.symbol, ref_dt, r_unit_pips=trade_r_unit)
+        # trade.pip_size は entry 時 snapshot。post_eval は同じ値で計算する(履歴改竄防止)
+        rv = evaluate_symbol(
+            agg.trade.symbol, ref_dt,
+            r_unit_pips=trade_r_unit,
+            pip_size_override=agg.trade.pip_size,
+        )
         obs = evaluate_entry(agg.trade)
         entry_review = EntryReview(
             symbol=agg.trade.symbol,

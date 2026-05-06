@@ -17,6 +17,7 @@ from trade_trainer_backend.schemas.chart import (
     OhlcBar,
 )
 from trade_trainer_backend.services import session_store
+from trade_trainer_backend.services.symbols import pip_size
 from trade_trainer_backend.utils.http import bad_request
 
 log = logging.getLogger(__name__)
@@ -97,10 +98,21 @@ def _aggregate_one_bar(lower_df: pd.DataFrame, dst_tf: str) -> pd.DataFrame:
     return resampled.tail(1)
 
 
-def _calculate_pips(symbol: str, direction: str, entry: float, exit_price: float) -> float:
-    pip_size = 0.01 if symbol.upper().endswith("JPY") else 0.0001
+def _calculate_pips(
+    symbol: str,
+    direction: str,
+    entry: float,
+    exit_price: float,
+    pip_size_override: float | None = None,
+) -> float:
+    """pips 損益を算出する。仕様書 §3.1。
+
+    通常パス: caller が `trade.pip_size`(エントリー時 snapshot)を `pip_size_override` に渡す。
+    `pip_size_override=None` の場合は MT5 不通時のフォールバック値を使う(legacy 経路 / テスト用)。
+    """
+    psize = pip_size_override if pip_size_override is not None and pip_size_override > 0 else pip_size(symbol)
     diff = (exit_price - entry) if direction == "buy" else (entry - exit_price)
-    return round(diff / pip_size, 1)
+    return round(diff / psize, 1)
 
 
 def _check_sl_tp(trade, bars: pd.DataFrame) -> tuple[str, float] | None:  # type: ignore[no-untyped-def]
@@ -332,7 +344,10 @@ def advance_session(
                 hit = _check_sl_tp(trade, sl_tp_m5)
                 if hit:
                     exit_reason, exit_price = hit
-                    pips_pnl = _calculate_pips(advance_symbol, trade.direction, trade.entry_price, exit_price)
+                    pips_pnl = _calculate_pips(
+                        advance_symbol, trade.direction, trade.entry_price, exit_price,
+                        pip_size_override=trade.pip_size,
+                    )
                     trade.exit_time = new_pos
                     trade.exit_price = exit_price
                     trade.exit_reason = exit_reason
