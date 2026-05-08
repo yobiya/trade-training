@@ -30,6 +30,10 @@ function tfBadge(d: Drawing, api: ChartApi): ReactElement | null {
     const price = Number((d.data as { price: number }).price)
     const y = api.priceToY(price)
     if (y !== null) anchor = { x: 8, y }  // 左端寄りに配置
+  } else if (d.kind === 'vline') {
+    const t = Number((d.data as { t: number }).t)
+    const x = api.timeToX(t)
+    if (x !== null) anchor = { x, y: 16 }  // 上端寄りに配置
   }
   if (!anchor) return null
   const color = getTimeframeColor(d.timeframe)

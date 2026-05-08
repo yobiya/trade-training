@@ -78,7 +78,7 @@ class IndicatorSnapshot(BaseModel):
 
 class DrawingSummary(BaseModel):
     """§11.3.2: 描画種別と作成 TF(座標は画像焼き込み済)。"""
-    kind: str                                  # 'line' / 'trendline' / 'fibonacci' / 'wave_label'
+    kind: str                                  # 'line' / 'vline' / 'trendline' / 'fibonacci' / 'wave_label'
     timeframe: str | None
     symbol: str | None
     label: str | None = None

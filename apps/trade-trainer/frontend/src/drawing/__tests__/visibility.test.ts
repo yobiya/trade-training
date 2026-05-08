@@ -50,6 +50,13 @@ describe('isDrawingVisibleOnTf', () => {
       expect(isDrawingVisibleOnTf(d, 'D1')).toBe(true)
     })
 
+    it('vline: 全 TF で true', () => {
+      const d = makeDrawing({ kind: 'vline' })
+      expect(isDrawingVisibleOnTf(d, 'M5')).toBe(true)
+      expect(isDrawingVisibleOnTf(d, 'H1')).toBe(true)
+      expect(isDrawingVisibleOnTf(d, 'D1')).toBe(true)
+    })
+
     it('fibonacci: 作成 TF のみ true', () => {
       const d = makeDrawing({ kind: 'fibonacci', timeframe: 'H1' })
       expect(isDrawingVisibleOnTf(d, 'H1')).toBe(true)

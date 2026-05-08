@@ -3,6 +3,7 @@ import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
 import { fibonacciTool } from './fibonacci'
 import { lineTool } from './line'
 import { trendlineTool } from './trendline'
+import { vlineTool } from './vline'
 import { waveLabelTool } from './wave_label'
 
 /**
@@ -11,6 +12,7 @@ import { waveLabelTool } from './wave_label'
  */
 export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
+  vline: vlineTool,
   trendline: trendlineTool,
   fibonacci: fibonacciTool,
   wave_label: waveLabelTool,

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { lineTool } from '../tools/line'
 import { trendlineTool } from '../tools/trendline'
 import { fibonacciTool } from '../tools/fibonacci'
+import { vlineTool } from '../tools/vline'
 import type { Drawing } from '../../api/types'
 import type { ChartApi, PointPx } from '../types'
 
@@ -81,6 +82,42 @@ describe('lineTool.hitTest', () => {
   it('price が NaN → miss', () => {
     const bad = makeDrawing('line', { price: 'not-a-number' })
     expect(lineTool.hitTest(bad, { x: 0, y: 50 }, makeIdentityApi())).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// vlineTool.hitTest
+// ---------------------------------------------------------------------------
+
+describe('vlineTool.hitTest', () => {
+  // t=500 → x = 500/10 = 50
+  const d = makeDrawing('vline', { t: 500 })
+
+  it('x 距離ゼロ → hit (body)', () => {
+    const api = makeIdentityApi()
+    expect(vlineTool.hitTest(d, { x: 50, y: 0 }, api))
+      .toEqual({ drawingId: 1, kind: 'vline', part: 'body' })
+  })
+
+  it('x 距離 ≤ 6px → hit', () => {
+    const api = makeIdentityApi()
+    expect(vlineTool.hitTest(d, { x: 56, y: 0 }, api)).not.toBeNull()
+    expect(vlineTool.hitTest(d, { x: 44, y: 0 }, api)).not.toBeNull()
+  })
+
+  it('x 距離 > 6px → miss', () => {
+    const api = makeIdentityApi()
+    expect(vlineTool.hitTest(d, { x: 57, y: 0 }, api)).toBeNull()
+    expect(vlineTool.hitTest(d, { x: 43, y: 0 }, api)).toBeNull()
+  })
+
+  it('timeToX が null → miss', () => {
+    expect(vlineTool.hitTest(d, { x: 50, y: 0 }, makeNullApi())).toBeNull()
+  })
+
+  it('data.t 不正 → miss', () => {
+    const bad = makeDrawing('vline', {})
+    expect(vlineTool.hitTest(bad, { x: 50, y: 0 }, makeIdentityApi())).toBeNull()
   })
 })
 

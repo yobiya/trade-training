@@ -20,11 +20,12 @@ type Props = {
 }
 
 // 通常描画ツールの順序(wave_label は波動セクションで別途表示)
-const TOOL_ORDER: DrawingKind[] = ['line', 'trendline', 'fibonacci']
+const TOOL_ORDER: DrawingKind[] = ['line', 'vline', 'trendline', 'fibonacci']
 
 function hintFor(tool: DrawingKind, wave: WaveValue | null): string {
   switch (tool) {
     case 'line': return 'チャートをクリックで追加 / ESC で中止'
+    case 'vline': return 'チャートをクリックで追加 / ESC で中止'
     case 'trendline': return '2 点をクリックで引く / ESC で中止'
     case 'fibonacci': return '2 点をクリックで引く / ESC で中止'
     case 'wave_label': return `波動 ${wave} を配置 / ESC で中止`
@@ -32,9 +33,21 @@ function hintFor(tool: DrawingKind, wave: WaveValue | null): string {
   }
 }
 
+function formatVlineTime(t: number): string {
+  return new Date(t * 1000).toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 function describe(d: Drawing, digits: number): string {
   switch (d.kind) {
     case 'line': return `水平線 ${Number(d.data.price).toFixed(digits)}`
+    case 'vline': {
+      const t = Number((d.data as { t?: number }).t)
+      return Number.isFinite(t) ? `縦線 ${formatVlineTime(t)}` : '縦線'
+    }
     case 'trendline': {
       const pts = d.data.points as Array<{ price: number }> | undefined
       if (pts && pts.length === 2) {

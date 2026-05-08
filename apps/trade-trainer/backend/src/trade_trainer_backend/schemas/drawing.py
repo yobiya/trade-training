@@ -2,7 +2,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-DrawingKind = Literal["line", "trendline", "fibonacci", "wave_label"]
+DrawingKind = Literal["line", "vline", "trendline", "fibonacci", "wave_label"]
 
 
 class CreateDrawingRequest(BaseModel):
@@ -10,6 +10,7 @@ class CreateDrawingRequest(BaseModel):
 
     `data` は kind ごとに構造が異なる:
       - line(水平線):   { "price": float }
+      - vline(縦線):    { "t": int }
       - trendline:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
       - fibonacci:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
       - wave_label:     { "t": int, "price": float, "wave": str ('1'|'2'|'3'|'4'|'5'|'A'|'B'|'C')}

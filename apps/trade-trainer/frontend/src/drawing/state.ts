@@ -3,6 +3,7 @@ import { lineTool } from './tools/line'
 import { fibonacciTool, getFibPoints } from './tools/fibonacci'
 import { findHit } from './tools/registry'
 import { trendlineTool, getTrendlinePoints } from './tools/trendline'
+import { vlineTool } from './tools/vline'
 import { waveLabelTool, getWaveLabelData, nextWave, type WaveValue } from './tools/wave_label'
 import type {
   ChartApi,
@@ -35,10 +36,12 @@ type Wave = WaveValue
 export type DrawingState =
   | { kind: 'idle'; cursor: string; hoveredId: number | null }
   | { kind: 'drawing-line' }
+  | { kind: 'drawing-vline' }
   | { kind: 'drawing-trendline'; firstPoint: PP | null; currentPoint: PP | null }
   | { kind: 'drawing-fibonacci'; firstPoint: PP | null; currentPoint: PP | null }
   | { kind: 'drawing-wave-label'; wave: Wave; previewPoint: PP | null }
   | { kind: 'moving-line'; original: Drawing; preview: Drawing }
+  | { kind: 'moving-vline'; original: Drawing; preview: Drawing }
   | { kind: 'moving-trendline-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchorPx: PointPx; anchorPrice: number }
   | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
@@ -88,10 +91,12 @@ export function dispatchEvent(
   switch (state.kind) {
     case 'idle': return reduceIdle(state, event, ctx)
     case 'drawing-line': return reduceDrawingLine(state, event, ctx)
+    case 'drawing-vline': return reduceDrawingVline(state, event, ctx)
     case 'drawing-trendline': return reduceDrawingTrendline(state, event, ctx)
     case 'drawing-fibonacci': return reduceDrawingFibonacci(state, event, ctx)
     case 'drawing-wave-label': return reduceDrawingWaveLabel(state, event, ctx)
     case 'moving-line': return reduceMovingLine(state, event, ctx)
+    case 'moving-vline': return reduceMovingVline(state, event, ctx)
     case 'moving-trendline-handle': return reduceMovingTrendlineHandle(state, event, ctx)
     case 'moving-trendline-body': return reduceMovingTrendlineBody(state, event, ctx)
     case 'moving-fibonacci-handle': return reduceMovingFibonacciHandle(state, event, ctx)
@@ -109,11 +114,13 @@ export function cursorOf(state: DrawingState): string {
   switch (state.kind) {
     case 'idle': return state.cursor
     case 'drawing-line':
+    case 'drawing-vline':
     case 'drawing-trendline':
     case 'drawing-fibonacci':
     case 'drawing-wave-label': return 'crosshair'
     case 'moving-line':
     case 'moving-trade-line': return 'ns-resize'
+    case 'moving-vline': return 'ew-resize'
     case 'moving-trendline-body':
     case 'moving-fibonacci-body':
     case 'moving-wave-label': return 'move'
@@ -138,6 +145,7 @@ export function previewOf(state: DrawingState): Drawing | null {
         wave: state.wave,
       })
     case 'moving-line':
+    case 'moving-vline':
     case 'moving-trendline-handle':
     case 'moving-trendline-body':
     case 'moving-fibonacci-handle':
@@ -152,6 +160,7 @@ export function previewOf(state: DrawingState): Drawing | null {
 export function activeToolOf(state: DrawingState): DrawingKind | null {
   switch (state.kind) {
     case 'drawing-line': return 'line'
+    case 'drawing-vline': return 'vline'
     case 'drawing-trendline': return 'trendline'
     case 'drawing-fibonacci': return 'fibonacci'
     case 'drawing-wave-label': return 'wave_label'
@@ -211,6 +220,7 @@ function startToolState(tool: DrawingKind | null, wave?: Wave): DrawingState {
   if (tool === null) return idleState()
   switch (tool) {
     case 'line': return { kind: 'drawing-line' }
+    case 'vline': return { kind: 'drawing-vline' }
     case 'trendline': return { kind: 'drawing-trendline', firstPoint: null, currentPoint: null }
     case 'fibonacci': return { kind: 'drawing-fibonacci', firstPoint: null, currentPoint: null }
     case 'wave_label':
@@ -235,6 +245,7 @@ function previewDrawing(kind: DrawingKind, data: Record<string, unknown>): Drawi
 
 function cursorForHit(hit: HitResult): string {
   if (hit.kind === 'line') return 'ns-resize'
+  if (hit.kind === 'vline') return 'ew-resize'
   if (hit.part === 'handle') return 'grab'
   return 'move'
 }
@@ -249,6 +260,8 @@ function buildMovingState(
   switch (hit.kind) {
     case 'line':
       return { kind: 'moving-line', original: drawing, preview: drawing }
+    case 'vline':
+      return { kind: 'moving-vline', original: drawing, preview: drawing }
     case 'trendline':
       if (hit.part === 'handle' && hit.handleIndex !== undefined) {
         return {
@@ -337,6 +350,24 @@ function reduceDrawingLine(
       data: { price: event.payload.point.price },
       timeframe: ctx.activeTimeframe,
       visible_on_timeframes: lineTool.defaultVisibleTfs,
+    })
+    return idleState()
+  }
+  return state
+}
+
+function reduceDrawingVline(
+  state: Extract<DrawingState, { kind: 'drawing-vline' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'click') {
+    if (event.payload.point.time === null) return state
+    void ctx.createDrawing({
+      kind: 'vline',
+      data: { t: event.payload.point.time },
+      timeframe: ctx.activeTimeframe,
+      visible_on_timeframes: vlineTool.defaultVisibleTfs,
     })
     return idleState()
   }
@@ -471,6 +502,30 @@ function reduceMovingLine(
   }
   if (event.type === 'mouse-up') {
     void ctx.updateDrawing(state.original.id, { data: { price: event.payload.point.price } })
+    return idleState()
+  }
+  return state
+}
+
+function reduceMovingVline(
+  state: Extract<DrawingState, { kind: 'moving-vline' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'mouse-move') {
+    if (event.payload.point.time === null) return state
+    return {
+      ...state,
+      preview: {
+        ...state.original,
+        data: { ...state.original.data, t: event.payload.point.time },
+      },
+    }
+  }
+  if (event.type === 'mouse-up') {
+    if (event.payload.point.time !== null && state.preview !== state.original) {
+      void ctx.updateDrawing(state.original.id, { data: { t: event.payload.point.time } })
+    }
     return idleState()
   }
   return state

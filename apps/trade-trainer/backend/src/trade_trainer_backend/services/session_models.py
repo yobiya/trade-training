@@ -70,7 +70,7 @@ class Drawing:
     """drawings.json の 1 エントリ。"""
     id: int
     symbol: str | None
-    kind: str                                  # 'line' | 'trendline' | 'fibonacci' | 'wave_label'
+    kind: str                                  # 'line' | 'vline' | 'trendline' | 'fibonacci' | 'wave_label'
     data: dict[str, Any]
     label: str | None
     timeframe: str | None
