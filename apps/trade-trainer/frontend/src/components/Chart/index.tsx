@@ -103,6 +103,7 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
             handleScale: { axisPressedMouseMove: enabled },
           })
         },
+        getBars: () => barsRef.current ?? [],
       }
     },
     get containerEl() { return containerRef.current },

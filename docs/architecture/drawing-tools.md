@@ -1,6 +1,6 @@
 # 描画ツールの状態管理
 
-仕様書 §5.3 / §5.6 の描画ツール(水平線・縦線・トレンドライン・フィボナッチ・波動ラベル)を、ツールが増えても複雑さが線形にしか増えないように整理するための設計方針。
+仕様書 §5.3 / §5.6 の描画ツール(水平線・縦線・トレンドライン・チャネル・フィボナッチ・波動ラベル・高値ブレイク・安値ブレイク)を、ツールが増えても複雑さが線形にしか増えないように整理するための設計方針。
 
 ← [設計ドキュメント](../ARCHITECTURE.md) | [仕様書](../spec/README.md)
 
@@ -73,7 +73,12 @@ type DrawingState =
   | { kind: 'idle'; cursor: string; hoveredId: number | null }
   | { kind: 'drawing-line' }
   | { kind: 'drawing-vline' }
+  | { kind: 'drawing-high-break' }
+  | { kind: 'drawing-low-break' }
   | { kind: 'drawing-trendline'; firstPoint: PP | null; currentPoint: PP | null }
+  | { kind: 'drawing-channel'; firstPoint: PP | null; secondPoint: PP | null; currentPoint: PP | null }
+  // §5.3 channel(平行線): 3 クリックで完結。p1-p2 が基準線、p3 が平行線アンカー。
+  // preview phase 1(secondPoint===null)= 基準線のみ、phase 2(secondPoint set)= 基準線 + 平行線。
   | { kind: 'drawing-fibonacci'; firstPoint: PP | null; currentPoint: PP | null }
   | { kind: 'drawing-wave-label'; wave: WaveLabel; previewPoint: PP | null }
   // WaveLabel = '1'|'2'|'3'|'4'|'5' (推進波) | 'A'|'B'|'C' (補正波)
@@ -82,6 +87,8 @@ type DrawingState =
   | { kind: 'moving-vline'; original: Drawing; preview: Drawing }
   | { kind: 'moving-trendline-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchor: PP }
+  | { kind: 'moving-channel-handle'; original: Drawing; preview: Drawing; handleIndex: number }
+  | { kind: 'moving-channel-body'; original: Drawing; preview: Drawing; anchor: PP }
   | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchor: PP }
   | { kind: 'moving-wave-label'; original: Drawing; preview: Drawing }

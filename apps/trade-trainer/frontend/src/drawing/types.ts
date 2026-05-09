@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Drawing, DrawingKind } from '../api/types'
+import type { Drawing, DrawingKind, OhlcBar } from '../api/types'
 
 export type PointPx = { x: number; y: number }
 export type Point = { price: number; time: number | null }
@@ -21,6 +21,11 @@ export interface ChartApi {
   logicalToX(logical: number): number | null
   /** チャートのドラッグパンを有効/無効にする。Moving 状態中は false にして描画操作と干渉させない。 */
   setScrollEnabled(enabled: boolean): void
+  /** §5.3 high_break / low_break 用: 表示中の bars 配列を取得する。
+   *  - 作成時の bar snap(クリック点に最寄りのバー検出)
+   *  - render 時のブレイク判定(選択バー以降の確定 close 探索)
+   *  に使用する。bar 配列はチャートの barsRef を参照するため、advance 等で更新される。 */
+  getBars(): OhlcBar[]
 }
 
 /** 描画の何に当たったか。 */

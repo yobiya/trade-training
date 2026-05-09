@@ -182,7 +182,9 @@ export type PostReviewResponse = {
 }
 
 // 仕様書 §5.3/§5.5: 描画オブジェクト
-export type DrawingKind = 'line' | 'vline' | 'trendline' | 'fibonacci' | 'wave_label'
+export type DrawingKind =
+  | 'line' | 'vline' | 'trendline' | 'channel' | 'fibonacci' | 'wave_label'
+  | 'high_break' | 'low_break'
 
 export type Drawing = {
   id: number

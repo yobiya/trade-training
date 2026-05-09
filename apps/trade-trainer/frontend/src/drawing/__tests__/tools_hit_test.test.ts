@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest'
+import { channelTool } from '../tools/channel'
 import { lineTool } from '../tools/line'
 import { trendlineTool } from '../tools/trendline'
 import { fibonacciTool } from '../tools/fibonacci'
 import { vlineTool } from '../tools/vline'
+import { highBreakTool } from '../tools/high_break'
+import { lowBreakTool } from '../tools/low_break'
+import type { OhlcBar } from '../../api/types'
 import type { Drawing } from '../../api/types'
 import type { ChartApi, PointPx } from '../types'
 
@@ -35,6 +39,7 @@ function makeIdentityApi(): ChartApi {
     xToTime: (x) => x * 10,
     logicalToX: () => null,
     setScrollEnabled: () => {},
+    getBars: () => [],
   }
 }
 
@@ -46,6 +51,7 @@ function makeNullApi(): ChartApi {
     xToTime: () => null,
     logicalToX: () => null,
     setScrollEnabled: () => {},
+    getBars: () => [],
   }
 }
 
@@ -118,6 +124,95 @@ describe('vlineTool.hitTest', () => {
   it('data.t 不正 → miss', () => {
     const bad = makeDrawing('vline', {})
     expect(vlineTool.hitTest(bad, { x: 50, y: 0 }, makeIdentityApi())).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// highBreakTool.hitTest / lowBreakTool.hitTest
+// ---------------------------------------------------------------------------
+
+function makeBar(t: number, h: number, l: number, c: number): OhlcBar {
+  return { t, o: 0, h, l, c, v: 0 }
+}
+
+describe('highBreakTool.hitTest', () => {
+  // 選択バー: t=100 (x=10), 高値=80 (y=20)
+  // bars: [t=100,c=80] [t=200,c=70] [t=300,c=90 ← break] [t=400,c=50] [live]
+  // ブレイク確定 idx=2 → 線 x=[10, 30] (t=100→x=10, t=300→x=30)
+  const d = makeDrawing('high_break', { t: 100, price: 80 })
+  const bars = [
+    makeBar(100, 80, 70, 80),
+    makeBar(200, 75, 65, 70),
+    makeBar(300, 95, 70, 90),  // close=90 > 80 → break
+    makeBar(400, 60, 40, 50),
+    makeBar(500, 0, 0, 0),     // live bar
+  ]
+
+  it('y 距離ゼロ かつ x が範囲内 → hit', () => {
+    const api = { ...makeIdentityApi(), getBars: () => bars }
+    expect(highBreakTool.hitTest(d, { x: 20, y: 20 }, api))
+      .toEqual({ drawingId: 1, kind: 'high_break', part: 'body' })
+  })
+
+  it('y 距離 > 6px → miss', () => {
+    const api = { ...makeIdentityApi(), getBars: () => bars }
+    expect(highBreakTool.hitTest(d, { x: 20, y: 27 }, api)).toBeNull()
+  })
+
+  it('x が線の範囲外 → miss', () => {
+    const api = { ...makeIdentityApi(), getBars: () => bars }
+    // 線は x=[10, 30] までなので x=50 は範囲外
+    expect(highBreakTool.hitTest(d, { x: 50, y: 20 }, api)).toBeNull()
+    // 線は x=[10, ...] からなので x=5 は範囲外
+    expect(highBreakTool.hitTest(d, { x: 5, y: 20 }, api)).toBeNull()
+  })
+
+  it('未ブレイク時は最終 bar まで延伸', () => {
+    const allClosesBelow = [
+      makeBar(100, 80, 70, 80),
+      makeBar(200, 75, 65, 70),
+      makeBar(300, 78, 60, 75),
+      makeBar(400, 79, 60, 78),
+      makeBar(500, 0, 0, 0),     // live
+    ]
+    const api = { ...makeIdentityApi(), getBars: () => allClosesBelow }
+    // 線は x=[10, 50] まで
+    expect(highBreakTool.hitTest(d, { x: 50, y: 20 }, api)).not.toBeNull()
+  })
+
+  it('data 不正 → miss', () => {
+    const bad = makeDrawing('high_break', {})
+    expect(highBreakTool.hitTest(bad, { x: 20, y: 20 }, makeIdentityApi())).toBeNull()
+  })
+})
+
+describe('lowBreakTool.hitTest', () => {
+  // 選択バー: t=100 (x=10), 安値=20 (y=80)
+  const d = makeDrawing('low_break', { t: 100, price: 20 })
+  const bars = [
+    makeBar(100, 30, 20, 25),
+    makeBar(200, 28, 22, 24),
+    makeBar(300, 25, 10, 15),  // close=15 < 20 → break
+    makeBar(400, 50, 40, 45),
+    makeBar(500, 0, 0, 0),     // live
+  ]
+
+  it('y 距離ゼロ かつ x が範囲内 → hit', () => {
+    const api = { ...makeIdentityApi(), getBars: () => bars }
+    expect(lowBreakTool.hitTest(d, { x: 20, y: 80 }, api))
+      .toEqual({ drawingId: 1, kind: 'low_break', part: 'body' })
+  })
+
+  it('未ブレイク時は最終 bar まで延伸', () => {
+    const allClosesAbove = [
+      makeBar(100, 30, 20, 25),
+      makeBar(200, 28, 22, 24),
+      makeBar(300, 25, 21, 22),
+      makeBar(400, 24, 21, 23),
+      makeBar(500, 0, 0, 0),
+    ]
+    const api = { ...makeIdentityApi(), getBars: () => allClosesAbove }
+    expect(lowBreakTool.hitTest(d, { x: 50, y: 80 }, api)).not.toBeNull()
   })
 })
 
@@ -263,6 +358,76 @@ describe('fibonacciTool.hitTest', () => {
     // xA=100, xB=0, x1=0, x2=100。0.5 レベル: price=50 → y=50。ポインタ(50, 50)
     const result = fibonacciTool.hitTest(dReverse, { x: 50, y: 50 }, api)
     expect(result).toEqual({ drawingId: 2, kind: 'fibonacci', part: 'body' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// channelTool.hitTest
+// ---------------------------------------------------------------------------
+
+describe('channelTool.hitTest', () => {
+  // p1: t=0 → x=0, price=100 → y=0
+  // p2: t=1000 → x=100, price=0 → y=100
+  // p3: t=0, price=50 → x=0, y=50
+  // slope = (0-100)/(1000-0) = -0.1
+  // offset = 50 - (100 + (-0.1)*(0-0)) = -50
+  // parallel: p1+offset → price=50 → y=50、p2+offset → price=-50 → y=150
+  //  a=(0,0), b=(100,100), a2=(0,50), b2=(100,150), c=(0,50)
+  const points = [{ t: 0, price: 100 }, { t: 1000, price: 0 }, { t: 0, price: 50 }]
+  const d = makeDrawing('channel', { points })
+
+  it('p1 端点 → handle 0', () => {
+    const api = makeIdentityApi()
+    expect(channelTool.hitTest(d, { x: 3, y: 3 }, api))
+      .toEqual({ drawingId: 1, kind: 'channel', part: 'handle', handleIndex: 0 })
+  })
+
+  it('p2 端点 → handle 1', () => {
+    const api = makeIdentityApi()
+    expect(channelTool.hitTest(d, { x: 97, y: 97 }, api))
+      .toEqual({ drawingId: 1, kind: 'channel', part: 'handle', handleIndex: 1 })
+  })
+
+  it('p3 端点(平行線アンカー)→ handle 2', () => {
+    const api = makeIdentityApi()
+    // c=(0,50)。distance sqrt(9+9)=4.24 < 8
+    expect(channelTool.hitTest(d, { x: 3, y: 47 }, api))
+      .toEqual({ drawingId: 1, kind: 'channel', part: 'handle', handleIndex: 2 })
+  })
+
+  it('基準線中点 → body', () => {
+    const api = makeIdentityApi()
+    // 基準線中点 (50, 50)。距離 0 < 6
+    expect(channelTool.hitTest(d, { x: 50, y: 50 }, api))
+      .toEqual({ drawingId: 1, kind: 'channel', part: 'body' })
+  })
+
+  it('平行線中点 → body', () => {
+    const api = makeIdentityApi()
+    // 平行線中点 (50, 100)。距離 0 < 6
+    expect(channelTool.hitTest(d, { x: 50, y: 100 }, api))
+      .toEqual({ drawingId: 1, kind: 'channel', part: 'body' })
+  })
+
+  it('両線から遠い位置 → miss', () => {
+    const api = makeIdentityApi()
+    // 中央 (50, 75) は基準線(y=50)から 25px、平行線(y=100)から 25px 離れる
+    expect(channelTool.hitTest(d, { x: 50, y: 75 }, api)).toBeNull()
+  })
+
+  it('points が 2 点のみ → miss(プレビュー中は hit 対象外)', () => {
+    const bad = makeDrawing('channel', { points: [{ t: 0, price: 100 }, { t: 1000, price: 0 }] })
+    expect(channelTool.hitTest(bad, { x: 50, y: 50 }, makeIdentityApi())).toBeNull()
+  })
+
+  it('points が 4 点 → miss(不正データ)', () => {
+    const bad = makeDrawing('channel', { points: [...points, { t: 500, price: 50 }] })
+    expect(channelTool.hitTest(bad, { x: 50, y: 50 }, makeIdentityApi())).toBeNull()
+  })
+
+  it('timeToX が null → miss', () => {
+    const partialApi: ChartApi = { ...makeIdentityApi(), timeToX: () => null }
+    expect(channelTool.hitTest(d, { x: 50, y: 50 }, partialApi)).toBeNull()
   })
 })
 

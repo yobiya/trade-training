@@ -20,15 +20,18 @@ type Props = {
 }
 
 // 通常描画ツールの順序(wave_label は波動セクションで別途表示)
-const TOOL_ORDER: DrawingKind[] = ['line', 'vline', 'trendline', 'fibonacci']
+const TOOL_ORDER: DrawingKind[] = ['line', 'vline', 'trendline', 'channel', 'fibonacci', 'high_break', 'low_break']
 
 function hintFor(tool: DrawingKind, wave: WaveValue | null): string {
   switch (tool) {
     case 'line': return 'チャートをクリックで追加 / ESC で中止'
     case 'vline': return 'チャートをクリックで追加 / ESC で中止'
     case 'trendline': return '2 点をクリックで引く / ESC で中止'
+    case 'channel': return '基準線を 2 点 + 平行線アンカーを 1 点(計 3 点)/ ESC で中止'
     case 'fibonacci': return '2 点をクリックで引く / ESC で中止'
     case 'wave_label': return `波動 ${wave} を配置 / ESC で中止`
+    case 'high_break': return 'バーをクリックで選択(高値ブレイク監視) / ESC で中止'
+    case 'low_break': return 'バーをクリックで選択(安値ブレイク監視) / ESC で中止'
     default: return ''
   }
 }
@@ -56,6 +59,13 @@ function describe(d: Drawing, digits: number): string {
       }
       return 'トレンドライン'
     }
+    case 'channel': {
+      const pts = d.data.points as Array<{ price: number }> | undefined
+      if (pts && pts.length === 3) {
+        return `チャネル ${Number(pts[0].price).toFixed(digits)} → ${Number(pts[1].price).toFixed(digits)} ∥ ${Number(pts[2].price).toFixed(digits)}`
+      }
+      return 'チャネル'
+    }
     case 'fibonacci': {
       const pts = d.data.points as Array<{ price: number }> | undefined
       if (pts && pts.length === 2) {
@@ -64,6 +74,20 @@ function describe(d: Drawing, digits: number): string {
       return 'フィボ'
     }
     case 'wave_label': return `波動 ${d.data.wave}`
+    case 'high_break': {
+      const t = Number((d.data as { t?: number }).t)
+      const price = Number((d.data as { price?: number }).price)
+      const tStr = Number.isFinite(t) ? formatVlineTime(t) : '—'
+      const pStr = Number.isFinite(price) ? price.toFixed(digits) : '—'
+      return `高値ブレイク ${tStr} @ ${pStr}`
+    }
+    case 'low_break': {
+      const t = Number((d.data as { t?: number }).t)
+      const price = Number((d.data as { price?: number }).price)
+      const tStr = Number.isFinite(t) ? formatVlineTime(t) : '—'
+      const pStr = Number.isFinite(price) ? price.toFixed(digits) : '—'
+      return `安値ブレイク ${tStr} @ ${pStr}`
+    }
     default: return String(d.kind)
   }
 }

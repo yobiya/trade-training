@@ -27,6 +27,7 @@ function makeChartApi(overrides?: Partial<ChartApi>): ChartApi {
     xToTime: () => null,
     logicalToX: () => null,
     setScrollEnabled: () => {},
+    getBars: () => [],
     ...overrides,
   }
 }
@@ -104,6 +105,16 @@ describe('select-tool', () => {
   it('fibonacci → drawing-fibonacci', () => {
     const next = dispatchEvent(idleState(), { type: 'select-tool', tool: 'fibonacci' }, makeCtx())
     expect(next.kind).toBe('drawing-fibonacci')
+  })
+
+  it('channel → drawing-channel', () => {
+    const next = dispatchEvent(idleState(), { type: 'select-tool', tool: 'channel' }, makeCtx())
+    expect(next.kind).toBe('drawing-channel')
+    if (next.kind === 'drawing-channel') {
+      expect(next.firstPoint).toBeNull()
+      expect(next.secondPoint).toBeNull()
+      expect(next.currentPoint).toBeNull()
+    }
   })
 
   it('wave_label without wave → idle', () => {
@@ -266,6 +277,74 @@ describe('drawing-trendline', () => {
 
   it('mouse-move without firstPoint → no change', () => {
     const state: DrawingState = { kind: 'drawing-trendline', firstPoint: null, currentPoint: null }
+    const next = dispatchEvent(state, { type: 'mouse-move', payload: makePayload(120, 1500) }, makeCtx())
+    expect(next).toBe(state)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// drawing-channel — 3 click sequence
+// ---------------------------------------------------------------------------
+
+describe('drawing-channel', () => {
+  it('1st click sets firstPoint', () => {
+    const state: DrawingState = { kind: 'drawing-channel', firstPoint: null, secondPoint: null, currentPoint: null }
+    const next = dispatchEvent(state, { type: 'click', payload: makePayload(100, 1000) }, makeCtx())
+    expect(next.kind).toBe('drawing-channel')
+    if (next.kind === 'drawing-channel') {
+      expect(next.firstPoint).toEqual({ t: 1000, price: 100 })
+      expect(next.secondPoint).toBeNull()
+    }
+  })
+
+  it('2nd click sets secondPoint, no createDrawing yet', () => {
+    const createDrawing = vi.fn()
+    const first = { t: 1000, price: 100 }
+    const state: DrawingState = { kind: 'drawing-channel', firstPoint: first, secondPoint: null, currentPoint: first }
+    const next = dispatchEvent(state, { type: 'click', payload: makePayload(110, 2000) }, makeCtx({ createDrawing }))
+    expect(next.kind).toBe('drawing-channel')
+    if (next.kind === 'drawing-channel') {
+      expect(next.firstPoint).toEqual(first)
+      expect(next.secondPoint).toEqual({ t: 2000, price: 110 })
+    }
+    expect(createDrawing).not.toHaveBeenCalled()
+  })
+
+  it('3rd click → createDrawing with 3 points, returns idle', () => {
+    const createDrawing = vi.fn().mockResolvedValue({ id: 3 })
+    const first = { t: 1000, price: 100 }
+    const second = { t: 2000, price: 110 }
+    const state: DrawingState = { kind: 'drawing-channel', firstPoint: first, secondPoint: second, currentPoint: second }
+    const next = dispatchEvent(state, { type: 'click', payload: makePayload(105, 1500) }, makeCtx({ createDrawing }))
+    expect(next).toEqual(idleState())
+    expect(createDrawing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'channel',
+        data: { points: [first, second, { t: 1500, price: 105 }] },
+      }),
+    )
+  })
+
+  it('click with null time → no change', () => {
+    const state: DrawingState = { kind: 'drawing-channel', firstPoint: null, secondPoint: null, currentPoint: null }
+    const next = dispatchEvent(state, { type: 'click', payload: makePayload(100, null) }, makeCtx())
+    expect(next).toBe(state)
+  })
+
+  it('mouse-move after firstPoint → updates currentPoint', () => {
+    const first = { t: 1000, price: 100 }
+    const state: DrawingState = { kind: 'drawing-channel', firstPoint: first, secondPoint: null, currentPoint: first }
+    const next = dispatchEvent(state, { type: 'mouse-move', payload: makePayload(120, 1500) }, makeCtx())
+    expect(next.kind).toBe('drawing-channel')
+    if (next.kind === 'drawing-channel') {
+      expect(next.currentPoint).toEqual({ t: 1500, price: 120 })
+      expect(next.firstPoint).toEqual(first)
+      expect(next.secondPoint).toBeNull()
+    }
+  })
+
+  it('mouse-move without firstPoint → no change', () => {
+    const state: DrawingState = { kind: 'drawing-channel', firstPoint: null, secondPoint: null, currentPoint: null }
     const next = dispatchEvent(state, { type: 'mouse-move', payload: makePayload(120, 1500) }, makeCtx())
     expect(next).toBe(state)
   })

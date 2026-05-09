@@ -76,7 +76,7 @@ data/sessions/
     {
       "id": 1,
       "symbol": "USDJPY",              // 銘柄別紐付け §5.3 / §5.6
-      "kind": "line",                  // line | vline | trendline | fibonacci | wave_label
+      "kind": "line",                  // line | vline | trendline | channel | fibonacci | wave_label | high_break | low_break
       "data": { ... },                 // 座標データ(kind ごとに異なる。wave_label の wave は文字列 '1'|'2'|'3'|'4'|'5'|'A'|'B'|'C')
       "label": null,
       "timeframe": "H1",               // 描画を行った時間足

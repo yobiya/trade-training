@@ -34,6 +34,12 @@ function tfBadge(d: Drawing, api: ChartApi): ReactElement | null {
     const t = Number((d.data as { t: number }).t)
     const x = api.timeToX(t)
     if (x !== null) anchor = { x, y: 16 }  // 上端寄りに配置
+  } else if (d.kind === 'high_break' || d.kind === 'low_break') {
+    const t = Number((d.data as { t: number }).t)
+    const price = Number((d.data as { price: number }).price)
+    const x = api.timeToX(t)
+    const y = api.priceToY(price)
+    if (x !== null && y !== null) anchor = { x, y }
   }
   if (!anchor) return null
   const color = getTimeframeColor(d.timeframe)

@@ -1,7 +1,10 @@
 import type { Drawing, DrawingKind } from '../../api/types'
 import type { ChartApi, HitResult, PointPx, ToolMetadata } from '../types'
+import { channelTool } from './channel'
 import { fibonacciTool } from './fibonacci'
+import { highBreakTool } from './high_break'
 import { lineTool } from './line'
+import { lowBreakTool } from './low_break'
 import { trendlineTool } from './trendline'
 import { vlineTool } from './vline'
 import { waveLabelTool } from './wave_label'
@@ -14,8 +17,11 @@ export const TOOLS: Record<DrawingKind, ToolMetadata | undefined> = {
   line: lineTool,
   vline: vlineTool,
   trendline: trendlineTool,
+  channel: channelTool,
   fibonacci: fibonacciTool,
   wave_label: waveLabelTool,
+  high_break: highBreakTool,
+  low_break: lowBreakTool,
 }
 
 export function findHit(

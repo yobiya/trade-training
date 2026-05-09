@@ -2,7 +2,16 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-DrawingKind = Literal["line", "vline", "trendline", "fibonacci", "wave_label"]
+DrawingKind = Literal[
+    "line",
+    "vline",
+    "trendline",
+    "channel",
+    "fibonacci",
+    "wave_label",
+    "high_break",
+    "low_break",
+]
 
 
 class CreateDrawingRequest(BaseModel):
@@ -12,8 +21,11 @@ class CreateDrawingRequest(BaseModel):
       - line(水平線):   { "price": float }
       - vline(縦線):    { "t": int }
       - trendline:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
+      - channel:        { "points": [{"t": int, "price": float} × 3] }  // p1-p2 が基準線、p3 が平行線アンカー
       - fibonacci:      { "points": [{"t": int, "price": float}, {"t": int, "price": float}] }
       - wave_label:     { "t": int, "price": float, "wave": str ('1'|'2'|'3'|'4'|'5'|'A'|'B'|'C')}
+      - high_break:     { "t": int, "price": float }  // price = 選択バー高値 snapshot
+      - low_break:      { "t": int, "price": float }  // price = 選択バー安値 snapshot
 
     `symbol` は統合フロー(§6.1)対応: 銘柄別に描画を紐付け、銘柄切替時に該当銘柄のみ表示する。
     """

@@ -1,6 +1,10 @@
 import type { Drawing, DrawingKind } from '../api/types'
+import { snapToBar } from './tools/break_common'
+import { channelTool, getChannelPoints } from './tools/channel'
 import { lineTool } from './tools/line'
 import { fibonacciTool, getFibPoints } from './tools/fibonacci'
+import { highBreakTool } from './tools/high_break'
+import { lowBreakTool } from './tools/low_break'
 import { findHit } from './tools/registry'
 import { trendlineTool, getTrendlinePoints } from './tools/trendline'
 import { vlineTool } from './tools/vline'
@@ -37,13 +41,21 @@ export type DrawingState =
   | { kind: 'idle'; cursor: string; hoveredId: number | null }
   | { kind: 'drawing-line' }
   | { kind: 'drawing-vline' }
+  // §5.3 high_break / low_break: 1 クリックでバー snap → idle に戻る単発作成。
+  // drag 移動は持たないため `moving-*` 状態は存在しない。
+  | { kind: 'drawing-high-break' }
+  | { kind: 'drawing-low-break' }
   | { kind: 'drawing-trendline'; firstPoint: PP | null; currentPoint: PP | null }
+  // §5.3 channel(平行線): 3 クリックで完結。p1-p2 が基準線、p3 が平行線アンカー。
+  | { kind: 'drawing-channel'; firstPoint: PP | null; secondPoint: PP | null; currentPoint: PP | null }
   | { kind: 'drawing-fibonacci'; firstPoint: PP | null; currentPoint: PP | null }
   | { kind: 'drawing-wave-label'; wave: Wave; previewPoint: PP | null }
   | { kind: 'moving-line'; original: Drawing; preview: Drawing }
   | { kind: 'moving-vline'; original: Drawing; preview: Drawing }
   | { kind: 'moving-trendline-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-trendline-body'; original: Drawing; preview: Drawing; anchorPx: PointPx; anchorPrice: number }
+  | { kind: 'moving-channel-handle'; original: Drawing; preview: Drawing; handleIndex: number }
+  | { kind: 'moving-channel-body'; original: Drawing; preview: Drawing; anchorPx: PointPx; anchorPrice: number }
   | { kind: 'moving-fibonacci-handle'; original: Drawing; preview: Drawing; handleIndex: number }
   | { kind: 'moving-fibonacci-body'; original: Drawing; preview: Drawing; anchorPx: PointPx; anchorPrice: number }
   | { kind: 'moving-wave-label'; original: Drawing; preview: Drawing }
@@ -92,13 +104,18 @@ export function dispatchEvent(
     case 'idle': return reduceIdle(state, event, ctx)
     case 'drawing-line': return reduceDrawingLine(state, event, ctx)
     case 'drawing-vline': return reduceDrawingVline(state, event, ctx)
+    case 'drawing-high-break': return reduceDrawingHighBreak(state, event, ctx)
+    case 'drawing-low-break': return reduceDrawingLowBreak(state, event, ctx)
     case 'drawing-trendline': return reduceDrawingTrendline(state, event, ctx)
+    case 'drawing-channel': return reduceDrawingChannel(state, event, ctx)
     case 'drawing-fibonacci': return reduceDrawingFibonacci(state, event, ctx)
     case 'drawing-wave-label': return reduceDrawingWaveLabel(state, event, ctx)
     case 'moving-line': return reduceMovingLine(state, event, ctx)
     case 'moving-vline': return reduceMovingVline(state, event, ctx)
     case 'moving-trendline-handle': return reduceMovingTrendlineHandle(state, event, ctx)
     case 'moving-trendline-body': return reduceMovingTrendlineBody(state, event, ctx)
+    case 'moving-channel-handle': return reduceMovingChannelHandle(state, event, ctx)
+    case 'moving-channel-body': return reduceMovingChannelBody(state, event, ctx)
     case 'moving-fibonacci-handle': return reduceMovingFibonacciHandle(state, event, ctx)
     case 'moving-fibonacci-body': return reduceMovingFibonacciBody(state, event, ctx)
     case 'moving-wave-label': return reduceMovingWaveLabel(state, event, ctx)
@@ -115,16 +132,21 @@ export function cursorOf(state: DrawingState): string {
     case 'idle': return state.cursor
     case 'drawing-line':
     case 'drawing-vline':
+    case 'drawing-high-break':
+    case 'drawing-low-break':
     case 'drawing-trendline':
+    case 'drawing-channel':
     case 'drawing-fibonacci':
     case 'drawing-wave-label': return 'crosshair'
     case 'moving-line':
     case 'moving-trade-line': return 'ns-resize'
     case 'moving-vline': return 'ew-resize'
     case 'moving-trendline-body':
+    case 'moving-channel-body':
     case 'moving-fibonacci-body':
     case 'moving-wave-label': return 'move'
     case 'moving-trendline-handle':
+    case 'moving-channel-handle':
     case 'moving-fibonacci-handle': return 'grabbing'
   }
 }
@@ -134,6 +156,14 @@ export function previewOf(state: DrawingState): Drawing | null {
     case 'drawing-trendline':
       if (!state.firstPoint || !state.currentPoint) return null
       return previewDrawing('trendline', { points: [state.firstPoint, state.currentPoint] })
+    case 'drawing-channel': {
+      if (!state.firstPoint || !state.currentPoint) return null
+      // phase 1: 基準線のみ(2 点) / phase 2: 基準線 + 平行線(3 点)
+      const points = state.secondPoint
+        ? [state.firstPoint, state.secondPoint, state.currentPoint]
+        : [state.firstPoint, state.currentPoint]
+      return previewDrawing('channel', { points })
+    }
     case 'drawing-fibonacci':
       if (!state.firstPoint || !state.currentPoint) return null
       return previewDrawing('fibonacci', { points: [state.firstPoint, state.currentPoint] })
@@ -148,6 +178,8 @@ export function previewOf(state: DrawingState): Drawing | null {
     case 'moving-vline':
     case 'moving-trendline-handle':
     case 'moving-trendline-body':
+    case 'moving-channel-handle':
+    case 'moving-channel-body':
     case 'moving-fibonacci-handle':
     case 'moving-fibonacci-body':
     case 'moving-wave-label':
@@ -161,7 +193,10 @@ export function activeToolOf(state: DrawingState): DrawingKind | null {
   switch (state.kind) {
     case 'drawing-line': return 'line'
     case 'drawing-vline': return 'vline'
+    case 'drawing-high-break': return 'high_break'
+    case 'drawing-low-break': return 'low_break'
     case 'drawing-trendline': return 'trendline'
+    case 'drawing-channel': return 'channel'
     case 'drawing-fibonacci': return 'fibonacci'
     case 'drawing-wave-label': return 'wave_label'
     default: return null
@@ -221,7 +256,10 @@ function startToolState(tool: DrawingKind | null, wave?: Wave): DrawingState {
   switch (tool) {
     case 'line': return { kind: 'drawing-line' }
     case 'vline': return { kind: 'drawing-vline' }
+    case 'high_break': return { kind: 'drawing-high-break' }
+    case 'low_break': return { kind: 'drawing-low-break' }
     case 'trendline': return { kind: 'drawing-trendline', firstPoint: null, currentPoint: null }
+    case 'channel': return { kind: 'drawing-channel', firstPoint: null, secondPoint: null, currentPoint: null }
     case 'fibonacci': return { kind: 'drawing-fibonacci', firstPoint: null, currentPoint: null }
     case 'wave_label':
       if (wave === undefined) return idleState()
@@ -246,6 +284,9 @@ function previewDrawing(kind: DrawingKind, data: Record<string, unknown>): Drawi
 function cursorForHit(hit: HitResult): string {
   if (hit.kind === 'line') return 'ns-resize'
   if (hit.kind === 'vline') return 'ew-resize'
+  // §5.3 high_break / low_break は drag 移動を持たないため、hover カーソルは default。
+  // hit-test は spotlight / TF バッジの highlight 用途で残す。
+  if (hit.kind === 'high_break' || hit.kind === 'low_break') return 'default'
   if (hit.part === 'handle') return 'grab'
   return 'move'
 }
@@ -274,6 +315,23 @@ function buildMovingState(
       if (payload.point.time === null) return null
       return {
         kind: 'moving-trendline-body',
+        original: drawing,
+        preview: drawing,
+        anchorPx: payload.pointerPx,
+        anchorPrice: payload.point.price,
+      }
+    case 'channel':
+      if (hit.part === 'handle' && hit.handleIndex !== undefined) {
+        return {
+          kind: 'moving-channel-handle',
+          original: drawing,
+          preview: drawing,
+          handleIndex: hit.handleIndex,
+        }
+      }
+      if (payload.point.time === null) return null
+      return {
+        kind: 'moving-channel-body',
         original: drawing,
         preview: drawing,
         anchorPx: payload.pointerPx,
@@ -374,6 +432,46 @@ function reduceDrawingVline(
   return state
 }
 
+function reduceDrawingHighBreak(
+  state: Extract<DrawingState, { kind: 'drawing-high-break' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'click') {
+    if (event.payload.point.time === null) return state
+    const bar = snapToBar(ctx.chartApi.getBars(), event.payload.point.time)
+    if (bar === null) return state
+    void ctx.createDrawing({
+      kind: 'high_break',
+      data: { t: bar.t, price: bar.h },
+      timeframe: ctx.activeTimeframe,
+      visible_on_timeframes: highBreakTool.defaultVisibleTfs,
+    })
+    return idleState()
+  }
+  return state
+}
+
+function reduceDrawingLowBreak(
+  state: Extract<DrawingState, { kind: 'drawing-low-break' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'click') {
+    if (event.payload.point.time === null) return state
+    const bar = snapToBar(ctx.chartApi.getBars(), event.payload.point.time)
+    if (bar === null) return state
+    void ctx.createDrawing({
+      kind: 'low_break',
+      data: { t: bar.t, price: bar.l },
+      timeframe: ctx.activeTimeframe,
+      visible_on_timeframes: lowBreakTool.defaultVisibleTfs,
+    })
+    return idleState()
+  }
+  return state
+}
+
 function reduceDrawingTrendline(
   state: Extract<DrawingState, { kind: 'drawing-trendline' }>,
   event: DrawingEvent,
@@ -390,6 +488,38 @@ function reduceDrawingTrendline(
       data: { points: [state.firstPoint, p] },
       timeframe: ctx.activeTimeframe,
       visible_on_timeframes: trendlineTool.defaultVisibleTfs,
+    })
+    return idleState()
+  }
+  if (event.type === 'mouse-move') {
+    if (state.firstPoint === null || event.payload.point.time === null) return state
+    return {
+      ...state,
+      currentPoint: { t: event.payload.point.time, price: event.payload.point.price },
+    }
+  }
+  return state
+}
+
+function reduceDrawingChannel(
+  state: Extract<DrawingState, { kind: 'drawing-channel' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'click') {
+    if (event.payload.point.time === null) return state
+    const p: PP = { t: event.payload.point.time, price: event.payload.point.price }
+    if (state.firstPoint === null) {
+      return { kind: 'drawing-channel', firstPoint: p, secondPoint: null, currentPoint: p }
+    }
+    if (state.secondPoint === null) {
+      return { kind: 'drawing-channel', firstPoint: state.firstPoint, secondPoint: p, currentPoint: p }
+    }
+    void ctx.createDrawing({
+      kind: 'channel',
+      data: { points: [state.firstPoint, state.secondPoint, p] },
+      timeframe: ctx.activeTimeframe,
+      visible_on_timeframes: channelTool.defaultVisibleTfs,
     })
     return idleState()
   }
@@ -565,6 +695,58 @@ function reduceMovingTrendlineBody(
   if (event.type === 'mouse-move') {
     const orig = getTrendlinePoints(state.original)
     if (!orig) return state
+    const dx = event.payload.pointerPx.x - state.anchorPx.x
+    const dp = event.payload.point.price - state.anchorPrice
+    const newPoints = shiftPointsByPixel(orig, dx, dp, ctx.chartApi)
+    if (newPoints === null) return state
+    return {
+      ...state,
+      preview: { ...state.original, data: { points: newPoints } },
+    }
+  }
+  if (event.type === 'mouse-up') {
+    if (state.preview !== state.original) {
+      void ctx.updateDrawing(state.original.id, { data: state.preview.data })
+    }
+    return idleState()
+  }
+  return state
+}
+
+function reduceMovingChannelHandle(
+  state: Extract<DrawingState, { kind: 'moving-channel-handle' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'mouse-move') {
+    if (event.payload.point.time === null) return state
+    const orig = getChannelPoints(state.original)
+    if (!orig || orig.length !== 3) return state
+    const t = event.payload.point.time
+    const price = event.payload.point.price
+    const newPoints = orig.map((p, i) => (i === state.handleIndex ? { t, price } : p))
+    return {
+      ...state,
+      preview: { ...state.original, data: { points: newPoints } },
+    }
+  }
+  if (event.type === 'mouse-up') {
+    if (state.preview !== state.original) {
+      void ctx.updateDrawing(state.original.id, { data: state.preview.data })
+    }
+    return idleState()
+  }
+  return state
+}
+
+function reduceMovingChannelBody(
+  state: Extract<DrawingState, { kind: 'moving-channel-body' }>,
+  event: DrawingEvent,
+  ctx: DispatchContext,
+): DrawingState {
+  if (event.type === 'mouse-move') {
+    const orig = getChannelPoints(state.original)
+    if (!orig || orig.length !== 3) return state
     const dx = event.payload.pointerPx.x - state.anchorPx.x
     const dp = event.payload.point.price - state.anchorPrice
     const newPoints = shiftPointsByPixel(orig, dx, dp, ctx.chartApi)
