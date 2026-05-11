@@ -1,4 +1,5 @@
-"""チャート取得 / 足送りエンドポイント(chart-stack 単一エンドポイント、設計 §C.3)。"""
+"""チャート取得 / 足送りエンドポイント(chart-stack 単一エンドポイント、設計 §C.3)。
+"""
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -115,18 +116,26 @@ def _calculate_pips(
     return round(diff / psize, 1)
 
 
-def _check_sl_tp(trade, bars: pd.DataFrame) -> tuple[str, float] | None:  # type: ignore[no-untyped-def]
-    for _, bar in bars.iterrows():
+def _check_sl_tp(trade, bars: pd.DataFrame) -> tuple[str, float, datetime] | None:  # type: ignore[no-untyped-def]
+    """SL/TP ヒットを M5 解像度で検出する。
+
+    返り値の `hit_time` は **ヒット M5 バーの close 時刻**(= `bar.name + 5min`)。
+    advance 中に途中の M5 バーで hit した場合は、advance の終端 (`new_pos`) ではなく
+    この `hit_time` で `trade.exit_time` / `current_position` を確定させる(仕様 §5.1.1
+    「+N 本」は最大 N 本進行であり、SL/TP hit で早期決済された場合はその時点で停止する)。
+    """
+    for ts, bar in bars.iterrows():
+        hit_time = (ts if ts.tzinfo is not None else ts.replace(tzinfo=timezone.utc)) + timedelta(minutes=TIMEFRAME_MINUTES["M5"])
         if trade.direction == "buy":
             if trade.sl is not None and bar["low"] <= trade.sl:
-                return ("sl", float(trade.sl))
+                return ("sl", float(trade.sl), hit_time)
             if trade.tp is not None and bar["high"] >= trade.tp:
-                return ("tp", float(trade.tp))
+                return ("tp", float(trade.tp), hit_time)
         else:
             if trade.sl is not None and bar["high"] >= trade.sl:
-                return ("sl", float(trade.sl))
+                return ("sl", float(trade.sl), hit_time)
             if trade.tp is not None and bar["low"] <= trade.tp:
-                return ("tp", float(trade.tp))
+                return ("tp", float(trade.tp), hit_time)
     return None
 
 
@@ -343,17 +352,21 @@ def advance_session(
             if not sl_tp_m5.empty:
                 hit = _check_sl_tp(trade, sl_tp_m5)
                 if hit:
-                    exit_reason, exit_price = hit
+                    exit_reason, exit_price, hit_time = hit
                     pips_pnl = _calculate_pips(
                         advance_symbol, trade.direction, trade.entry_price, exit_price,
                         pip_size_override=trade.pip_size,
                     )
-                    trade.exit_time = new_pos
+                    # hit が発生した M5 バーの close 時刻で確定させ、残りの bars を進めない。
+                    # current_position もここで止める(advance は最大 N 本進行であり、SL/TP
+                    # hit で早期決済された場合は hit bar 終端でユーザーの足送りも止まる)。
+                    trade.exit_time = hit_time
                     trade.exit_price = exit_price
                     trade.exit_reason = exit_reason
                     trade.pips_pnl = pips_pnl
                     session_store.save_trade(session_id, trade)
                     auto_closed = True
+                    new_pos = hit_time
     else:
         # 銘柄未確定(分析中で symbol query 無し)— 現状は到達しない想定だが安全側で時刻加算
         new_pos = current_pos + timedelta(minutes=f_minutes * bars)

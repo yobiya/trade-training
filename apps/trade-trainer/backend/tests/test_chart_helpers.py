@@ -1,9 +1,11 @@
-"""chart.py プライベートヘルパ(_bar_start_for_tf / _calculate_pips)の単体テスト。"""
+"""chart.py プライベートヘルパ(_bar_start_for_tf / _calculate_pips / _check_sl_tp)の単体テスト。"""
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import pandas as pd
 import pytest
 
-from trade_trainer_backend.routers.chart import _bar_start_for_tf, _calculate_pips
+from trade_trainer_backend.routers.chart import _bar_start_for_tf, _calculate_pips, _check_sl_tp
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -134,3 +136,101 @@ class TestCalculatePips:
     def test_jp225_buy_loss(self) -> None:
         # JP225 pip = 1.0 → (40 円下落 = -40 pips for buy)
         assert _calculate_pips("JP225", "buy", 38000.0, 37960.0) == pytest.approx(-40.0)
+
+
+# ---------------------------------------------------------------------------
+# _check_sl_tp
+# (advance 中の M5 解像度 SL/TP ヒット検出。hit_time = ヒット M5 バーの close 時刻)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _StubTrade:
+    direction: str
+    sl: float | None = None
+    tp: float | None = None
+
+
+def _bars(*rows: tuple[datetime, float, float]) -> pd.DataFrame:
+    """ts → (high, low) のタプル列から DataFrame を生成する。"""
+    idx = [ts for ts, _, _ in rows]
+    data = {"high": [h for _, h, _ in rows], "low": [l for _, _, l in rows]}
+    return pd.DataFrame(data, index=pd.DatetimeIndex(idx, tz="UTC"))
+
+
+class TestCheckSlTp:
+    def test_no_bars_returns_none(self) -> None:
+        empty = pd.DataFrame({"high": [], "low": []}, index=pd.DatetimeIndex([], tz="UTC"))
+        assert _check_sl_tp(_StubTrade("buy", sl=149.0, tp=151.0), empty) is None
+
+    def test_no_hit_in_range(self) -> None:
+        bars = _bars(
+            (utc(2024, 1, 15, 10, 0), 150.5, 149.5),
+            (utc(2024, 1, 15, 10, 5), 150.6, 149.7),
+        )
+        assert _check_sl_tp(_StubTrade("buy", sl=149.0, tp=151.0), bars) is None
+
+    def test_buy_tp_hit_returns_first_bar_close_time(self) -> None:
+        # 2 本目の M5 バー(open=10:05)で high=151.2 → tp=151.0 をヒット。
+        # hit_time は **その bar の close = 10:10**(open + 5min)。
+        bars = _bars(
+            (utc(2024, 1, 15, 10, 0), 150.5, 149.5),  # not hit
+            (utc(2024, 1, 15, 10, 5), 151.2, 150.0),  # tp hit (high >= 151.0)
+            (utc(2024, 1, 15, 10, 10), 152.0, 151.0),
+        )
+        result = _check_sl_tp(_StubTrade("buy", sl=149.0, tp=151.0), bars)
+        assert result == ("tp", 151.0, utc(2024, 1, 15, 10, 10))
+
+    def test_buy_sl_hit_returns_first_bar_close_time(self) -> None:
+        bars = _bars(
+            (utc(2024, 1, 15, 10, 0), 150.5, 149.8),
+            (utc(2024, 1, 15, 10, 5), 150.0, 148.5),  # sl hit (low <= 149.0)
+        )
+        result = _check_sl_tp(_StubTrade("buy", sl=149.0, tp=151.0), bars)
+        assert result == ("sl", 149.0, utc(2024, 1, 15, 10, 10))
+
+    def test_sell_sl_hit(self) -> None:
+        # sell の SL: high >= sl
+        bars = _bars(
+            (utc(2024, 1, 15, 10, 0), 150.0, 149.5),
+            (utc(2024, 1, 15, 10, 5), 151.5, 150.5),  # sl hit (high >= 151.0)
+        )
+        result = _check_sl_tp(_StubTrade("sell", sl=151.0, tp=149.0), bars)
+        assert result == ("sl", 151.0, utc(2024, 1, 15, 10, 10))
+
+    def test_sell_tp_hit(self) -> None:
+        # sell の TP: low <= tp
+        bars = _bars(
+            (utc(2024, 1, 15, 10, 0), 150.0, 149.5),
+            (utc(2024, 1, 15, 10, 5), 149.5, 148.5),  # tp hit (low <= 149.0)
+        )
+        result = _check_sl_tp(_StubTrade("sell", sl=151.0, tp=149.0), bars)
+        assert result == ("tp", 149.0, utc(2024, 1, 15, 10, 10))
+
+    def test_first_hit_wins_when_multiple_bars_qualify(self) -> None:
+        # 2 本目で TP、3 本目で SL → 最初に来た TP を返す(advance は早期決済優先で停止)
+        bars = _bars(
+            (utc(2024, 1, 15, 10, 0), 150.5, 149.5),  # not hit
+            (utc(2024, 1, 15, 10, 5), 151.5, 150.0),  # tp hit
+            (utc(2024, 1, 15, 10, 10), 151.0, 148.0), # sl hit (but later)
+        )
+        result = _check_sl_tp(_StubTrade("buy", sl=149.0, tp=151.0), bars)
+        assert result == ("tp", 151.0, utc(2024, 1, 15, 10, 10))
+
+    def test_naive_index_is_treated_as_utc(self) -> None:
+        # bars の index が naive でも hit_time は UTC aware で返される(I-1 整合)
+        idx = pd.DatetimeIndex([datetime(2024, 1, 15, 10, 5)])
+        df = pd.DataFrame({"high": [151.2], "low": [150.0]}, index=idx)
+        result = _check_sl_tp(_StubTrade("buy", tp=151.0), df)
+        assert result is not None
+        assert result[2] == utc(2024, 1, 15, 10, 10)
+        assert result[2].tzinfo == timezone.utc
+
+    def test_only_sl_set_no_tp(self) -> None:
+        bars = _bars((utc(2024, 1, 15, 10, 0), 150.0, 148.5))
+        result = _check_sl_tp(_StubTrade("buy", sl=149.0, tp=None), bars)
+        assert result == ("sl", 149.0, utc(2024, 1, 15, 10, 5))
+
+    def test_only_tp_set_no_sl(self) -> None:
+        bars = _bars((utc(2024, 1, 15, 10, 0), 151.5, 149.5))
+        result = _check_sl_tp(_StubTrade("buy", sl=None, tp=151.0), bars)
+        assert result == ("tp", 151.0, utc(2024, 1, 15, 10, 5))

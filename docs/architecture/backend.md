@@ -328,10 +328,12 @@ DataFrame の規約:
        # SL/TP 判定: current_pos 以降の実 M5 バーで high/low が SL/TP を抜けたかを判定
        sl_tp_m5 = market_data.get_ohlc(advance_symbol, 'M5', current_pos + 5min, new_pos)
        if not sl_tp_m5.empty:
-         hit = _check_sl_tp(trade, sl_tp_m5)
+         hit = _check_sl_tp(trade, sl_tp_m5)        # → (reason, price, hit_time)
          if hit:
-           update trade.exit_*
+           reason, price, hit_time = hit            # hit_time = ヒット M5 バーの close 時刻
+           update trade.exit_*(exit_time = hit_time)
            session_store.save_trade(...)
+           new_pos = hit_time                       # ★ 早期決済で advance を hit bar 終端に切詰める
    else:
      new_pos = current_pos + (f_minutes × bars)           # 銘柄未確定(分析中で symbol query なし) — 将来対象外想定
 5. agg.meta.current_position = new_pos
@@ -341,6 +343,7 @@ DataFrame の規約:
 
 - **「N 本未満しか取れなかった」**(MT5 ヒストリ末尾 + 連休継続等のレア): `current_position` は最後のバー直後にアライメントされる。frontend は `current_position` の値で「進んだか」を判定する
 - **SL/TP 判定は M5 解像度で実行**: フォーカス TF が H1 などで上位足の場合も、その間に M5 で high/low が SL/TP を抜けたかを判定する(粒度を犠牲にしない)
+- **SL/TP hit による早期決済**: hit が発生した M5 バーの close 時刻(= バー open + 5min)を `trade.exit_time` と `current_position` の両方に確定させ、残りの `bars` を進めない。例: H1 focus で +5 本 advance → 3 本目の M5 バーで TP hit → `current_position` は 3 本目 M5 バーの close まで(進行 12.5 分相当、7 本目 M5 末尾ではない)。これによりユーザーが見るチャートも実際の決済時点で停止し、振り返り phase へ進める。`AdvanceResponse.current_position` も同じ値で返す
 - **frontend は `chart-stack` を再呼び出しして全 TF を同期取得**(`new_bars` レスポンスは持たない、§5.1.1)
 
 ### D.3 POST `/sessions/{id}/skip` (`routers/sessions.py:skip_session`)
