@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
+import { jstCrosshairTimeFormatter, jstTickMarkFormatter } from '../../utils/datetime'
 
 export type ChartCore = {
   chart: IChartApi
@@ -37,7 +38,17 @@ export function useChartInstance(
       autoSize: true,
       layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' },
       grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-      timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      // §5.1.4: 時間軸ラベル・クロスヘアは JST 表示(内部データは UTC のまま、表示時のみ変換)
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 4,
+        tickMarkFormatter: jstTickMarkFormatter,
+      },
+      localization: {
+        locale: 'ja-JP',
+        timeFormatter: jstCrosshairTimeFormatter,
+      },
       // ローソク足の上下余白(LWC 既定の半分: top 0.2→0.1, bottom 0.1→0.05)
       rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.05 } },
       // §5.1.3: 素のホイール = ページスクロール、Ctrl+ホイール = ズーム。
