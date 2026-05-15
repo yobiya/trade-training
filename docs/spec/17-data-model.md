@@ -6,7 +6,7 @@
 
 「ユーザー入力 = ファイル / 機械生成キャッシュ = SQLite」のハイブリッド構成を採る([§13](./13-data-storage.md))。
 
-- **ファイル管理**: セッション関連、メモテンプレート、AI 分析結果
+- **ファイル管理**: セッション関連、メモテンプレート
 - **SQLite 管理**(`shared-schema` パッケージ): 市場データキャッシュ、経済指標、Setting、Account、IndicatorConfig
 
 **Session の稼働モード**: training では時系列に1つずつ(1セッション1エントリー完結)。real では複数の Session が並行稼働する([§12.7](./12-live.md#127-ポジション継続管理) 参照)。
@@ -20,10 +20,9 @@ data/sessions/
 └── {dir_name}/                       # 例: 20260425-1530-USDJPY-doubletop
     ├── session.json                  # meta + trade + final_decision + drawings + holding_memos を統合
     ├── note.md                       # 横断メモ(§7.2.2)
-    ├── candidates/
-    │   ├── EURJPY.md                 # 銘柄別メモ(§7.2.1、symbol 名のファイル)
-    │   └── USDJPY.md
-    └── ai_analysis/                  # AI 分析結果(§11.7)
+    └── candidates/
+        ├── EURJPY.md                 # 銘柄別メモ(§7.2.1、symbol 名のファイル)
+        └── USDJPY.md
 ```
 
 ### ディレクトリ命名
@@ -40,13 +39,13 @@ data/sessions/
 ```json
 {
   "id": "20260425-1530-7f3a",          // 不変識別子(YYYYMMDD-HHMM-xxxx 形式)
-  "name": "ダブルトップ逆張り",         // 任意のセッション名(§6.1、AI 送信対象外 §11.3.2)
+  "name": "ダブルトップ逆張り",         // 任意のセッション名(§6.1)
   "started_at": "2026-04-25T06:30:00Z",
   "presented_at": "2026-04-25T06:30:00Z",
   "current_position": "2026-04-25T08:15:00Z",  // 現在の足位置(足送りで更新)
   "mode": "training",                  // training | real
   "settled_at": null,                  // §4.2.1 状態モデル: null=進行中、ISO8601=決着済み
-  "indicator_config_id": null,         // §11.8 インジケーター設定バージョン参照
+  "indicator_config_id": null,         // §5.2 インジケーター設定バージョン参照
 
   "trade": {                           // エントリー時のみ。未エントリーは null
     "id": "uuid-...",

@@ -111,10 +111,9 @@ npm run dev --workspace=apps/trade-trainer/frontend
 - 配色テーマを警告色系にしてトレーニングと区別
 - 仮想環境: `apps/trade-live/backend/.venv`(uv管理)
 
-## 15.5 AI 分析の配置
+## 15.5 横断アプリの不採用
 - [principles/no-aggregation.md](./principles/no-aggregation.md) により横断集計機能は採用しないため、**独立した集計アプリ(trade-analyzer)は持たない**
-- §11 AI 分析は trade-trainer 本体の機能として統合し、セッション詳細画面から 1 セッション単位で呼び出す
-- AI 呼び出しは Claude API(バックエンドから直接)、結果はファイルストレージに保存([§11.7](./11-ai-analysis.md#117-分析結果の永続化ファイルストレージ))
+- 振り返りは trade-trainer 本体のセッション詳細画面(§9)で 1 セッション単位で完結させる
 
 ## 15.6 運用構成
 
@@ -154,7 +153,7 @@ npm run dev --workspace=apps/trade-trainer/frontend
 
 | 対象 | 同期(Dropbox 等) | バックアップ |
 |---|---|---|
-| `data/sessions/`(セッション情報・AI 分析結果) | **同期推奨** | Dropbox 履歴 + 個別フォルダコピー |
+| `data/sessions/`(セッション情報) | **同期推奨** | Dropbox 履歴 + 個別フォルダコピー |
 | `data/memo-templates/` | git で管理 | git 履歴 |
 | `trading.db`(SQLite: ohlc / economic_events / Setting / 認証セッション) | **同期対象外**(WAL/shm 同期で部分破損リスク。市場データは再取得可能な消耗品) | 定期手元PCダウンロード or VPS スナップショット |
 

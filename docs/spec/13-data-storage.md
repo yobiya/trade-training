@@ -12,7 +12,6 @@
 |---|---|---|---|
 | **ユーザー入力** | セッション情報(セッション・候補・Trade・見送り・描画・保有中メモ) | `data/sessions/{dir}/` ファイル群 | **同期推奨** |
 | ユーザー入力 | メモ見出しテンプレート | `data/memo-templates/*.md` | git 管理 |
-| AI 分析結果 | レポート・送信メタ・画像 | `data/sessions/{dir}/ai_analysis/`(セッション配下、§11.7) | セッションと同時に同期 |
 | 機械生成キャッシュ | M5 OHLC、経済指標 | `trading.db`(SQLite) | **同期対象外**(消耗品扱い) |
 | アプリ設定 | Setting テーブル(symbols / spreads / 経済指標表示設定 / リスク設定 等) | `trading.db`(SQLite) | 同期対象外 |
 | 認証セッション | Starlette SessionMiddleware | `trading.db` or Redis | 同期対象外 |
@@ -28,10 +27,9 @@ data/sessions/
 └── {dir_name}/                       # 例: 20260425-1530-USDJPY-doubletop
     ├── session.json                  # meta + trade + final_decision + drawings + holding_memos を統合
     ├── note.md                       # 横断メモ(§7.2.2)
-    ├── candidates/
-    │   ├── EURJPY.md                 # 銘柄別メモ(§7.2.1)
-    │   └── USDJPY.md
-    └── ai_analysis/                  # AI 分析結果(§11.7)
+    └── candidates/
+        ├── EURJPY.md                 # 銘柄別メモ(§7.2.1)
+        └── USDJPY.md
 ```
 
 ### ディレクトリ命名
@@ -112,7 +110,7 @@ VPS とローカル PC で同じセッションを同時編集することは想
 - 市場データキャッシュは消耗品(MT5 から再取得可能)
 - アプリ設定は同期不要(端末ごとに別運用が妥当な項目もある)
 
-ユーザーは `data/sessions/`、`data/memo-templates/`、`data/sessions/{dir}/ai_analysis/`(セッション配下)を同期対象に含め、`trading.db` および WAL/shm ファイルは同期から除外する設定にする。
+ユーザーは `data/sessions/`、`data/memo-templates/` を同期対象に含め、`trading.db` および WAL/shm ファイルは同期から除外する設定にする。
 
 ## 13.6 バックアップ
 
@@ -120,7 +118,6 @@ VPS とローカル PC で同じセッションを同時編集することは想
 |---|---|
 | セッション・メモテンプレ | Dropbox 同期 + git(テンプレのみ) |
 | `trading.db`(キャッシュ・設定) | 単純なファイルコピー(WAL モードでは `.backup` 推奨)、または VPS スナップショット |
-| AI 分析結果 | セッションディレクトリと一緒にコピーされる(同経路) |
 
 ## 13.7 同期(クラウドサービス)
 

@@ -16,7 +16,7 @@
 | §8 | *(欠番: 旧トレードスタイル機能を撤廃した跡)* | — |
 | §9 | 判断結果の事後確認機能 | [09-post-review.md](./09-post-review.md) |
 | §10 | *(集計・情報蓄積を採用しない方針 → principles/ へ移管)* | [principles/no-aggregation.md](./principles/no-aggregation.md) |
-| §11 | AI 分析機能 | [11-ai-analysis.md](./11-ai-analysis.md) |
+| §11 | *(欠番: 旧 AI 分析機能を撤廃した跡)* | — |
 | §12 | リアルトレードアプリ(trade-live) | [12-live.md](./12-live.md) |
 | §13 | データ保存方針 | [13-data-storage.md](./13-data-storage.md) |
 | §14 | UI レイアウト | [14-ui-layout.md](./14-ui-layout.md) |
@@ -31,28 +31,27 @@
 
 | ハブ | 参照箇所 |
 |---|---|
-| [no-aggregation.md](./principles/no-aggregation.md)(集計・情報蓄積を採用しない) | §1 / §9.4 / §11.1 / §13 / §15.5 / §16 / §18 |
-| [no-tags.md](./principles/no-tags.md)(タグ・構造化選択式入力を採用しない) | §6.4 / §7.1 / §9.1 / §11 / §18 |
-| [no-future-info.md](./principles/no-future-info.md)(判断時点で知り得ない情報を出さない) | §5.4 / §6.1 / §9 / §11 |
+| [no-aggregation.md](./principles/no-aggregation.md)(集計・情報蓄積を採用しない) | §1 / §9.4 / §13 / §16 / §18 |
+| [no-tags.md](./principles/no-tags.md)(タグ・構造化選択式入力を採用しない) | §6.4 / §7.1 / §9.1 / §18 |
+| [no-future-info.md](./principles/no-future-info.md)(判断時点で知り得ない情報を出さない) | §5.4 / §6.1 / §9 |
 
 ## トピック索引(章をまたぐ関心ごと)
 
-仕様を変える時に **他のどこを更新すべきか** を 1 表で俯瞰するためのマップです。メモ・統合フロー・AI 分析など密結合トピックは複数章に影響が出るため、漏れなく追える入口として利用してください。
+仕様を変える時に **他のどこを更新すべきか** を 1 表で俯瞰するためのマップです。メモ・統合フローなど密結合トピックは複数章に影響が出るため、漏れなく追える入口として利用してください。
 
 | トピック | 主たる章 | 関連箇所 |
 |---|---|---|
-| メモ機能 | §7 | §4.1 フロー / §6.3 ★ 候補 / §11.3.3 AI 送信 / §17 Session.note・SessionCandidate.memo / principles/no-tags |
+| メモ機能 | §7 | §4.1 フロー / §6.3 ★ 候補 / §17 Session.note・SessionCandidate.memo / principles/no-tags |
 | 1 画面統合フロー(選定とトレーニングの分離廃止) | §6 | §4.1 Phase 2 / §5.3 描画銘柄別 / §17 SessionFinalDecision.symbol 非使用 |
 | 描画(銘柄別に紐付け) | §5.3 / §5.6 | §6.1 セッション画面 / §17 Drawing.symbol |
 | エントリー / 決済情報の表示 | §5.5 | §6.1 セッション画面 / §17 Trade |
-| インジケーター | §5.2 | §11.8 設定スナップショット / §17 IndicatorConfig |
-| 経済指標表示 | §5.4 | §2.10 データ取得 / §11.3.2 AI 送信 |
-| AI 分析 | §11 | §7 メモ送信 / §9.6 事後情報の送信範囲 / §17 データモデル |
-| 判断結果の事後確認(R ベース) | §9 | §4.1 Phase 4 / §6.1 振り返りサイドバー / §11.3 AI 送信 / §17 Trade / §12 step 14 / principles/no-future-info |
-| リアルトレード特有機能 | §12 | §7 メモ差分 / §11 AI 分析 / §15.4 trade-live / §17 `mode` フラグ |
-| データモデル全体 | §17 | 各章のデータ変更(§7 / §11.8 / §12) |
-| タグ・構造化入力を採用しない | principles/no-tags | §6.4 / §7.1 / §9.1 / §11 |
-| 集計・蓄積を採用しない | principles/no-aggregation | §9.4 / §11.1 / §13 / §16 |
+| インジケーター | §5.2 | §17 IndicatorConfig |
+| 経済指標表示 | §5.4 | §2.10 データ取得 |
+| 判断結果の事後確認(R ベース) | §9 | §4.1 Phase 4 / §6.1 振り返りサイドバー / §17 Trade / §12 step 14 / principles/no-future-info |
+| リアルトレード特有機能 | §12 | §7 メモ差分 / §15.4 trade-live / §17 `mode` フラグ |
+| データモデル全体 | §17 | 各章のデータ変更(§7 / §12) |
+| タグ・構造化入力を採用しない | principles/no-tags | §6.4 / §7.1 / §9.1 |
+| 集計・蓄積を採用しない | principles/no-aggregation | §9.4 / §13 / §16 |
 
 ## 関連ドキュメント
 

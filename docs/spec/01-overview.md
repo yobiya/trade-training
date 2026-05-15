@@ -13,7 +13,7 @@
 - **見送りも評価**: 「入らなかった判断」も §9.3 で事後評価
 - **経済指標の認識訓練**: 強指標をチャート上に可視化、相場の背景要因を意識した判断を促す
 - **トレーニングとリアルの一貫性**: 同じ分析・メモ機能を実トレードでも使用可能
-- **AI 分析支援**: 1 セッション単位の深掘り観察(§11)。集計・情報蓄積は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))
+- **集計・情報蓄積は採用しない**: 1 セッション単位の深掘り振り返りに専念する([principles/no-aggregation.md](./principles/no-aggregation.md))
 
 ## 1.3 対象ユーザー
 自分専用(単一ユーザー)
@@ -42,7 +42,6 @@ Web + スマホ両対応(レスポンシブデザイン)
   │
   ├─ [アプリ B] trade-trainer (Webサーバー)
   │    └ 過去チャートを使った訓練。発注コードを一切含まない
-  │      AI 分析(§11)は本体機能として統合(別アプリ化しない)
   │
   └─ [アプリ C] trade-live (Webサーバー)
        └ 実トレードの実行。MT5経由で発注、ポジション管理
@@ -51,7 +50,7 @@ Web + スマホ両対応(レスポンシブデザイン)
   [ブローカーサーバー]
 ```
 
-横断集計アプリ(旧称 trade-analyzer)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。集計・統計機能を持たず、分析は §11 AI 分析(1 セッション単位)で完結させる。
+横断集計アプリ(旧称 trade-analyzer)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。集計・統計機能を持たず、振り返りは 1 セッション単位(§9)で完結させる。
 
 **市場データ取得の方針: ハイブリッドキャッシュ**
 
@@ -90,7 +89,7 @@ Web + スマホ両対応(レスポンシブデザイン)
 | B. trade-trainer | Webアプリ | VPS | 読み書き(トレーニング記録) | 経由(market-data 経由) | **なし** | Phase 1〜4 |
 | C. trade-live | Webアプリ | VPS | 読み書き(リアル記録) | 直接(発注) + 経由(データ) | あり | Phase 5〜6 |
 
-※ 集計専用アプリは採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。AI 分析(§11)は B 本体に統合する。
+※ 集計専用アプリは採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。振り返りは B 本体のセッション単位の機能(§9)で行う。
 
 **開発環境と本番環境**
 - 本番: Windows VPS

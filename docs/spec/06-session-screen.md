@@ -68,4 +68,4 @@
 
 - 読みは横断メモ([§7.2.2](./07-memo.md#722-横断メモ))に**自由記述**で記録する
 - 構造化入力(通貨別数値・選択式タグ等)は不採用([principles/no-tags.md](./principles/no-tags.md) 参照)
-- 横断メモは 1 セッション単位の AI 観察([§11](./11-ai-analysis.md))の視点セクションの対象になる。横断集計は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))
+- 横断メモは 1 セッション単位の振り返り([§9](./09-post-review.md))の対象になる。横断集計は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))
