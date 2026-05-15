@@ -67,6 +67,14 @@ export function TradePanel({
     const pnlClass = activeTrade.pips_pnl == null
       ? ''
       : activeTrade.pips_pnl >= 0 ? 'profit' : 'loss'
+    // §7.4: SL/TP 両方ある場合は R:R 比率を補助表示する(§9 評価軸と整合)
+    const activeRr = (() => {
+      if (activeTrade.sl == null || activeTrade.tp == null) return null
+      const risk = Math.abs(activeTrade.entry_price - activeTrade.sl)
+      if (risk === 0) return null
+      const reward = Math.abs(activeTrade.tp - activeTrade.entry_price)
+      return Math.round((reward / risk) * 100) / 100
+    })()
     return (
       <div className="trade-panel">
         <div className="active-trade">
@@ -77,6 +85,7 @@ export function TradePanel({
             <span>@ {activeTrade.entry_price}</span>
             {activeTrade.sl && <span>SL: {activeTrade.sl}</span>}
             {activeTrade.tp && <span>TP: {activeTrade.tp}</span>}
+            {activeRr != null && <span className="rr-badge">RR 1:{activeRr}</span>}
           </div>
           {activeTrade.pips_pnl != null && (
             <div className={`pnl ${pnlClass}`}>{activeTrade.pips_pnl > 0 ? '+' : ''}{activeTrade.pips_pnl} pips</div>

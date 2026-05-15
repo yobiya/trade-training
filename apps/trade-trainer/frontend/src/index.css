@@ -723,6 +723,13 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 
 .active-trade { display: flex; flex-direction: column; gap: 8px; }
 .trade-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.rr-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--text-dim);
+  border-radius: 3px;
+  color: var(--text-dim);
+}
 .direction { font-weight: 700; font-size: 13px; }
 .direction.buy { color: var(--buy); }
 .direction.sell { color: var(--sell); }
