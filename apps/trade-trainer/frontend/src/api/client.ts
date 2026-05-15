@@ -1,7 +1,5 @@
 import type {
   AdvanceResponse,
-  AIHistoryEntry,
-  AIRunResponse,
   ChartHistoryResponse,
   ChartStackResponse,
   CreateDrawingRequest,
@@ -165,29 +163,6 @@ export const api = {
       }),
     /** §2.8 銘柄一覧。アプリ起動時に 1 回取得して使い回す(useSymbols hook 経由)。 */
     getSymbols: () => request<SymbolsListResponse>('/settings/symbols'),
-  },
-
-  ai: {
-    // §11 AI 分析: 送信前プレビュー機能は持たない。
-    // メモには AI に送ってよい内容のみが書かれている前提で、実行ボタンで直接 run する。
-    // 非公開情報を扱う場合は AI 分析自体を使わない運用で対応する。
-    run: (
-      sessionId: string,
-      mode?: 'decision' | 'review',
-      images?: { timeframe: string; data_url: string }[],
-    ) =>
-      request<AIRunResponse>(`/sessions/${sessionId}/ai-analysis/run`, {
-        method: 'POST',
-        body: JSON.stringify({
-          analysis_mode: mode ?? null,
-          images: images && images.length > 0 ? images : null,
-        }),
-      }),
-    history: (sessionId: string) =>
-      request<AIHistoryEntry[]>(`/sessions/${sessionId}/ai-analysis/history`),
-    report: (sessionId: string, entryId: string) =>
-      fetch(`/api/sessions/${sessionId}/ai-analysis/report/${entryId}`, { credentials: 'include' })
-        .then(r => r.text()),
   },
 
   events: {

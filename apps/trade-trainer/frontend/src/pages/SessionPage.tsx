@@ -10,7 +10,6 @@ import { IndicatorPanel } from '../components/IndicatorPanel'
 import { MemoPanel } from '../components/MemoPanel'
 import { Modal } from '../components/Modal'
 import { PostReviewPanel } from '../components/PostReviewPanel'
-import { AiAnalysisPanel } from '../components/AiAnalysisPanel'
 import { SkipEntryModal } from '../components/SkipEntryModal'
 import { TimeframeSelector } from '../components/TimeframeSelector'
 import { TradePanel } from '../components/TradePanel'
@@ -572,9 +571,6 @@ export function SessionPage({ sessionId, onBack }: Props) {
 
           {phase === 'reviewing' && session && (
             <PostReviewPanel session={session} onSessionChange={setSession} />
-          )}
-          {phase === 'reviewing' && (
-            <AiAnalysisPanel sessionId={sessionId} mode="review" chartHandles={chartHandles} />
           )}
 
           <div className="action-buttons">
