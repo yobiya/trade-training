@@ -8,7 +8,6 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from trade_trainer_backend.auth import router as auth_router
 from trade_trainer_backend.config import get_settings
-from trade_trainer_backend.routers.ai_analysis import router as ai_analysis_router
 from trade_trainer_backend.routers.chart import router as chart_router
 from trade_trainer_backend.routers.drawings import router as drawings_router
 from trade_trainer_backend.routers.events import router as events_router
@@ -74,7 +73,6 @@ def create_app() -> FastAPI:
     app.include_router(drawings_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
     app.include_router(events_router, prefix="/api")
-    app.include_router(ai_analysis_router, prefix="/api")
 
     @app.get("/health")
     async def health() -> dict[str, str]:
