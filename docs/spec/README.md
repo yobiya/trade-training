@@ -16,7 +16,6 @@
 | §8 | *(欠番: 旧トレードスタイル機能を撤廃した跡)* | — |
 | §9 | 判断結果の事後確認機能 | [09-post-review.md](./09-post-review.md) |
 | §10 | *(集計・情報蓄積を採用しない方針 → principles/ へ移管)* | [principles/no-aggregation.md](./principles/no-aggregation.md) |
-| §11 | *(欠番: 旧 AI 分析機能を撤廃した跡)* | — |
 | §12 | リアルトレードアプリ(trade-live) | [12-live.md](./12-live.md) |
 | §13 | データ保存方針 | [13-data-storage.md](./13-data-storage.md) |
 | §14 | UI レイアウト | [14-ui-layout.md](./14-ui-layout.md) |

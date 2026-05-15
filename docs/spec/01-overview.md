@@ -87,7 +87,7 @@ Web + スマホ両対応(レスポンシブデザイン)
 | common-ui-lib | パッケージ | - | - | - | - | Phase 2 |
 | market-data | パッケージ | - | 読み書き(市場データキャッシュ) | 取得 | - | Phase 1 |
 | B. trade-trainer | Webアプリ | VPS | 読み書き(トレーニング記録) | 経由(market-data 経由) | **なし** | Phase 1〜4 |
-| C. trade-live | Webアプリ | VPS | 読み書き(リアル記録) | 直接(発注) + 経由(データ) | あり | Phase 5〜6 |
+| C. trade-live | Webアプリ | VPS | 読み書き(リアル記録) | 直接(発注) + 経由(データ) | あり | Phase 4〜5 |
 
 ※ 集計専用アプリは採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。振り返りは B 本体のセッション単位の機能(§9)で行う。
 
