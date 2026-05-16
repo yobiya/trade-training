@@ -50,7 +50,7 @@ Web + スマホ両対応(レスポンシブデザイン)
   [ブローカーサーバー]
 ```
 
-横断集計アプリ(旧称 trade-analyzer)は採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。集計・統計機能を持たず、振り返りは 1 セッション単位(§9)で完結させる。
+横断集計アプリは採用しない([principles/no-aggregation.md](./principles/no-aggregation.md))。集計・統計機能を持たず、振り返りは 1 セッション単位(§9)で完結させる。
 
 **市場データ取得の方針: ハイブリッドキャッシュ**
 

@@ -183,6 +183,6 @@ uv run market-data verify-range EURUSD
 
 ---
 
-## 7. trade-live / trade-analyzer について
+## 7. trade-live について
 
-`apps/trade-live` と `apps/trade-analyzer` も同じ構造(`backend/` + `frontend/`)ですが、Phase 1 時点では未実装です。実装が進んだ時点でこのドキュメントに起動手順を追記します。
+`apps/trade-live` も同じ構造(`backend/` + `frontend/`)ですが、Phase 1 時点では未実装です。実装が進んだ時点でこのドキュメントに起動手順を追記します。

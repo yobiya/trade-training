@@ -112,7 +112,7 @@ npm run dev --workspace=apps/trade-trainer/frontend
 - 仮想環境: `apps/trade-live/backend/.venv`(uv管理)
 
 ## 15.5 横断アプリの不採用
-- [principles/no-aggregation.md](./principles/no-aggregation.md) により横断集計機能は採用しないため、**独立した集計アプリ(trade-analyzer)は持たない**
+- [principles/no-aggregation.md](./principles/no-aggregation.md) により横断集計機能は採用しないため、**独立した集計アプリは持たない**
 - 振り返りは trade-trainer 本体のセッション詳細画面(§9)で 1 セッション単位で完結させる
 
 ## 15.6 運用構成

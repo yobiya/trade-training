@@ -13,7 +13,6 @@ members = [
     "packages/market-data",
     "apps/trade-trainer/backend",
     "apps/trade-live/backend",
-    "apps/trade-analyzer/backend",
 ]
 
 [dependency-groups]
