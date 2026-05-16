@@ -30,7 +30,6 @@ apps/trade-trainer/backend/src/trade_trainer_backend/
 │  ├─ drawings.py             ← 描画 CRUD
 │  ├─ events.py               ← 経済指標取得
 │  ├─ settings.py             ← アプリ設定
-│  ├─ ai_analysis.py          ← AI 分析 run / history / report
 │  └─ _helpers.py             ← session 検証 helper など共通
 ├─ services/                  ← ドメインロジック。HTTP に依存しない
 │  ├─ session_store/          ← セッションファイル I/O(パッケージ分割済)
@@ -40,9 +39,6 @@ apps/trade-trainer/backend/src/trade_trainer_backend/
 │  ├─ session_models.py       ← dataclass(SessionMeta / Trade / Candidate / FinalDecision / Drawing 等)
 │  ├─ candidates.py           ← 候補追加削除
 │  ├─ post_eval.py            ← 事後評価(MFE / MAE / R-pnl / 3 段階観察)
-│  ├─ ai_input_builder.py     ← AI 送信 payload 構築
-│  ├─ ai_client.py            ← Anthropic SDK ラッパ + モック
-│  ├─ ai_storage.py           ← AI 履歴(index.json + report.md)+ payload hash キャッシュ
 │  └─ memo_templates.py       ← data/memo-templates の起動時ロード
 ├─ utils/                     ← 共通 utility(state-less)
 │  ├─ json_io.py              ← json_default(datetime/Decimal) / read_json / write_json
@@ -92,7 +88,6 @@ lifespan:
 ```
 
 `TRAINER_USE_MT5=false` 起動時は MT5 を使わない(キャッシュ参照モード)。
-`TRAINER_AI_MOCK=true` 起動時は AI 分析がモック応答を返す。
 
 ---
 
@@ -104,12 +99,9 @@ lifespan:
 20231018-2120-USDJPY-doubletop/      # ディレクトリ名は可読ラベル(rename される)
 ├─ session.json                       # meta + trade + final_decision + drawings + holding_memos を統合
 ├─ note.md                            # 横断メモ(§7.2.2、settled_at トリガー)
-├─ candidates/
-│  ├─ USDJPY.md                       # 銘柄別メモ(§7.2.1)
-│  └─ EURJPY.md
-└─ ai_analysis/
-   ├─ index.json                      # 履歴 entry のメタ(hash, model, tokens, ts)
-   └─ {entry_id}.md                   # レポート Markdown
+└─ candidates/
+   ├─ USDJPY.md                       # 銘柄別メモ(§7.2.1)
+   └─ EURJPY.md
 ```
 
 `session.json` の構造:
@@ -408,30 +400,6 @@ DataFrame の規約:
 
 `considered_styles` / 見送り代理 R は採用しない。見送り・候補振り返りは SL 未確定で R 換算が信頼できないため pips のみで評価する。
 
-### D.6 POST `/sessions/{id}/ai-analysis/run` (`routers/ai_analysis.py:run_ai_analysis`)
-
-```
-1. payload = ai_input_builder.build_ai_analysis_input(session_id, db, mode)
-2. payload_hash = ai_storage.compute_payload_hash(payload + image data_url 先頭 64B)
-3. cached = ai_storage.find_cached_entry(session_id, payload_hash)
-   if cached: return cached
-4. result = ai_client.run_analysis(payload, api_key, model, max_tokens, mock, images)
-5. entry = ai_storage.save_run(session_id, payload, result.report_md, ...)
-6. return AIRunResponse(entry, report_md, cached=False)
-```
-
-`build_ai_analysis_input` の入力スキーマ:
-- DecisionMeta(エントリー or 見送り判断時のメタ)
-- EntryResult(振り返り時のみ、MFE / MAE / r_pnl / continuation_available)
-- MemoBlock(横断メモ + 銘柄別メモ + 層 1 候補メモ)
-- IndicatorSnapshot(§11.8、現状未実装)
-- DrawingSummary(描画種別 + TF)
-- EconomicEventSummary(判断時刻 ±N 時間)
-- Layer1Candidate(★ 付き非エントリー銘柄)
-- generated_at
-
-[invariants.md I-9](./invariants.md#i-9-ai-分析の送信ガードレール) で送らないものを定義。
-
 ---
 
 ## §E 認証 / DB マイグレーション / ログ
@@ -464,7 +432,6 @@ uvicorn 標準のロガーに従う:
 | 変数 | 用途 |
 |---|---|
 | `TRAINER_USE_MT5` | `false` で MT5 無効(キャッシュ参照のみ) |
-| `TRAINER_AI_MOCK` | AI 関連、market-data には影響なし |
 | `TRAINER_APP_PASSWORD` | 認証パスワード |
 | `db_path` | 既定 `apps/trade-trainer/backend/trading.db`(env で上書き可) |
 
@@ -478,7 +445,6 @@ uvicorn 標準のロガーに従う:
 |---|---|---|
 | advance しても new_bars=0 | 進めた range の M5 がキャッシュにない & MT5 が応答しない | MT5 接続確認 / ブローカーのヒストリカル範囲を確認 |
 | post-review で空応答 | 候補がない or trade も skip も未確定 | 仕様通り(対象なしを示す) |
-| AI 分析が遅い | 同 payload キャッシュ未ヒット + max_tokens 大 | `TRAINER_AI_MOCK=true` でテスト時バイパス |
 | セッションファイル破損 | 書き込み中の中断 or 外部編集 | `session_store.load` が `None` を返す → 404 |
 
 ### F.2 market-data 層

@@ -56,7 +56,6 @@ src/
 │  ├─ LowerTfRangeOverlay.tsx ← §5.1.6 下位 TF レンジ背景
 │  ├─ TradePanel.tsx          ← エントリー / 決済 / SL/TP 表示
 │  ├─ MemoPanel.tsx           ← メモモーダル(銘柄別 + 横断、debounce 保存)
-│  ├─ AiAnalysisPanel.tsx     ← AI 分析(レポート + 履歴 + 比較)
 │  ├─ PostReviewPanel.tsx     ← 振り返り(MFE/MAE/R + 振り返りメモ)
 │  ├─ SkipEntryModal.tsx      ← 見送り確認モーダル
 │  ├─ Modal.tsx               ← 汎用モーダル
@@ -109,7 +108,7 @@ phase 別の表示要素:
 |---|---|---|---|
 | 銘柄ドロップダウン | ✓ | 固定表示 | 固定表示 |
 | `<TradePanel>` | エントリー UI | exit UI + active trade 表示 | 非表示 |
-| `<PostReviewPanel>` + `<AiAnalysisPanel>` | - | - | ✓ |
+| `<PostReviewPanel>` | - | - | ✓ |
 | 「見送り」「全候補見送り」ボタン | ✓ | - | - |
 | `▶ +1本 / +5本` | ✓ | ✓ | ✓(続き観察) |
 

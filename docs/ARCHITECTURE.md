@@ -113,8 +113,8 @@ SessionPage(統合フロー、§6.1)
 
 | 軸 | frontend の責務 | backend の責務 | 境界の不変条件 |
 |---|---|---|---|
-| **1. データの真実 (Source of Truth)** | UI 状態のみ(visible range / focus TF / modal 開閉 / entry draft / hover state / star マーク表示状態) | セッション情報・Trade・描画・メモ・`current_position`・設定・AI レポートの**永続化された真実** | frontend は backend 由来のデータを **読み取り専用キャッシュ** として扱う。編集は必ず HTTP 経由で backend に通し、レスポンスで自分のキャッシュを更新する |
-| **2. 計算の場所** | UI 計算(座標変換・インジケーター描画・tooltip・色決定・hover 判定) | ドメイン計算(MT5 集約・SL/TP 自動判定・見送り評価・AI 入力構築・経済指標フィルタ) | 同じ計算を 2 箇所で行わない。境界をまたぐ計算は片方を真実として他方は受け取るだけ |
+| **1. データの真実 (Source of Truth)** | UI 状態のみ(visible range / focus TF / modal 開閉 / entry draft / hover state / star マーク表示状態) | セッション情報・Trade・描画・メモ・`current_position`・設定の**永続化された真実** | frontend は backend 由来のデータを **読み取り専用キャッシュ** として扱う。編集は必ず HTTP 経由で backend に通し、レスポンスで自分のキャッシュを更新する |
+| **2. 計算の場所** | UI 計算(座標変換・インジケーター描画・tooltip・色決定・hover 判定) | ドメイン計算(MT5 集約・SL/TP 自動判定・見送り評価・経済指標フィルタ) | 同じ計算を 2 箇所で行わない。境界をまたぐ計算は片方を真実として他方は受け取るだけ |
 | **3. 時刻 / タイムゾーン** | UTC を保ったまま受け取り、表示時のみ `formatJST` 経由で JST 変換 | 全処理・全永続化を UTC で統一(ISO 8601 + `Z` で API 境界を明示) | naive datetime は層境界で必ず UTC aware に補完([invariants.md I-1](./architecture/invariants.md#i-1-タイムスタンプは-utc-で統一する)) |
 | **4. ライフサイクル** | セッション内のみ(タブクローズで消失)。編集中 draft は blur / unmount で消失 | プロセス再起動越え(ファイル / SQLite で永続) | frontend で永続化したいものは backend 経由で送る。frontend がモジュールスコープに持つ state は「セッション内だけ生存していい」ものに限る |
 
@@ -145,7 +145,6 @@ SessionPage(統合フロー、§6.1)
 | **描画 (Drawing)** | backend (`session.json` 内 `drawings`) | frontend(座標変換 + 編集 UI)、backend は CRUD | backend 永続 | [`drawing-tools.md`](./architecture/drawing-tools.md), [`frontend-chart.md` §5.2](./architecture/frontend-chart.md#52-drawingoverlay) |
 | **visible range** | frontend(Chart instance 内) | frontend(LWC 内部) | しない(タブクローズで消失) | [`frontend-chart.md` §4](./architecture/frontend-chart.md#4-chart-instance-の-lifecycle-と-useeffect-責務) |
 | **エントリー draft (SL/TP 配置中)** | frontend(`useTradeFlow.entryDraft`) | frontend(クリック → 価格丸め) | しない、確定時に backend へ POST | [`frontend-overview.md` §F.3](./architecture/frontend-overview.md#f3-sltp-配置) |
-| **AI レポート** | backend (`ai_analysis/{entry_id}.md`) + payload hash cache | backend(Anthropic API 呼び出し)、frontend は表示のみ | backend 永続(セッションごと) | [`backend.md` §D.6](./architecture/backend.md#d6-post-sessionsidai-analysisrun-routersai_analysispyrun_ai_analysis) |
 
 ### 3.4 責務原則の言語化
 
@@ -276,46 +275,6 @@ sequenceDiagram
 
 詳細: [`backend.md` §D.5](./architecture/backend.md#d5-get-sessionsidpost-review-routerssessionspyget_post_review)
 
-### 4.4 AI 分析(POST `/sessions/{id}/ai-analysis/run`)
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant FE as frontend (AiAnalysisPanel)
-  participant API as backend (routers/ai_analysis.py:run_ai_analysis)
-  participant Build as ai_input_builder
-  participant Store as ai_storage
-  participant Client as ai_client
-  participant Anthropic as Anthropic API
-
-  FE->>API: POST /ai-analysis/run
-  API->>Build: build_ai_analysis_input(session_id, db, mode)
-  Note over Build: I-9 ガード(損益・勝敗・<br/>機械判定ラベル等を除外)
-  Build-->>API: payload (DecisionMeta / Memo / Drawing / ...)
-  API->>Store: compute_payload_hash(payload + image_data_url[:64])
-  Store-->>API: payload_hash
-  API->>Store: find_cached_entry(session_id, payload_hash)
-  alt cached
-    Store-->>API: 既存 entry (report_md)
-    API-->>FE: AIRunResponse(cached=true)
-  else cache miss
-    Store-->>API: null
-    API->>Client: run_analysis(payload, images, model, max_tokens, mock?)
-    alt mock=true
-      Note over Client: モック応答を返す
-    else
-      Client->>Anthropic: Messages API
-      Anthropic-->>Client: response (report_md, tokens)
-    end
-    Client-->>API: result
-    API->>Store: save_run(session_id, payload_hash, report_md, tokens, ...)
-    Store-->>API: entry
-    API-->>FE: AIRunResponse(cached=false)
-  end
-```
-
-詳細: [`backend.md` §D.6](./architecture/backend.md#d6-post-sessionsidai-analysisrun-routersai_analysispyrun_ai_analysis)
-
 ---
 
 ## §5 データの所有(永続化レイヤ別)
@@ -327,7 +286,6 @@ sequenceDiagram
 | OHLC キャッシュ(TF 別、現状未使用) | SQLite `ohlc` | ✗(再取得可能) | [`backend.md` §C](./architecture/backend.md#c-market-data-層) |
 | 経済指標 | SQLite `economic_events` | ✗(再取得可能) | market-data CLI が日次で取得 |
 | アプリ設定 | SQLite `settings` | ✗ | 単一行 |
-| AI 分析結果 | `data/sessions/{dir}/ai_analysis/` | ✓(同期推奨) | セッションと同経路 |
 
 「セッション情報を SQLite に書く」「OHLC をファイルに書く」を **やらない**([invariants.md I-3](./architecture/invariants.md#i-3-ファイル管理-vs-sqlite))。
 
@@ -347,7 +305,6 @@ sequenceDiagram
 | [I-6](./architecture/invariants.md#i-6-current_position-の単一情報源) | 現在位置 | `session.json` の `current_position` が真実 |
 | [I-7](./architecture/invariants.md#i-7-バー時系列の単調性) | バー昇順 | 全層で時刻昇順・重複なし |
 | [I-8](./architecture/invariants.md#i-8-上位-tf-のライブバー扱い) | ライブバー | 進行中バーは未確定として扱う |
-| [I-9](./architecture/invariants.md#i-9-ai-分析の送信ガードレール) | AI ガード | 結果論バイアスを与えない |
 | [I-10](./architecture/invariants.md#i-10-observability-の最低ライン) | observability | silent failure を作らない |
 | [I-11](./architecture/invariants.md#i-11-エラー処理--失敗の可視化) | エラー処理 | 6 項目: silent 禁止 / 捕捉スコープ / 空 vs 失敗 / UI 通知 / trust boundary / デフォルト返却 |
 | [I-12](./architecture/invariants.md#i-12-座標変換と-tf-間-projection) | 座標変換 | 単一 Chart 内は LWC 信頼、TF 間 projection は純粋関数経由 |
