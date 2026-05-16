@@ -63,7 +63,6 @@ type Props = {
 | `api` | `ChartApi`(座標変換 + setScrollEnabled) | なし(座標変換) / `setScrollEnabled` のみオプション変更 | 各メソッドは **マウント前 / unmount 後** で `null` 返却の可能性あり。詳細は §1.4 | いつでも呼べる |
 | `containerEl` | `HTMLDivElement \| null` | なし | unmount 時 `null` | DOM 直接アクセスは推奨しない |
 | `subscribeRedraw(cb)` | `(cb) => () => void` | 内部購読リストに `cb` を追加 | 未マウント時は no-op unsubscribe を返す | useEffect 内で呼び、cleanup で必ず unsubscribe |
-| `takeScreenshot()` | `() => string \| null` | LWC の internal canvas を toDataURL 化 | unmount 時 / 例外時に `null` | チャート PNG 取得(現状未呼び出し、将来用) |
 | `setCrosshairTime(time \| null)` | `(t) => void` | LWC `setCrosshairPosition` を呼ぶ | bars に該当時刻が無いと最寄りバーへスナップ。例外は捕捉してクラッシュさせない | クロスヘア同期(§6) |
 | `subscribeUserCrosshair(cb)` | `(cb) => () => void` | 内部 subscriber set に追加 | — | **ユーザー操作のみ** 通知される(programmatic move は含めない、§6.2) |
 | `getVisibleLogicalRange()` | `() => { from, to } \| null` | なし | 未マウント時 `null` | 浮動小数の logical range をそのまま返す。`from <= 0` で過去側の whitespace、`to >= bars.length-1` で右側 rightOffset whitespace に到達している判定([I-12](./invariants.md#i-12-座標変換と-tf-間-projection)) |

@@ -120,15 +120,6 @@ export const Chart = forwardRef<ChartHandle, Props>(function Chart({
         ro.disconnect()
       }
     },
-    takeScreenshot() {
-      const chart = chartRef.current
-      if (!chart) return null
-      try {
-        return chart.takeScreenshot().toDataURL('image/png')
-      } catch {
-        return null
-      }
-    },
     setCrosshair,
     subscribeUserCrosshair,
     getVisibleLogicalRange() {

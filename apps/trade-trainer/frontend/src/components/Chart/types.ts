@@ -28,8 +28,6 @@ export type ChartHandle = {
   containerEl: HTMLDivElement | null
   /** チャートの再描画が必要なタイミング(時間軸変化・リサイズ等)でコールバックを呼ぶ。 */
   subscribeRedraw: (cb: () => void) => () => void
-  /** §11.3.1 AI 分析向けにチャートのスクリーンショットを PNG dataURL で返す。 */
-  takeScreenshot: () => string | null
   /** §5.1.2 クロスヘア同期(命令的): 他チャートからの (time, price) を受け取り setCrosshairPosition を呼ぶ。 */
   setCrosshair: (time: number | null, price: number | null) => void
   /** §5.1.2 クロスヘア同期(購読): ユーザー操作によるクロスヘア移動を (time, price) で通知する。 */
